@@ -33,6 +33,8 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: org.knowledge-studio.prototype
+        GENERATE_INFOPLIST_FILE: NO
+        INFOPLIST_FILE: KnowledgeStudio/Info.plist
         INFOPLIST_KEY_CFBundleDisplayName: Knowledge Studio
         INFOPLIST_KEY_LSApplicationCategoryType: public.app-category.education
         INFOPLIST_KEY_UILaunchScreen_Generation: YES

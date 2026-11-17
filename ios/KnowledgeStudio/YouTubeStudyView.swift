@@ -28,14 +28,6 @@ struct YouTubeStudyView: View {
                         YouTubePlayerView(player)
                             .frame(height: expanded ? 420 : 260)
                             .frame(maxWidth: .infinity)
-                        HStack(spacing: 16) {
-                            Button(action: model.saveMark) { Label("Mark", systemImage: "bookmark.fill") }
-                                .buttonStyle(.borderedProminent).controlSize(.large)
-                                .disabled(!model.isReady || model.isBusy)
-                            Button(expanded ? "收起" : "放大观看") { expanded.toggle() }
-                            Spacer()
-                            Button("重新连接") { if let source = model.source { model.activate(source) } }
-                        }
                         Text(model.message).font(.callout).accessibilityIdentifier("playerStatus")
                         if let source = model.source {
                             Link("在 YouTube 打开", destination: source.videoID.watchURL)
@@ -74,6 +66,19 @@ struct YouTubeStudyView: View {
                 }
                 .padding(24).frame(maxWidth: 1100)
                 .frame(maxWidth: .infinity)
+            }
+            .safeAreaInset(edge: .bottom) {
+                if model.player != nil {
+                    HStack(spacing: 16) {
+                        Button(action: model.saveMark) { Label("Mark", systemImage: "bookmark.fill") }
+                            .buttonStyle(.borderedProminent).controlSize(.large)
+                            .disabled(!model.isReady || model.isBusy)
+                        Button(expanded ? "收起" : "放大") { expanded.toggle() }
+                        Spacer()
+                        Button("重连") { if let source = model.source { model.activate(source) } }
+                    }
+                    .padding().background(.bar)
+                }
             }
             .navigationTitle("Knowledge Studio")
             .navigationBarTitleDisplayMode(.inline)

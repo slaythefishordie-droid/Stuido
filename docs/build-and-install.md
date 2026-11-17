@@ -2,7 +2,7 @@
 
 ## 路径与工具
 
-Windows / iPadOS 26.2 用户不需要实体 Mac 来下载 CI 产物。GitHub Actions 使用标准 `macos-15` Runner，固定 `DEVELOPER_DIR=/Applications/Xcode_26.2.app/Contents/Developer`。官方 Runner 清单在 2026-11-17 列有 Xcode 26.2、iOS 26.2 SDK 和相应 iPad 模拟器；如果后续移除该工具链，工作流会明确失败，不静默换 SDK。
+Windows / iPadOS 26.2 用户不需要实体 Mac 来下载 CI 产物。GitHub Actions 使用标准 `macos-15-intel` Runner，固定 `DEVELOPER_DIR=/Applications/Xcode_26.2.app/Contents/Developer`。官方 Runner 清单在 2026-11-17 列有 Xcode 26.2、iOS 26.2 SDK 和相应 iPad 模拟器；如果后续移除该工具链，工作流会明确失败，不静默换 SDK。
 
 - [官方 Runner 清单](https://github.com/actions/runner-images/blob/main/images/macos/macos-15-Readme.md)
 - XcodeGen 2.44.1：从官方发行下载并校验已发布 SHA-256；`ios/project.yml` 是工程来源。
