@@ -44,7 +44,7 @@ swift-fsrs README 明确默认 `FSRSParameters()` 仍为 FSRS-5（19 权重）�
 |---|---|---|
 | [Ajv](https://github.com/ajv-validator/ajv) | v8.17.1，`9050ba1359fb87cd7c143f3c79513ea7624ea443`；MIT | **已用于跨平台协议工具**，Ajv2020 严格模式 + ajv-formats 3.0.1；npm lockfile 含完整性摘要。24 项协议测试先通过，后续边界测试数量见进度记录。不会打包进 SwiftUI App。 |
 | [swift-json-schema](https://github.com/ajevans99/swift-json-schema) | v0.15.0，`a00dde585b7f55b343214cece9afcfeb613e7899`；MIT；Swift 6.1 / iOS 16 | 支持 Draft 2020-12、OrderedJSON 和官方 JSON-Schema-Test-Suite；原生阶段 2 首选验证候选。只需 JSONSchema runtime 产品；builder/macro 会引入 SwiftSyntax，必须审查解析/构建成本。未运行完整上游 suite，尚未接入。 |
-| [JSONSchema.swift](https://github.com/kylef/JSONSchema.swift) | main `8c7ec156dde09715d8d2ed83cc8fe6b1ba90648c`，2022-05-21；发行 0.6.0；BSD-3-Clause | 老版本草案支持与当前协议不匹配，发行请求 issue #228；不采用。 |
+| [JSONSchema.swift](https://github.com/kylef/JSONSchema.swift) | main `8c7ec156dde09715d8d2ed83cc8fe6b1ba90648c`，2022-05-21；发行 0.6.0（2021-03-28）；BSD-3-Clause | README 声明支持 2020-12，但明确有新关键字缺口；源码将 unevaluatedItems/unevaluatedProperties 标为 unsupported。不是完全不支持新草案。考虑发行节奏、#228 的新版本请求及后续协议扩展，优先评估另一个原生候选；本轮未运行此库的协议样例。 |
 
 额外开发依赖 [jsonc-parser](https://github.com/microsoft/node-jsonc-parser) 3.3.1（MIT）仅用于严格 JSON 的语法树和重复键检测，明确禁用注释与尾逗号；不接受 JSONC。所有 schema 来自本仓库，不联网加载远程 `$ref`。
 
@@ -61,6 +61,6 @@ PDF 使用官方 PDFKit，本地视频使用 AVKit，SwiftUI 通过薄适配层�
 
 ## 分发与体积
 
-当前 App 只引入 YouTubePlayerKit；MIT 全文随 App 的 `THIRD_PARTY_NOTICES.md` 资源保留。构建用 XcodeGen 2.44.1 也保留 MIT 声明。Ajv/jsonc-parser/ajv-formats 及传递依赖仅用于开发工具，LICENSE 保留在 npm 包中并在 notice 文档列出。未复制第三方业务源码。
+当前 App 只引入 YouTubePlayerKit；MIT 全文随 App 的 `THIRD_PARTY_NOTICES.md` 资源保留。构建用 XcodeGen 2.44.1 也保留 MIT 声明。Ajv/jsonc-parser/ajv-formats 及传递依赖仅用于开发工具，许可证全文同时保存在 `tools/protocol/THIRD_PARTY_NOTICES.md`。未复制第三方业务源码。
 
-其余推荐候选尚未接入，不因此承担其全部依赖体积；进入对应阶段时必须锁定正式版本、补齐传递依赖许可证和实际验证。所有本地内容管理应可离线；只有 YouTube 网络播放会访问第三方服务。没有评估或批准无许可证/分发条件不明代码。
+其余推荐候选尚未接入，不因此承担其全部依赖体积；进入对应阶段时必须锁定正式版本、补齐传递依赖许可证和实际验证。所有本地内容管理应可离线；只有 YouTube 网络播放会访问第三方服务。YouTubePlayerKit 当前默认使用 WebKit 持久化站点数据存储，可能保留播放器 cookies/cache；本项目的 Mark JSON 独立留在 App 容器。没有评估或批准无许可证/分发条件不明代码。

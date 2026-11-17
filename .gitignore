@@ -11,3 +11,4 @@ ios/Local.xcconfig
 *.mobileprovision
 ios/KnowledgeStudio.xcodeproj/
 artifacts/
+__pycache__/

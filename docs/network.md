@@ -27,4 +27,6 @@
 
 可选文档仍被当前策略阻止：`developer.apple.com`（Xcode/签名官方文档）、`docs.github.com`（Actions/额度）、`faq.altstore.io`（Classic 安装说明）。如需在此环境直接核对这些资料，请在环境设置的 Internet access 允许域名中增量加入这三个精确域名并保存，再重试。这里未声称已添加。
 
+下载 `protocol-evidence-1` Artifact 时发现实际重定向目标 `productionresultssa4.blob.core.windows.net` 被平台拒绝；原生失败日志入口 `results-receiver.actions.githubusercontent.com` 也被拒绝。需要增量允许这两个精确域名，才能在当前云环境读取失败细节；它们与 `api.github.com` 的授权分开。已保留原有三项白名单并把这两项写入配置**草稿**，工具确认保存，但未应用当前网络、未发布。用户在环境设置审核保存并按界面发布后，需要重新测试访问。没有添加通配整个 Azure Storage 的权限，也没有把临时签名下载 URL 写入仓库。未来若 GitHub 使用不同的具体存储主机，再依据实际重定向补充。Windows 浏览器下载不使用本云环境白名单。
+
 真实 YouTube 播放还需要 iPad 自身能访问 YouTube；云环境文档白名单不等于 iPad 网络可播放，也不等于 GitHub macOS Runner 的网络策略。
