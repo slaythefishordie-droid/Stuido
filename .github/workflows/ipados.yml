@@ -1,0 +1,152 @@
+name: Native iPadOS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'ios/**'
+      - 'Package.swift'
+      - 'scripts/**'
+      - 'THIRD_PARTY_NOTICES.md'
+      - '.github/workflows/ipados.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'Sources/**'
+      - 'Tests/**'
+      - 'ios/**'
+      - 'Package.swift'
+      - 'scripts/**'
+      - 'THIRD_PARTY_NOTICES.md'
+      - '.github/workflows/ipados.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: native-ipados-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Xcode 26.2 · iPadOS
+    runs-on: macos-15
+    timeout-minutes: 25
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          persist-credentials: false
+      - name: Record toolchain
+        id: toolchain
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/logs
+          test -d "$DEVELOPER_DIR"
+          { sw_vers; xcodebuild -version; xcrun swift --version; xcodebuild -showsdks; } | tee artifacts/logs/toolchain.log
+      - name: Generate project with verified XcodeGen 2.44.1
+        run: |
+          set -euo pipefail
+          bash scripts/bootstrap-xcodegen.sh 2>&1 | tee artifacts/logs/project.log
+      - name: Resolve and check locked Swift packages
+        id: packages
+        run: |
+          set -euo pipefail
+          xcodebuild -resolvePackageDependencies -project ios/KnowledgeStudio.xcodeproj -scheme KnowledgeStudio \
+            -clonedSourcePackagesDirPath .build/SourcePackages -onlyUsePackageVersionsFromResolvedFile \
+            2>&1 | tee artifacts/logs/packages.log
+          python3 - <<'PY'
+          import json, pathlib
+          expected = json.loads(pathlib.Path('ios/Package.resolved').read_text())['pins']
+          actual = json.loads(pathlib.Path('ios/KnowledgeStudio.xcodeproj/project.xcworkspace/xcshareddata/swiftpm/Package.resolved').read_text())['pins']
+          assert actual == expected, 'SPM lock changed; review the dependency update explicitly'
+          PY
+      - name: Run Swift core tests
+        id: core
+        run: |
+          set -euo pipefail
+          bash scripts/test-core.sh 2>&1 | tee artifacts/logs/core-tests.log
+      - name: Test the native App on an iPad simulator
+        id: simulator
+        run: |
+          set -euo pipefail
+          ks_simulator=$(python3 scripts/select-simulator.py)
+          xcodebuild test -project ios/KnowledgeStudio.xcodeproj -scheme KnowledgeStudio \
+            -destination "platform=iOS Simulator,id=$ks_simulator" -parallel-testing-enabled NO \
+            -derivedDataPath .build/DerivedData -clonedSourcePackagesDirPath .build/SourcePackages \
+            -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile \
+            -resultBundlePath artifacts/SimulatorTests.xcresult CODE_SIGNING_ALLOWED=NO \
+            2>&1 | tee artifacts/logs/simulator-tests.log
+          xcrun xcresulttool get test-results summary --path artifacts/SimulatorTests.xcresult --format json > artifacts/simulator-summary.json
+          python3 - <<'PY'
+          import json
+          result = json.load(open('artifacts/simulator-summary.json'))
+          assert result['totalTestCount'] >= 10, 'Expected core and App tests to actually run'
+          assert result['failedTests'] == 0, 'Simulator tests failed'
+          PY
+      - name: Archive the actual iPadOS device App without signing
+        id: archive
+        run: |
+          set -euo pipefail
+          xcodebuild archive -project ios/KnowledgeStudio.xcodeproj -scheme KnowledgeStudio \
+            -configuration Release -destination 'generic/platform=iOS' \
+            -archivePath .build/KnowledgeStudio.xcarchive -derivedDataPath .build/DerivedData \
+            -clonedSourcePackagesDirPath .build/SourcePackages -disableAutomaticPackageResolution \
+            -onlyUsePackageVersionsFromResolvedFile CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' \
+            2>&1 | tee artifacts/logs/archive.log
+      - name: Package and verify unsigned IPA candidate
+        id: ipa
+        run: |
+          set -euo pipefail
+          bash scripts/package-unsigned-ipa.sh 2>&1 | tee artifacts/logs/package.log
+      - name: Record separate verification outcomes
+        if: always()
+        env:
+          PACKAGES: ${{ steps.packages.outcome }}
+          CORE: ${{ steps.core.outcome }}
+          SIMULATOR: ${{ steps.simulator.outcome }}
+          ARCHIVE: ${{ steps.archive.outcome }}
+          IPA: ${{ steps.ipa.outcome }}
+        run: |
+          mkdir -p artifacts
+          python3 - <<'PY'
+          import json, os, pathlib
+          results = {name.lower(): os.environ[name] for name in ['PACKAGES', 'CORE', 'SIMULATOR', 'ARCHIVE', 'IPA']}
+          results.update(commit=os.environ['GITHUB_SHA'], altstore_installation='not_tested', physical_ipad_validation='not_tested')
+          pathlib.Path('artifacts/build-status.json').write_text(json.dumps(results, indent=2) + '\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
+              summary.write('| Check | Result |\n|---|---|\n')
+              for name, value in results.items(): summary.write(f'| {name} | {value} |\n')
+              summary.write('\nUnsigned IPA requires AltStore re-signing. CI does not verify installation or real YouTube playback.\n')
+          PY
+      - name: Upload unsigned IPA candidate
+        if: steps.ipa.outcome == 'success'
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: KnowledgeStudio-unsigned-ipa-${{ github.run_number }}
+          path: |
+            artifacts/KnowledgeStudio-unsigned.ipa
+            artifacts/KnowledgeStudio-unsigned.ipa.sha256
+            artifacts/package-report.json
+          if-no-files-found: error
+          retention-days: 7
+          compression-level: 0
+      - name: Upload logs, test results and generated project
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: KnowledgeStudio-build-evidence-${{ github.run_number }}
+          path: |
+            artifacts/logs/
+            artifacts/*.json
+            artifacts/*.xcresult/
+            ios/KnowledgeStudio.xcodeproj/
+          if-no-files-found: warn
+          retention-days: 7
