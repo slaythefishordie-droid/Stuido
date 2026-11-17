@@ -1,0 +1,691 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "urn:knowledge-studio:import:1.0",
+  "title": "Knowledge Studio import package 1.0",
+  "type": "object",
+  "additionalProperties": false,
+  "properties": {
+    "schema_version": {
+      "const": "1.0"
+    },
+    "package_id": {
+      "$ref": "#/$defs/id"
+    },
+    "title": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 500
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/source"
+      },
+      "maxItems": 1000
+    },
+    "cards": {
+      "type": "array",
+      "items": {
+        "oneOf": [
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/id"
+              },
+              "type": {
+                "const": "word"
+              },
+              "content": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "word": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 200
+                  },
+                  "definition_en": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
+                  },
+                  "example_en": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
+                  }
+                },
+                "required": [
+                  "word",
+                  "definition_en",
+                  "example_en"
+                ]
+              },
+              "source_refs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/sourceRef"
+                },
+                "maxItems": 100
+              },
+              "language": {
+                "type": "string",
+                "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "maxItems": 100,
+                "uniqueItems": true
+              },
+              "provenance": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "fields": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "word": {
+                        "$ref": "#/$defs/fieldProvenance"
+                      },
+                      "definition_en": {
+                        "$ref": "#/$defs/fieldProvenance"
+                      },
+                      "example_en": {
+                        "$ref": "#/$defs/fieldProvenance"
+                      }
+                    },
+                    "required": [
+                      "word",
+                      "definition_en",
+                      "example_en"
+                    ]
+                  },
+                  "note": {
+                    "$ref": "#/$defs/fieldProvenance"
+                  }
+                },
+                "required": [
+                  "fields"
+                ]
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "content",
+              "source_refs",
+              "language",
+              "tags",
+              "provenance"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/id"
+              },
+              "type": {
+                "const": "expression"
+              },
+              "content": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              },
+              "source_refs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/sourceRef"
+                },
+                "maxItems": 100
+              },
+              "language": {
+                "type": "string",
+                "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "maxItems": 100,
+                "uniqueItems": true
+              },
+              "provenance": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "fields": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "text": {
+                        "$ref": "#/$defs/fieldProvenance"
+                      }
+                    },
+                    "required": [
+                      "text"
+                    ]
+                  },
+                  "note": {
+                    "$ref": "#/$defs/fieldProvenance"
+                  }
+                },
+                "required": [
+                  "fields"
+                ]
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "content",
+              "source_refs",
+              "language",
+              "tags",
+              "provenance"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/id"
+              },
+              "type": {
+                "const": "keyword"
+              },
+              "content": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "term": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 500
+                  },
+                  "explanation": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
+                  }
+                },
+                "required": [
+                  "term"
+                ]
+              },
+              "source_refs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/sourceRef"
+                },
+                "maxItems": 100
+              },
+              "language": {
+                "type": "string",
+                "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "maxItems": 100,
+                "uniqueItems": true
+              },
+              "provenance": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "fields": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "term": {
+                        "$ref": "#/$defs/fieldProvenance"
+                      },
+                      "explanation": {
+                        "$ref": "#/$defs/fieldProvenance"
+                      }
+                    },
+                    "required": [
+                      "term"
+                    ]
+                  },
+                  "note": {
+                    "$ref": "#/$defs/fieldProvenance"
+                  }
+                },
+                "required": [
+                  "fields"
+                ]
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "content",
+              "source_refs",
+              "language",
+              "tags",
+              "provenance"
+            ]
+          },
+          {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "id": {
+                "$ref": "#/$defs/id"
+              },
+              "type": {
+                "const": "key_sentence"
+              },
+              "content": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "text": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
+                  },
+                  "explanation": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 20000
+                  }
+                },
+                "required": [
+                  "text"
+                ]
+              },
+              "source_refs": {
+                "type": "array",
+                "items": {
+                  "$ref": "#/$defs/sourceRef"
+                },
+                "maxItems": 100
+              },
+              "language": {
+                "type": "string",
+                "pattern": "^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$"
+              },
+              "tags": {
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 100
+                },
+                "maxItems": 100,
+                "uniqueItems": true
+              },
+              "provenance": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "fields": {
+                    "type": "object",
+                    "additionalProperties": false,
+                    "properties": {
+                      "text": {
+                        "$ref": "#/$defs/fieldProvenance"
+                      },
+                      "explanation": {
+                        "$ref": "#/$defs/fieldProvenance"
+                      }
+                    },
+                    "required": [
+                      "text"
+                    ]
+                  },
+                  "note": {
+                    "$ref": "#/$defs/fieldProvenance"
+                  }
+                },
+                "required": [
+                  "fields"
+                ]
+              },
+              "note": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 20000
+              }
+            },
+            "required": [
+              "id",
+              "type",
+              "content",
+              "source_refs",
+              "language",
+              "tags",
+              "provenance"
+            ]
+          }
+        ]
+      },
+      "maxItems": 5000,
+      "minItems": 0
+    },
+    "relations": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/relation"
+      },
+      "maxItems": 10000
+    }
+  },
+  "required": [
+    "schema_version",
+    "package_id",
+    "title",
+    "sources",
+    "cards",
+    "relations"
+  ],
+  "$defs": {
+    "id": {
+      "type": "string",
+      "pattern": "^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$"
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "kind": {
+          "enum": [
+            "pdf",
+            "epub",
+            "youtube",
+            "local_video",
+            "text"
+          ]
+        },
+        "title": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 500
+        },
+        "url": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri",
+          "pattern": "^https://",
+          "maxLength": 4000
+        },
+        "sha256": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-f0-9]{64}$"
+        }
+      },
+      "required": [
+        "id",
+        "kind",
+        "title",
+        "url",
+        "sha256"
+      ]
+    },
+    "sourceRef": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "source_id": {
+          "$ref": "#/$defs/id"
+        },
+        "locator": {
+          "oneOf": [
+            {
+              "type": "null"
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "const": "pdf"
+                },
+                "file_page": {
+                  "type": "integer",
+                  "minimum": 1
+                },
+                "printed_page": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 64
+                }
+              },
+              "required": [
+                "type",
+                "file_page"
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "const": "epub"
+                },
+                "chapter": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 500
+                },
+                "href": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 2000
+                },
+                "cfi": {
+                  "type": "string",
+                  "minLength": 1,
+                  "maxLength": 4000
+                },
+                "progression": {
+                  "type": "number",
+                  "minimum": 0,
+                  "maximum": 1
+                }
+              },
+              "required": [
+                "type"
+              ],
+              "anyOf": [
+                {
+                  "required": [
+                    "chapter"
+                  ],
+                  "properties": {
+                    "chapter": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 500
+                    }
+                  }
+                },
+                {
+                  "required": [
+                    "href"
+                  ],
+                  "properties": {
+                    "href": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 2000
+                    }
+                  }
+                },
+                {
+                  "required": [
+                    "cfi"
+                  ],
+                  "properties": {
+                    "cfi": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 4000
+                    }
+                  }
+                }
+              ]
+            },
+            {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "type": {
+                  "const": "video"
+                },
+                "seconds": {
+                  "type": "number",
+                  "minimum": 0
+                }
+              },
+              "required": [
+                "type",
+                "seconds"
+              ]
+            }
+          ]
+        }
+      },
+      "required": [
+        "id",
+        "source_id",
+        "locator"
+      ]
+    },
+    "relation": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/id"
+        },
+        "from_card_id": {
+          "$ref": "#/$defs/id"
+        },
+        "to_card_id": {
+          "$ref": "#/$defs/id"
+        },
+        "type": {
+          "enum": [
+            "related",
+            "supports",
+            "contradicts",
+            "example_of"
+          ]
+        },
+        "note": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 1000
+        }
+      },
+      "required": [
+        "id",
+        "from_card_id",
+        "to_card_id",
+        "type"
+      ]
+    },
+    "fieldProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "properties": {
+        "kind": {
+          "enum": [
+            "original",
+            "ai_explanation",
+            "ai_generated",
+            "user_input"
+          ]
+        },
+        "source_ref_ids": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/id"
+          },
+          "maxItems": 100,
+          "uniqueItems": true
+        }
+      },
+      "required": [
+        "kind",
+        "source_ref_ids"
+      ],
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "kind": {
+                "const": "original"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "source_ref_ids": {
+                "minItems": 1,
+                "type": "array"
+              }
+            }
+          }
+        }
+      ]
+    }
+  }
+}

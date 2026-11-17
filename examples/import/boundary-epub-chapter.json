@@ -1,0 +1,176 @@
+{
+  "schema_version": "1.0",
+  "package_id": "boundary-epub-chapter",
+  "title": "协议演示材料（非真实出版物）",
+  "sources": [
+    {
+      "id": "s1",
+      "kind": "epub",
+      "title": "用户提供的示例材料",
+      "url": null,
+      "sha256": null
+    }
+  ],
+  "cards": [
+    {
+      "id": "c1",
+      "type": "word",
+      "content": {
+        "word": "connect",
+        "definition_en": "To join or link things together.",
+        "example_en": "Small ideas can connect across different projects."
+      },
+      "source_refs": [
+        {
+          "id": "r1",
+          "source_id": "s1",
+          "locator": {
+            "type": "epub",
+            "chapter": "Chapter 1"
+          }
+        }
+      ],
+      "language": "en",
+      "tags": [
+        "sample"
+      ],
+      "provenance": {
+        "fields": {
+          "word": {
+            "kind": "original",
+            "source_ref_ids": [
+              "r1"
+            ]
+          },
+          "definition_en": {
+            "kind": "ai_explanation",
+            "source_ref_ids": [
+              "r1"
+            ]
+          },
+          "example_en": {
+            "kind": "ai_generated",
+            "source_ref_ids": [
+              "r1"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "c2",
+      "type": "expression",
+      "content": {
+        "text": "Let us take this one step at a time."
+      },
+      "source_refs": [
+        {
+          "id": "r1",
+          "source_id": "s1",
+          "locator": {
+            "type": "epub",
+            "chapter": "Chapter 1"
+          }
+        }
+      ],
+      "language": "en",
+      "tags": [
+        "sample"
+      ],
+      "provenance": {
+        "fields": {
+          "text": {
+            "kind": "original",
+            "source_ref_ids": [
+              "r1"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "c3",
+      "type": "keyword",
+      "content": {
+        "term": "local-first",
+        "explanation": "Keep the primary copy of personal knowledge on the device."
+      },
+      "source_refs": [
+        {
+          "id": "r1",
+          "source_id": "s1",
+          "locator": {
+            "type": "epub",
+            "chapter": "Chapter 1"
+          }
+        }
+      ],
+      "language": "en",
+      "tags": [
+        "sample"
+      ],
+      "provenance": {
+        "fields": {
+          "term": {
+            "kind": "original",
+            "source_ref_ids": [
+              "r1"
+            ]
+          },
+          "explanation": {
+            "kind": "ai_explanation",
+            "source_ref_ids": [
+              "r1"
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": "c4",
+      "type": "key_sentence",
+      "content": {
+        "text": "A mark is not yet a card.",
+        "explanation": "Capture first; decide what to keep later."
+      },
+      "source_refs": [
+        {
+          "id": "r1",
+          "source_id": "s1",
+          "locator": {
+            "type": "epub",
+            "chapter": "Chapter 1"
+          }
+        }
+      ],
+      "language": "en",
+      "tags": [
+        "sample"
+      ],
+      "provenance": {
+        "fields": {
+          "text": {
+            "kind": "original",
+            "source_ref_ids": [
+              "r1"
+            ]
+          },
+          "explanation": {
+            "kind": "ai_explanation",
+            "source_ref_ids": [
+              "r1"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "relations": [
+    {
+      "id": "rel1",
+      "from_card_id": "c3",
+      "to_card_id": "c4",
+      "type": "related"
+    }
+  ]
+}

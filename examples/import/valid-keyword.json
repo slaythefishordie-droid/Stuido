@@ -1,0 +1,56 @@
+{
+  "schema_version": "1.0",
+  "package_id": "sample-keyword",
+  "title": "协议演示材料（非真实出版物）",
+  "sources": [
+    {
+      "id": "s1",
+      "kind": "pdf",
+      "title": "用户提供的示例材料",
+      "url": null,
+      "sha256": null
+    }
+  ],
+  "cards": [
+    {
+      "id": "c3",
+      "type": "keyword",
+      "content": {
+        "term": "local-first",
+        "explanation": "Keep the primary copy of personal knowledge on the device."
+      },
+      "source_refs": [
+        {
+          "id": "r1",
+          "source_id": "s1",
+          "locator": {
+            "type": "pdf",
+            "file_page": 1,
+            "printed_page": "i"
+          }
+        }
+      ],
+      "language": "en",
+      "tags": [
+        "sample"
+      ],
+      "provenance": {
+        "fields": {
+          "term": {
+            "kind": "original",
+            "source_ref_ids": [
+              "r1"
+            ]
+          },
+          "explanation": {
+            "kind": "ai_explanation",
+            "source_ref_ids": [
+              "r1"
+            ]
+          }
+        }
+      }
+    }
+  ],
+  "relations": []
+}

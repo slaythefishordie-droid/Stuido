@@ -1,0 +1,88 @@
+[
+  {
+    "url": "https://github.com",
+    "local_dns": "[Errno -3] Temporary failure in name resolution",
+    "curl_exit": 0,
+    "result": "200 200 0 https://github.com/",
+    "error": "",
+    "response_layers": [
+      "HTTP/1.1 200 OK",
+      "server: envoy",
+      "HTTP/2 200 ",
+      "content-type: text/html; charset=utf-8",
+      "server: envoy"
+    ]
+  },
+  {
+    "url": "https://api.github.com",
+    "local_dns": "[Errno -3] Temporary failure in name resolution",
+    "curl_exit": 0,
+    "result": "200 200 0 https://api.github.com/",
+    "error": "",
+    "response_layers": [
+      "HTTP/1.1 200 OK",
+      "server: envoy",
+      "HTTP/2 200 ",
+      "content-type: application/json; charset=utf-8",
+      "server: envoy",
+      "x-ratelimit-remaining: 14981"
+    ]
+  },
+  {
+    "url": "https://developer.android.com",
+    "local_dns": "[Errno -3] Temporary failure in name resolution",
+    "curl_exit": 0,
+    "result": "200 200 0 https://developer.android.com/",
+    "error": "",
+    "response_layers": [
+      "HTTP/1.1 200 OK",
+      "server: envoy",
+      "HTTP/2 200 ",
+      "content-type: text/html; charset=utf-8",
+      "server: envoy"
+    ]
+  },
+  {
+    "url": "https://developers.google.com",
+    "local_dns": "[Errno -3] Temporary failure in name resolution",
+    "curl_exit": 0,
+    "result": "200 200 0 https://developers.google.com/",
+    "error": "",
+    "response_layers": [
+      "HTTP/1.1 200 OK",
+      "server: envoy",
+      "HTTP/2 200 ",
+      "content-type: text/html; charset=utf-8",
+      "server: envoy"
+    ]
+  },
+  {
+    "url": "https://api.github.com/repos/slaythefishordie-droid/Stuido",
+    "local_dns": "[Errno -3] Temporary failure in name resolution",
+    "curl_exit": 0,
+    "result": "200 200 0 https://api.github.com/repos/slaythefishordie-droid/Stuido",
+    "error": "",
+    "response_layers": [
+      "HTTP/1.1 200 OK",
+      "server: envoy",
+      "HTTP/2 200 ",
+      "content-type: application/json; charset=utf-8",
+      "server: envoy",
+      "x-ratelimit-remaining: 14980"
+    ]
+  },
+  {
+    "url": "https://github.com/slaythefishordie-droid/Stuido/actions",
+    "local_dns": "[Errno -3] Temporary failure in name resolution",
+    "curl_exit": 0,
+    "result": "200 200 0 https://github.com/slaythefishordie-droid/Stuido/actions",
+    "error": "",
+    "response_layers": [
+      "HTTP/1.1 200 OK",
+      "server: envoy",
+      "HTTP/2 200 ",
+      "content-type: text/html; charset=utf-8",
+      "server: envoy"
+    ]
+  }
+]

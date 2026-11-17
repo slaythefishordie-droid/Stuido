@@ -8,7 +8,10 @@ iPad 优先、本地优先的个人知识整理工具，采用 SwiftUI。当前�
 - `ios/`：SwiftUI YouTube 播放 / Mark / 回跳 / 最近视频原型。SPM 锁定 YouTubePlayerKit 2.0.5。
 - `.github/workflows/ipados.yml`：macOS 15 / Xcode 26.2，SPM 检查、核心测试、iPad 模拟器测试、未签名设备归档和 IPA 结构校验。
 - 本地核心测试：Swift 6.0+ 下运行 `bash scripts/test-core.sh`。
+- 协议验证：Node.js 22+ 下运行 `npm ci --ignore-scripts && npm test`；`npm run validate -- examples/import/valid-four-types.json`。
 
 macOS 上运行 `bash scripts/bootstrap-xcodegen.sh` 生成 `ios/KnowledgeStudio.xcodeproj`，然后打开项目。最低 iPadOS 17；CI 使用 SDK 26.2。无 Apple ID、证书或密码进入 CI。
 
 参见 [构建与 AltStore 安装](docs/build-and-install.md)、[网络诊断](docs/network.md)。编译成功、模拟器测试成功、重签安装成功和真机功能验证是不同状态。当前验证记录会随实际运行更新；不能用未签名 IPA 推断安装成功。
+
+需求与接续文档：[原始产品规范](docs/product-spec.md)、[数据模型](docs/data-model.md)、[导入协议](docs/protocol.md)、[ChatGPT 提示词](docs/chatgpt-prompt.zh.md)、[依赖评估](docs/dependencies.md)、[进度与阻塞](docs/progress.md)、[真机验收](docs/device-validation.md)。
