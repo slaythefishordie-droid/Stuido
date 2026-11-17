@@ -33,7 +33,7 @@ concurrency:
 jobs:
   build:
     name: Xcode 26.2 · iPadOS
-    runs-on: macos-15-intel
+    runs-on: macos-26
     timeout-minutes: 25
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer

@@ -45,3 +45,9 @@
 首次 native run 44075633839 在 `macos-15` 队列中等待，后由并发策略取消。发现该标签目前对应 ARM64、先前核对的镜像清单对应 Intel，因此固定为官方标准 `macos-15-intel` 后实际运行成功进入编译。没有使用付费 larger runner；不把标签差异直接断言为排队根因。
 
 打包修复依据：[Apple cctools lipo.c](https://github.com/apple-oss-distributions/cctools/blob/e0d56624eca2a76c2ace4c21850df9e666de4ca5/misc/lipo.c#L444) 的 `verify_arch` 分支消费后续所有参数；[lipo 手册](https://github.com/apple-oss-distributions/cctools/blob/e0d56624eca2a76c2ace4c21850df9e666de4ca5/man/lipo.1) 明确 `lipo input_file command [option ...]`。
+
+## 2026-11-18 · 构建调度与网络复查
+
+修复提交 `7322edda9371f017acd5c76d0187e7937ed67783` 对应 [run 44081549150](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44081549150) 未执行任何步骤。GitHub 注解明确为 `The job was not acquired by Runner of type hosted even after multiple attempts`，是托管 Runner 调度失败，不能记为新代码编译失败或测试失败。改用经官方 ARM64 镜像清单核实的标准 `macos-26`，继续固定 Xcode 26.2 / iOS 26.2 模拟器。尚待新运行验证。
+
+云实例已恢复为 running。当前生效白名单仍为原来三项；本次绑定的新草稿 revision 1 没有自定义域名，旧草稿的两项追加没有出现在新草稿中。已经把原有三项及两项下载域名再次保存到当前草稿；没有声称已更改生效网络策略。完整日志下载仍返回 403，失败细节也可由新增的 GitHub 原生错误注解报告。

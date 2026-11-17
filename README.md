@@ -6,7 +6,7 @@ iPad 优先、本地优先的个人知识整理工具，采用 SwiftUI。当前�
 
 - `Sources/KnowledgeCore`：YouTube 链接校验、会话隔离、带版本的原子 Mark 存储。
 - `ios/`：SwiftUI YouTube 播放 / Mark / 回跳 / 最近视频原型。SPM 锁定 YouTubePlayerKit 2.0.5。
-- `.github/workflows/ipados.yml`：macOS 15 / Xcode 26.2，SPM 检查、核心测试、iPad 模拟器测试、未签名设备归档和 IPA 结构校验。
+- `.github/workflows/ipados.yml`：标准 macOS 26 ARM64 / Xcode 26.2，SPM 检查、核心测试、iPad 模拟器测试、未签名设备归档和 IPA 结构校验。
 - 本地核心测试：Swift 6.0+ 下运行 `bash scripts/test-core.sh`。
 - 协议验证：Node.js 22+ 下运行 `npm ci --ignore-scripts && npm test`；`npm run validate -- examples/import/valid-four-types.json`。
 

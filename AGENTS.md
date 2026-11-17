@@ -14,7 +14,7 @@
 
 - Swift 核心：`bash scripts/test-core.sh`（需要 Swift 6+）。
 - 协议：`npm ci --ignore-scripts`，`npm test`，`npm run validate -- examples/import/valid-four-types.json`。
-- 原生：`.github/workflows/ipados.yml`，固定标准 macos-15-intel / Xcode 26.2；本地 macOS 可用 `bash scripts/bootstrap-xcodegen.sh` 生成工程。
+- 原生：`.github/workflows/ipados.yml`，固定标准 macos-26 (ARM64) / Xcode 26.2；本地 macOS 可用 `bash scripts/bootstrap-xcodegen.sh` 生成工程。
 - 只运行与本次更改相称的检查。文档修改无需重复 macOS 构建。
 - 分开记录核心测试、原生编译、模拟器测试、IPA 结构、AltStore 安装、真机播放/交互。Mock 测试不是 YouTube 播放成功；Linux 不能验证 SwiftUI 或签名安装。
 
