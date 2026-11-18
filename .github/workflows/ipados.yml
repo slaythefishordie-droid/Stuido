@@ -88,7 +88,7 @@ jobs:
           python3 - <<'PY'
           import json
           result = json.load(open('artifacts/simulator-summary.json'))
-          assert result['totalTestCount'] >= 10, 'Expected core and App tests to actually run'
+          assert result['totalTestCount'] >= 12, 'Expected core and App tests to actually run'
           assert result['failedTests'] == 0, 'Simulator tests failed'
           PY
       - name: Archive the actual iPadOS device App without signing
@@ -101,7 +101,7 @@ jobs:
             -clonedSourcePackagesDirPath .build/SourcePackages -disableAutomaticPackageResolution \
             -onlyUsePackageVersionsFromResolvedFile CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' \
             2>&1 | tee artifacts/logs/archive.log
-      - name: Package and verify unsigned IPA candidate
+      - name: Package and verify re-signable IPA candidate
         id: ipa
         run: |
           set -euo pipefail
@@ -124,16 +124,16 @@ jobs:
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
               summary.write('| Check | Result |\n|---|---|\n')
               for name, value in results.items(): summary.write(f'| {name} | {value} |\n')
-              summary.write('\nUnsigned IPA requires AltStore re-signing. CI does not verify installation or real YouTube playback.\n')
+              summary.write('\nAd-hoc IPA requires AltStore re-signing. CI does not verify installation or real YouTube playback.\n')
           PY
-      - name: Upload unsigned IPA candidate
+      - name: Upload re-signable IPA candidate
         if: steps.ipa.outcome == 'success'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: KnowledgeStudio-unsigned-ipa-${{ github.run_number }}
+          name: KnowledgeStudio-resignable-ipa-${{ github.run_number }}
           path: |
-            artifacts/KnowledgeStudio-unsigned.ipa
-            artifacts/KnowledgeStudio-unsigned.ipa.sha256
+            artifacts/KnowledgeStudio-resignable.ipa
+            artifacts/KnowledgeStudio-resignable.ipa.sha256
             artifacts/package-report.json
           if-no-files-found: error
           retention-days: 7

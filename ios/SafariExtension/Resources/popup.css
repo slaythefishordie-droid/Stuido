@@ -1,0 +1,5 @@
+:root { font: 16px/1.5 system-ui, sans-serif; color-scheme: light dark; }
+body { width: 300px; max-width: 100%; margin: 0; padding: 16px; box-sizing: border-box; }
+h1 { font-size: 20px; }
+button { width: 100%; min-height: 44px; margin-bottom: 8px; font: inherit; }
+output { display: block; overflow-wrap: anywhere; font: 13px/1.5 monospace; user-select: all; }

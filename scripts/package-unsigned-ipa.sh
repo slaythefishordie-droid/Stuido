@@ -31,17 +31,44 @@ require(re.search(r'platform\s+IOS\s*$', build, re.M), f'Mach-O is not built for
 require(not (app / 'embedded.mobileprovision').exists(), 'Unexpected provisioning profile')
 require(not (app / '_CodeSignature').exists(), 'Expected an unsigned device archive')
 PY
+ks_extension="$ks_app/PlugIns/SafariExtension.appex"
+test -d "$ks_extension" || fail 'Safari extension is missing from the device archive.'
+ks_extension_binary="$ks_extension/$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$ks_extension/Info.plist")"
+xcrun lipo "$ks_extension_binary" -verify_arch arm64
+xcrun vtool -show-build "$ks_extension_binary" > .build/extension-platform.txt
+python3 - "$ks_extension" <<'CHECK'
+import pathlib, plistlib, re, sys
+extension = pathlib.Path(sys.argv[1])
+info = plistlib.loads((extension / 'Info.plist').read_bytes())
+assert info['NSExtension']['NSExtensionPointIdentifier'] == 'com.apple.Safari.web-extension'
+assert info['CFBundleSupportedPlatforms'] == ['iPhoneOS']
+assert re.search(r'platform\s+IOS\s*$', pathlib.Path('.build/extension-platform.txt').read_text(), re.M)
+assert (extension / 'Resources/manifest.json').is_file()
+CHECK
+# Ad-hoc signatures carry requested entitlements for the user's re-signing tool.
+# They do not provide an Apple provisioning profile or grant device permissions.
+codesign --force --sign - --generate-entitlement-der --entitlements ios/SafariExtension/SafariExtension.entitlements "$ks_extension"
+codesign --force --sign - --generate-entitlement-der --entitlements ios/KnowledgeStudio/KnowledgeStudio.entitlements "$ks_app"
+codesign --verify --deep --strict "$ks_app"
+codesign -d --entitlements :- "$ks_app" > .build/app-entitlements.plist
+codesign -d --entitlements :- "$ks_extension" > .build/extension-entitlements.plist
+python3 - <<'CHECK'
+import plistlib, pathlib
+for name in ['app', 'extension']:
+    entitlements = plistlib.loads(pathlib.Path(f'.build/{name}-entitlements.plist').read_bytes())
+    assert entitlements['com.apple.security.application-groups'] == ['group.org.knowledge-studio.prototype']
+CHECK
 ks_staging=$(mktemp -d "$PWD/.build/ipa-staging.XXXXXX")
 trap 'rm -rf "$ks_staging"' EXIT
 mkdir -p "$ks_staging/Payload" artifacts
 ditto "$ks_app" "$ks_staging/Payload/KnowledgeStudio.app"
-ks_output="$PWD/artifacts/KnowledgeStudio-unsigned.ipa"
+ks_output="$PWD/artifacts/KnowledgeStudio-resignable.ipa"
 (cd "$ks_staging" && ditto -c -k --keepParent Payload "$ks_output")
 unzip -t "$ks_output"
-(cd artifacts && shasum -a 256 KnowledgeStudio-unsigned.ipa > KnowledgeStudio-unsigned.ipa.sha256)
+(cd artifacts && shasum -a 256 KnowledgeStudio-resignable.ipa > KnowledgeStudio-resignable.ipa.sha256)
 python3 - "$ks_app" <<'PY'
 import json, os, pathlib, plistlib, sys, zipfile
-path = pathlib.Path('artifacts/KnowledgeStudio-unsigned.ipa')
+path = pathlib.Path('artifacts/KnowledgeStudio-resignable.ipa')
 info = plistlib.loads((pathlib.Path(sys.argv[1]) / 'Info.plist').read_bytes())
 with zipfile.ZipFile(path) as archive:
     assert 'Payload/KnowledgeStudio.app/Info.plist' in archive.namelist()
@@ -51,7 +78,12 @@ report = {
     'build_type': 'Release iphoneos arm64',
     'device_compilation': 'passed',
     'package_structure': 'verified',
-    'signed': False,
+    'signed': True,
+    'signing': 'ad-hoc; user provisioning required',
+    'safari_extension_embedded': True,
+    'requested_app_group': 'group.org.knowledge-studio.prototype',
+    'safari_recognition': 'not_tested',
+    'app_group_sharing': 'not_tested',
     'requires_resigning': True,
     'bundle_identifier': info['CFBundleIdentifier'],
     'minimum_os_version': info['MinimumOSVersion'],
@@ -59,7 +91,7 @@ report = {
     'device_family': info['UIDeviceFamily'],
     'altstore_installation': 'not_tested',
     'physical_ipad_validation': 'not_tested',
-    'note': 'Unsigned IPA candidate for AltStore Classic; packaging is not proof of successful installation.'
+    'note': 'Ad-hoc IPA for AltStore Classic re-signing; device extension and App Groups permissions require verification.'
 }
 pathlib.Path('artifacts/package-report.json').write_text(json.dumps(report, indent=2) + '\n')
 PY

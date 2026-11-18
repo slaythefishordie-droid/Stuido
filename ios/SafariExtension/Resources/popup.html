@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Knowledge Studio</title>
+  <link rel="stylesheet" href="popup.css">
+  <script src="popup.js" defer></script>
+</head>
+<body>
+  <h1>共享验证</h1>
+  <p>在此写入记录，返回 Knowledge Studio 核对编号。再从主 App 写入，回到此处读取。</p>
+  <button id="write">写入 Safari 验证记录</button>
+  <button id="read">读取共享记录</button>
+  <p>主 App 的记录</p><output id="app">尚未读取</output>
+  <p>Safari 的记录</p><output id="safari">尚未读取</output>
+  <p id="status" role="status" aria-live="polite"></p>
+</body>
+</html>
