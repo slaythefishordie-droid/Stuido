@@ -18,6 +18,7 @@ final class VideoTests: XCTestCase {
             "javascript:alert(1)", "http://youtu.be/dQw4w9WgXcQ",
             "https://youtube.com/watch?v=bad", "https://youtube.com/playlist?list=abc",
             "https://youtube.com/watch?v=dQw4w9WgXcQ&v=abcdefghijk",
+            "https://youtube.com/watch?v=dQw4w9WgXcQ%0A",
             "https://youtu.be/dQw4w9WgXcQ/extra", "https://youtu.be:9000/dQw4w9WgXcQ"
         ] { XCTAssertThrowsError(try YouTubeVideoID(urlString: url), url) }
     }
@@ -28,7 +29,11 @@ final class VideoTests: XCTestCase {
         defer { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
         let store = try MarkStore(fileURL: url)
         let first = try store.select(videoID: YouTubeVideoID("dQw4w9WgXcQ"))
+        let timestamp = Date(timeIntervalSince1970: 1_600_000_000)
+        try FileManager.default.setAttributes([.modificationDate: timestamp], ofItemAtPath: url.path)
         XCTAssertEqual(try store.select(videoID: first.videoID).id, first.id)
+        let attributes = try FileManager.default.attributesOfItem(atPath: url.path)
+        XCTAssertEqual(attributes[.modificationDate] as? Date, timestamp)
         let mark = try store.append(sourceID: first.id, seconds: 42.125)
         _ = try store.append(sourceID: first.id, seconds: 0)
         let restored = try MarkStore(fileURL: url)

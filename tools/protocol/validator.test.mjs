@@ -45,7 +45,7 @@ test('reference, locator and provenance errors name the offending location', () 
   const result = parsePackage(JSON.stringify(pkg));
   assert.equal(result.valid, false);
   assert(result.errors.some(e => e.code === 'locator_mismatch' && e.path.includes('/cards/0')));
-  assert(result.errors.some(e => e.code === 'invalid_reference'));
+  assert(result.errors.some(e => e.code === 'invalid_reference' && e.path === '/cards/0/provenance/fields/word/source_ref_ids/0'));
 });
 test('original content requires attribution; missing location remains a warning', () => {
   const pkg = base(); pkg.cards[0].provenance.fields.word.source_ref_ids = [];

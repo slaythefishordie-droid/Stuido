@@ -1,5 +1,13 @@
 # 开发进度与验证记录
 
+## 2026-11-18 · 阶段 0 草稿复核
+
+- 当前草稿基于 `7322edd`。另一个提交 `a37dce8` 的原生 CI 已通过 iPad 模拟器测试、设备归档、IPA 校验并上传 `KnowledgeStudio-unsigned-ipa-4`。该产物早于本轮代码修改。[GitHub Actions 运行](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44203023658)
+- 根据 YouTubePlayerKit 2.0.5 源码修正了 SwiftUI 播放器的视图标识，切换视频与重连都会替换显示用的 WKWebView。打开新视频只提交一次，恢复或重连当前视频可复用已保存的选择。视频 ID 改为全文匹配，拒绝尾随换行。
+- 修正导入校验器返回的字段出处错误路径，可定位到具体无效引用。新增缺少必填 `source_refs` 的样例。
+- 本轮验证使用 Linux Swift 6.2.1，核心 8 项通过，覆盖重启恢复、重复选择的文件修改时间、错误链接、零秒及过期会话。协议 26 项通过，四类联合样例经 CLI 校验为 4 张候选卡、0 条警告。
+- 本轮 SwiftUI 文件通过语法解析，仍需 macOS 编译及 iPad 安装后用实际学习视频检验播放、切换、Mark 和回跳。下一阶段为原型 Source 与 Mark 的事务迁移。
+
 ## 2026-11-17 · 阶段 0
 
 起点：仓库 `a4c48fc26db834045e8bd9a681ff7aa95de96255` 只有 README，无工程、AGENTS.md 或现有依赖。选择 SwiftUI，最低 iPadOS 17，Swift 6 语言模式；当前用户设备 iPadOS 26.2。用户只有 Windows 和 iPad，使用免费 Apple 账户及 AltStore Classic。

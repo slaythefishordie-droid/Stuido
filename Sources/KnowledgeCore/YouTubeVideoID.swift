@@ -4,7 +4,7 @@ public struct YouTubeVideoID: Hashable, Codable, Sendable {
     public let rawValue: String
 
     public init(_ rawValue: String) throws {
-        guard rawValue.range(of: "^[A-Za-z0-9_-]{11}$", options: .regularExpression) != nil else {
+        guard rawValue.wholeMatch(of: /[A-Za-z0-9_-]{11}/) != nil else {
             throw VideoError.invalidURL
         }
         self.rawValue = rawValue

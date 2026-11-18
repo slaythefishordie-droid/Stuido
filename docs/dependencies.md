@@ -22,6 +22,8 @@ Readium [#884](https://github.com/readium/swift-toolkit/issues/884) 报告拖动
 
 已知 [YouTubePlayerKit #165](https://github.com/SvenTiigi/YouTubePlayerKit/issues/165)：cued 状态可能从头播放，故回跳验收必须覆盖首次播放、暂停和重新进入，不能只测 playing。原型关闭自动播放、系统全屏按钮和 PiP，保留 App 内放大及原生 Mark，不提取媒体 URL。核心 8 项测试验证了失败/0 秒/落盘/竞态，但不验证 YouTube 服务本身。
 
+2026-11-18 复核锁定版本 2.0.5。iOS 包装在 `makeUIView` 中取得 `player.webView`，`updateUIView` 为空。App 用播放器实例标识绑定 SwiftUI 视图，使切换视频或重连时一并替换 WKWebView，放大和收起继续使用同一实例。显示画面与 Mark 归属的一致性列入真机验收。[上游实现](https://github.com/SvenTiigi/YouTubePlayerKit/blob/1ae827573024ab13dd6adea33b25d3eef6ff667c/Sources/UI/View/YouTubePlayerView.swift)
+
 ## FSRS
 
 | 候选 | 检查版本/commit | 许可证/兼容性 | 决定与验证 |

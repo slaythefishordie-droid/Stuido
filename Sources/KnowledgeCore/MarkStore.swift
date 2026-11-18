@@ -60,6 +60,7 @@ public final class MarkStore {
 
     @discardableResult
     public func select(videoID: YouTubeVideoID) throws -> VideoSource {
+        if let selectedSource, selectedSource.videoID == videoID { return selectedSource }
         var candidate = snapshot
         let source = candidate.sources.first { $0.videoID == videoID }
             ?? VideoSource(id: UUID(), videoID: videoID, createdAt: Date())

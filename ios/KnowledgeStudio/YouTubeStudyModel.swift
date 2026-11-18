@@ -32,7 +32,7 @@ final class YouTubeStudyModel: ObservableObject {
             self.store = store
             capture = MarkCapture(store: store)
             refresh()
-            if let selected = store.selectedSource { activate(selected) }
+            if let selected = store.selectedSource { activate(selected.videoID) }
         } catch {
             store = nil
             capture = nil
@@ -43,14 +43,14 @@ final class YouTubeStudyModel: ObservableObject {
     func openInput() {
         do {
             let id = try YouTubeVideoID(urlString: input)
-            guard let store else { return }
-            activate(try store.select(videoID: id))
+            activate(id)
         } catch { message = error.localizedDescription }
     }
 
-    func activate(_ selected: VideoSource) {
+    func activate(_ videoID: YouTubeVideoID) {
         guard let store, let capture else { return }
-        do { _ = try store.select(videoID: selected.videoID) }
+        let selected: VideoSource
+        do { selected = try store.select(videoID: videoID) }
         catch { message = error.localizedDescription; return }
         operation?.cancel()
         deadline?.cancel()
@@ -58,12 +58,15 @@ final class YouTubeStudyModel: ObservableObject {
         capture.invalidate()
         isReady = false
         isBusy = false
+        token = nil
         source = selected
+        refresh()
         input = selected.videoID.watchURL.absoluteString
         // The wrapper uses originURL as loadHTMLString's baseURL, which supplies Referer.
         // Derive this at runtime so AltStore's re-signed bundle identifier is respected.
         guard let identifier = Bundle.main.bundleIdentifier,
               let origin = URL(string: "https://\(identifier.lowercased())") else {
+            self.player = nil
             message = "无法读取应用身份，播放器未加载。"
             return
         }
@@ -94,7 +97,6 @@ final class YouTubeStudyModel: ObservableObject {
             }
         }.store(in: &subscriptions)
         armDeadline(seconds: 20, token: current, message: "播放器连接超时，请检查网络后重试。")
-        refresh()
     }
 
     func saveMark() {

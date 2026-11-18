@@ -24,8 +24,9 @@ struct YouTubeStudyView: View {
                             .disabled(model.storageError != nil)
                     }
                     if let player = model.player {
-                        // One stable player view: resizing never replaces the WKWebView.
+                        // The wrapper binds its WKWebView at creation. A reconnect creates a new player.
                         YouTubePlayerView(player)
+                            .id(ObjectIdentifier(player))
                             .frame(height: expanded ? 420 : 260)
                             .frame(maxWidth: .infinity)
                         Text(model.message).font(.callout).accessibilityIdentifier("playerStatus")
@@ -59,7 +60,7 @@ struct YouTubeStudyView: View {
                             Divider()
                             Text("最近学习").font(.headline)
                             ForEach(model.sources.reversed()) { source in
-                                Button(source.videoID.rawValue) { model.activate(source) }
+                                Button(source.videoID.rawValue) { model.activate(source.videoID) }
                             }
                         }
                     }
@@ -75,7 +76,7 @@ struct YouTubeStudyView: View {
                             .disabled(!model.isReady || model.isBusy)
                         Button(expanded ? "收起" : "放大") { expanded.toggle() }
                         Spacer()
-                        Button("重连") { if let source = model.source { model.activate(source) } }
+                        Button("重连") { if let source = model.source { model.activate(source.videoID) } }
                     }
                     .padding().background(.bar)
                 }

@@ -82,12 +82,15 @@ export function validatePackage(data) {
       errors.push(issue(`${path}/provenance/fields`, 'provenance_mismatch', '每个实际 content 字段必须有且只有一条 provenance。'));
     }
     if (('note' in card) !== ('note' in card.provenance)) errors.push(issue(`${path}/provenance/note`, 'provenance_mismatch', '导入说明存在时必须提供其 provenance。'));
-    const fields = { ...card.provenance.fields, ...(card.provenance.note ? { note: card.provenance.note } : {}) };
-    for (const [key, value] of Object.entries(fields)) {
-      for (const id of value.source_ref_ids) {
-        if (!refs.has(id)) errors.push(issue(`${path}/provenance/${key}`, 'invalid_reference', `不存在的出处引用：${id}`));
-      }
+    const checkReferences = (field, fieldPath) => {
+      field.source_ref_ids.forEach((id, index) => {
+        if (!refs.has(id)) errors.push(issue(`${fieldPath}/source_ref_ids/${index}`, 'invalid_reference', `不存在的出处引用：${id}`));
+      });
+    };
+    for (const [key, field] of Object.entries(card.provenance.fields)) {
+      checkReferences(field, `${path}/provenance/fields/${key}`);
     }
+    if (card.provenance.note) checkReferences(card.provenance.note, `${path}/provenance/note`);
     for (const [key, value] of Object.entries(card.content)) {
       if (!value.trim()) errors.push(issue(`${path}/content/${key}`, 'empty_content', '内容不能只包含空白。'));
     }
