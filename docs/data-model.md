@@ -47,3 +47,10 @@ SwiftUI View → 应用服务（capture/import/review/backup）→ 领域对象�
 - key_sentence：正面原句，背面已有 explanation 和出处。
 
 展示策略独立于内容数据，待用户实际体验后调整。进入 Review 必须用户主动选择，收藏不会自动入队。FSRS 适配层持有算法版本、参数与时区决定，调度状态和 ReviewRecord 分开事务保存。未实现正反面或每日任务，不把提案当作验收结果。
+
+
+### 里程碑 1 验证实现
+
+主 App 激活时和 Safari 扩展面板请求时读取共享目录。当前只保存双向诊断记录，各端写自己的 JSON 文件并原子替换，用 UUID 核对来源与重启恢复。此诊断格式独立于未来 Mark 交接协议。Safari 的 UI 页面调用 native messaging，原生 SafariServices 处理器执行读写。
+
+分发时以 ad-hoc 签名保存请求的 App Groups 权限，AltStore 重签后优先解析其 ALTAppGroups 元数据。需要用真机确认该版本 AltStore 的实际行为。

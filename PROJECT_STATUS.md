@@ -1,6 +1,6 @@
 # Knowledge Studio 第一版交接
 
-新模型须先读 [AGENTS.md](AGENTS.md)、本文件、[现行产品需求](docs/product-spec.md)和[四个里程碑](docs/web-capture-roadmap.md)。第一版标签保存的是旧原型。主分支现行的网页采集架构为随 App 分发的 Safari Web Extension，扩展和 My Inbox 交接尚待实现。
+新模型须先读 [AGENTS.md](AGENTS.md)、本文件、[现行产品需求](docs/product-spec.md)和[四个里程碑](docs/web-capture-roadmap.md)。第一版标签保存的是旧原型。主分支现行的网页采集架构为随 App 分发的 Safari Web Extension，扩展分发与双向共享验证代码已在 `feature/safari-extension` 通过构建，等待免费签名后的 iPad 验证。My Inbox 交接尚待实现。
 
 ## v0.1.0 已有实现
 
@@ -29,3 +29,5 @@
 依次验证含扩展的构建、免费签名安装、Safari 识别和共享读写；打通 Safari Mark 到 My Inbox；迁移完整 QuickMark；完善文章及播客可复用的适配器接口。[实施顺序与验收](docs/web-capture-roadmap.md)
 
 其余产品工作仍包括正式数据库和旧记录迁移、回收站与备份、四类卡片及双 Inbox、PDF/EPUB/本地视频学习、知识组织和用户自选复习。各项验收条件见[产品需求](docs/product-spec.md)。
+
+里程碑 1 构建及测试证据见[运行记录](docs/verification/safari-m1-run-44245690553.json)，安装与实测见[操作步骤](docs/build-and-install.md)。

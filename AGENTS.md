@@ -1,6 +1,6 @@
 # Knowledge Studio 开发约定
 
-每个新 Codex 模型或新会话开始开发前，必须先读本文件、[PROJECT_STATUS.md](PROJECT_STATUS.md)、[开发计划与验收标准](docs/product-spec.md) 和[Safari 网页采集路线图及脚本迁移对照](docs/web-capture-roadmap.md)，再阅读 README.md、docs/progress.md 以及本次任务涉及的协议或模型文档。先核对当前分支、未提交改动和用户本轮目标。使用当前 checkout。
+每个新 Codex 模型或新会话开始开发前，必须先读本文件、[PROJECT_STATUS.md](PROJECT_STATUS.md)、[开发计划与验收标准](docs/product-spec.md) 和[Safari 网页采集路线图及脚本迁移对照](docs/web-capture-roadmap.md)，再阅读 README.md、docs/progress.md 以及本次任务涉及的协议或模型文档。先核对当前分支、未提交改动和用户本轮目标。Safari 相关开发使用 `feature/safari-extension` 分支，提交前核对分支。
 
 ## 架构与技术栈
 
@@ -18,7 +18,7 @@
 - 不加入内置 AI 聊天、云同步、字典 API、完整浏览器或 YouTube 媒体直链提取。
 - 不清空用户数据来修复数据库/迁移；保留稳定 ID、原始定位、字段 provenance。导入需要显式确认、引用重映射和事务。
 - 依赖通过薄适配层隔离，锁定版本；修改依赖时更新 docs/dependencies.md、锁文件与许可证声明。
-- 不提交 Apple 账户密码、证书、签名密钥、临时签名下载 URL。AltStore 在用户端重签，CI 只产出经过设备架构检查的未签名 IPA 候选。
+- 不提交 Apple 账户密码、证书、签名密钥、临时签名下载 URL。AltStore 在用户端重签，CI 产出经过设备架构检查、需要用户重新签名的 IPA 候选。扩展开发包以 ad-hoc 签名保存权限声明。
 
 ## 相关检查
 

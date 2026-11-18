@@ -1,6 +1,6 @@
 # Knowledge Studio
 
-iPad 优先、本地优先的个人知识整理工具，采用 SwiftUI。网页学习采用随 App 提供的 Safari Web Extension，首个适配器为 YouTube。扩展与共享采集尚待实现。只保留四类卡片，不接入 AI 聊天或云同步。
+iPad 优先、本地优先的个人知识整理工具，采用 SwiftUI。网页学习采用随 App 提供的 Safari Web Extension，首个适配器为 YouTube。开发分支已提供扩展与主 App 双向共享验证入口，真机验证待执行。只保留四类卡片，不接入 AI 聊天或云同步。
 
 新模型开始前先读 [AGENTS.md](AGENTS.md)、[项目状态](PROJECT_STATUS.md)、[产品需求](docs/product-spec.md) 和[四个里程碑](docs/web-capture-roadmap.md)。
 

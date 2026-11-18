@@ -41,3 +41,17 @@ Windows / iPadOS 26.2 用户不需要实体 Mac 来下载 CI 产物。GitHub Act
 ## 本轮环境限制
 
 本地机器为 Linux，Swift 6.2.1 官方工具链签名验证通过；核心测试可执行。Xcode、iPad 模拟器和设备归档只能由 macOS CI 验证。AltStore Classic 实际重签安装、Safari 识别扩展、App Groups 实际共享与网站采集仍需用户设备验证。
+
+## Safari 里程碑 1 开发包
+
+在 `feature/safari-extension` 上手动运行 Native iPadOS。新产物名为 `KnowledgeStudio-resignable-ipa-<run_number>`，内含 `KnowledgeStudio-resignable.ipa`。归档后先验证嵌入的 SafariExtension.appex 的设备架构、扩展类型和 manifest，再用 ad-hoc 签名携带两端的 App Groups 声明。该签名没有 Apple 配置文件，安装仍由 AltStore Classic 免费账户重签。
+
+安装时保留 Safari 扩展。主 App 启动进入「Safari 扩展」验证页面。到 iPad 设置中的 Safari 扩展列表启用 Knowledge Studio，再在 Safari 页面菜单打开它。
+
+1. 在 Safari 面板按「写入 Safari 验证记录」，记下编号。
+2. 打开主 App，确认 Safari 记录编号相同。
+3. 按「写入主 App 验证记录」，记下新的编号。
+4. 回到 Safari 面板按「读取共享记录」，确认主 App 编号相同。
+5. 关闭并重新打开主 App，复核两条记录仍可读取。
+
+首次构建请求组名 `group.org.knowledge-studio.prototype`。AltStore 如果写入 `ALTAppGroups`，程序使用其中唯一的实际组名；空列表或多个组名会报告无法访问。出现错误时请记录原文和安装时对扩展的选项。可访问目录只证明当前进程能访问，两个方向的编号一致才证明共享成功。

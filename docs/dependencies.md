@@ -59,3 +59,9 @@ PDF 使用官方 PDFKit，本地视频使用 AVKit，SwiftUI 通过薄适配层�
 当前 App 只引入 YouTubePlayerKit；MIT 全文随 App 的 `THIRD_PARTY_NOTICES.md` 资源保留。构建用 XcodeGen 2.44.1 也保留 MIT 声明。Ajv/jsonc-parser/ajv-formats 及传递依赖仅用于开发工具，许可证全文同时保存在 `tools/protocol/THIRD_PARTY_NOTICES.md`。未复制第三方业务源码。
 
 其余推荐候选尚未接入，不因此承担其全部依赖体积；进入对应阶段时必须锁定正式版本、补齐传递依赖许可证和实际验证。所有本地内容管理应可离线；只有 YouTube 网络播放会访问第三方服务。YouTubePlayerKit 当前默认使用 WebKit 持久化站点数据存储，可能保留播放器 cookies/cache；本项目的 Mark JSON 独立留在 App 容器。没有评估或批准无许可证/分发条件不明代码。
+
+## Safari 里程碑 1 实施参考
+
+使用 Apple SafariServices 的原生扩展处理器，扩展页面通过 native messaging 请求原生扩展读写共享目录。Apple 文档允许扩展 UI 页面发出原生消息，iOS 主 App 无法直接向 JavaScript 推送消息，所以本轮在主 App 激活时、Safari 面板打开或点击读取时刷新。[Apple 消息与 App Groups 文档](https://developer.apple.com/documentation/safariservices/messaging-between-the-app-and-javascript-in-a-safari-web-extension)
+
+核对 AltStore 的 ResignAppOperation 和 Bundle 扩展后，使用重签时写入的 ALTAppGroups 解析组标识。这里只使用其声明的数据键，未引入新的第三方运行库。[AltStore 重签实现](https://github.com/altstoreio/AltStore/blob/marketplace/AltStore/Operations/ResignAppOperation.swift) · [Info 字段定义](https://github.com/altstoreio/AltStore/blob/marketplace/Shared/Extensions/Bundle%2BAltStore.swift)

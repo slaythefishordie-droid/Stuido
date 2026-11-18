@@ -1,0 +1,160 @@
+{
+  "run": {
+    "id": 44245690553,
+    "html_url": "https://github.com/slaythefishordie-droid/Stuido/actions/runs/44245690553",
+    "head_sha": "547eaf4020001c0a4462263a36a03dfe2a277905",
+    "conclusion": "success",
+    "updated_at": "2026-11-18T05:44:50Z"
+  },
+  "jobs": [
+    {
+      "id": 134604054636,
+      "name": "Xcode 26.2 · iPadOS",
+      "conclusion": "success",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-18T05:39:08Z",
+          "completed_at": "2026-11-18T05:39:09Z"
+        },
+        {
+          "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-18T05:39:09Z",
+          "completed_at": "2026-11-18T05:39:11Z"
+        },
+        {
+          "name": "Record toolchain",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-18T05:39:11Z",
+          "completed_at": "2026-11-18T05:39:17Z"
+        },
+        {
+          "name": "Generate project with verified XcodeGen 2.44.1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-18T05:39:17Z",
+          "completed_at": "2026-11-18T05:39:18Z"
+        },
+        {
+          "name": "Resolve and check locked Swift packages",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-18T05:39:18Z",
+          "completed_at": "2026-11-18T05:39:36Z"
+        },
+        {
+          "name": "Run Swift core tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-18T05:39:36Z",
+          "completed_at": "2026-11-18T05:40:04Z"
+        },
+        {
+          "name": "Test the native App on an iPad simulator",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-18T05:40:04Z",
+          "completed_at": "2026-11-18T05:43:56Z"
+        },
+        {
+          "name": "Surface simulator build errors",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 8,
+          "started_at": "2026-11-18T05:43:56Z",
+          "completed_at": "2026-11-18T05:43:56Z"
+        },
+        {
+          "name": "Archive the actual iPadOS device App without signing",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-11-18T05:43:56Z",
+          "completed_at": "2026-11-18T05:44:37Z"
+        },
+        {
+          "name": "Package and verify re-signable IPA candidate",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-11-18T05:44:37Z",
+          "completed_at": "2026-11-18T05:44:39Z"
+        },
+        {
+          "name": "Record separate verification outcomes",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-11-18T05:44:39Z",
+          "completed_at": "2026-11-18T05:44:39Z"
+        },
+        {
+          "name": "Upload re-signable IPA candidate",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-11-18T05:44:39Z",
+          "completed_at": "2026-11-18T05:44:40Z"
+        },
+        {
+          "name": "Upload logs, test results and generated project",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-11-18T05:44:40Z",
+          "completed_at": "2026-11-18T05:44:42Z"
+        },
+        {
+          "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 26,
+          "started_at": "2026-11-18T05:44:42Z",
+          "completed_at": "2026-11-18T05:44:43Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27,
+          "started_at": "2026-11-18T05:44:43Z",
+          "completed_at": "2026-11-18T05:44:47Z"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 14402425120,
+      "name": "KnowledgeStudio-resignable-ipa-11",
+      "digest": "sha256:d15a97857fa6c0818808f3e77a5b63345f656a6d6f870f0c710526033a437a3f",
+      "expires_at": "2026-11-25T05:44:40Z"
+    },
+    {
+      "id": 14401069419,
+      "name": "KnowledgeStudio-build-evidence-11",
+      "digest": "sha256:32cf35270cf8c5ca35dec23df6817ab6fca73dec5bda811b6e39777b5c65e6c6",
+      "expires_at": "2026-11-25T05:44:41Z"
+    }
+  ],
+  "scope": {
+    "source": "GitHub REST API job and artifact metadata",
+    "simulator_gate": "at least 12 tests, 0 failed",
+    "artifact_local_download": "blocked by runtime network policy",
+    "altstore_free_signing": "not_tested",
+    "safari_recognition": "not_tested",
+    "app_group_sharing": "not_tested"
+  }
+}

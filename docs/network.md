@@ -43,3 +43,9 @@
 然后检查任务运行实例是否加载了新配置；验收依据是生效白名单包含新增域名，且实际日志/Artifact 下载成功，不能只看草稿已保存。当前工具只允许保存草稿，不提供发布或修改运行实例网络策略的操作。
 
 真实 YouTube 播放还需要 iPad 自身能访问 YouTube；云环境文档白名单不等于 iPad 网络可播放，也不等于 GitHub macOS Runner 的网络策略。
+
+## Safari 扩展构建的下载域名
+
+2026-11-18，运行 44244882996 的日志和 Artifact 实际下载域名为 `productionresultssa30.blob.core.windows.net`。运行中白名单含 sa4、sa5，但缺少 sa30，下载返回 Forbidden。已经保存增量加入 sa30 的配置草稿，工具要求发布后应用。重新启动或应用配置后，先检查环境策略再重试真实日志下载。GitHub 会使用不同的存储主机，应以实际重定向为准。
+
+运行 44245690553 的 IPA 与测试产物使用 `productionresultssa18.blob.core.windows.net`。sa18 也已加入配置草稿，当前运行实例尚未应用。

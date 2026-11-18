@@ -1,5 +1,13 @@
 # 开发进度与验证记录
 
+## Safari 里程碑 1 · 2026-11-18
+
+`feature/safari-extension` 的提交 `547eaf4020001c0a4462263a36a03dfe2a277905` 已通过原生 CI。核心测试、iPad 模拟器测试、设备归档和含 Safari 扩展的 IPA 校验均成功。模拟器门槛提升为至少 12 个测试且失败数为 0，包含新增的独立写入重开和损坏记录保留测试。Linux 核心测试另行复跑 8 项通过。[原生运行](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44245690553) · [验证元数据](verification/safari-m1-run-44245690553.json)
+
+主 App 入口为 Safari 共享验证页，Safari 扩展弹出面板通过 Native Messaging 写入或读取两端诊断编号。修正了扩展资源的打包层级，manifest 位于包根目录。归档以 ad-hoc 签名保留 App Groups 声明，产物名为 KnowledgeStudio-resignable-ipa-11。
+
+真机免费重签、Safari 识别和双向共享仍待执行。当前运行环境缺少 GitHub 日志与产物的新存储域名，新增 sa30、sa18 的配置草稿已保存，待发布应用。API 可核实构建步骤成功，完整产物尚未本地复验。[安装和双向验证步骤](build-and-install.md)
+
 ## 第一版交接与网页采集架构更新
 
 `v0.1.0` 的提交为 `7df6ef182b73131878a07e568cf6799fc543cf0c`。本地 Swift 核心测试 8 项通过，导入协议测试 26 项通过。该提交的 GitHub 原生构建、模拟器测试、设备归档及 IPA 校验成功，协议 CI 成功。原始 CI 产物包括 `KnowledgeStudio-build-evidence-6`、`KnowledgeStudio-unsigned-ipa-6` 和 `protocol-evidence-3`。[原生 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44227526926) · [协议 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44227553771)
