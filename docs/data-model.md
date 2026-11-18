@@ -1,6 +1,6 @@
 # 数据模型与技术决定
 
-状态：阶段 0 的正式架构约定。当前代码只实现视频 Source/Mark 的小型原型存储；以下正式数据库和导入事务在阶段 1–2 实现。
+现行设计覆盖 Safari 网页采集和主 App 的本地知识库。第一版实现了视频 Source/Mark 原型存储；Safari 扩展、共享交接、正式数据库及导入事务仍待实现。
 
 ## 独立维度
 
@@ -26,7 +26,14 @@
 
 ## 分层与依赖边界
 
-SwiftUI View → 应用服务（capture/import/review/backup）→ 领域对象与 Repository 协议 → 持久化适配层。多个页面查询同一存储：Dictionary 过滤 word/keyword，Corpus 过滤 expression/key_sentence；双 Inbox 按来源和阶段筛选。当前 `VideoClock` 将第三方播放器隔离，`MarkCapture` 处理会话，`MarkStore` 负责原子落盘。应用本身不建 Web 浏览器、不调用 ChatGPT、不获取 YouTube 媒体直链。
+SwiftUI View → 应用服务（capture/import/review/backup）→ 领域对象与 Repository 协议 → 持久化适配层。多个页面查询同一存储：Dictionary 过滤 word/keyword，Corpus 过滤 expression/key_sentence；双 Inbox 按来源和阶段筛选。网页标记属于用户自行发现的内容，进入 My Inbox；AI Inbox 继续接收用户手动导入的候选卡片。
+
+### Safari 扩展与主 App 的职责
+
+- 一个随主 App 分发的 Safari Web Extension 承载多个网站适配器。适配器在原页面识别资料，读取页面真实定位并承接站点变化。YouTube 首先使用出处链接和秒数；文章、播客后续按资料类型提供定位。通用知识库使用 Source、Mark 及其关联。
+- 采集和交接经本地 Native Messaging 与 App Groups。只有持久化成功才提示已保存；主 App 未运行时仍可采集。切回 App 后自动接收，交接中断可重试；同一唯一 ID 重送只出现一次。采集时不暂停精听、不弹编辑表单、不切换 App。
+- QuickMark 回溯作用于新书签保存的位置。旧原型的 Mark 在迁移时保留原始 ID、定位与秒数，已有记录不重新套用回溯设置。
+- Native Messaging 的具体消息流程、共享存储格式、代码结构和接口由实施时决定。ChatGPT 导入 Schema 与 QuickMark 旧书签备份各自服务于原来的用途。[网页采集路线图](web-capture-roadmap.md)
 
 阶段 1 优先 GRDB/SQLite，原因是显式事务、外键、迁移、备份快照和 Linux 验证便利。正式接入前跑迁移/失败回滚/备份恢复验证，并锁版本。当前 prototype-v1.json 是可迁移记录：UUID、sourceID 和原始秒数保持不变；数据库迁移成功前保留原文件，失败不能清空重建。它还不提供正式 Data Manager 或用户备份能力。
 

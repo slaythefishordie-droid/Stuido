@@ -1,8 +1,10 @@
 # Knowledge Studio
 
-iPad 优先、本地优先的个人知识整理工具，采用 SwiftUI。当前进行阶段 0：协议与依赖评估、YouTube Mark 原型、原生自动构建。只保留四类卡片，不接入 AI 聊天或云同步。
+iPad 优先、本地优先的个人知识整理工具，采用 SwiftUI。网页学习采用随 App 提供的 Safari Web Extension，首个适配器为 YouTube。扩展与共享采集尚待实现。只保留四类卡片，不接入 AI 聊天或云同步。
 
-## 当前可执行内容
+新模型开始前先读 [AGENTS.md](AGENTS.md)、[项目状态](PROJECT_STATUS.md)、[产品需求](docs/product-spec.md) 和[四个里程碑](docs/web-capture-roadmap.md)。
+
+## 第一版已有实现（旧原型）
 
 - `Sources/KnowledgeCore`：YouTube 链接校验、会话隔离、带版本的原子 Mark 存储。
 - `ios/`：SwiftUI YouTube 播放 / Mark / 回跳 / 最近视频原型。SPM 锁定 YouTubePlayerKit 2.0.5。
@@ -12,8 +14,8 @@ iPad 优先、本地优先的个人知识整理工具，采用 SwiftUI。当前�
 
 macOS 上运行 `bash scripts/bootstrap-xcodegen.sh` 生成 `ios/KnowledgeStudio.xcodeproj`，然后打开项目。最低 iPadOS 17；CI 使用 SDK 26.2。无 Apple ID、证书或密码进入 CI。
 
-2026-11-18 已通过 [Native iPadOS #4](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44203023658)：依赖检查、核心与 iPad 模拟器测试、设备归档、未签名 IPA 打包和产物上传。AltStore 重签安装及真机交互仍待用户设备验证。
+第一版标签 `v0.1.0` 已通过 [Native iPadOS #6](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44227526926)：依赖检查、核心与 iPad 模拟器测试、设备归档、未签名 IPA 打包和产物上传。AltStore 重签安装及真机交互仍待用户设备验证。
 
 参见 [构建与 AltStore 安装](docs/build-and-install.md)、[网络诊断](docs/network.md)。编译成功、模拟器测试成功、重签安装成功和真机功能验证是不同状态。当前验证记录会随实际运行更新；不能用未签名 IPA 推断安装成功。
 
-需求与接续文档：[原始产品规范](docs/product-spec.md)、[数据模型](docs/data-model.md)、[导入协议](docs/protocol.md)、[ChatGPT 提示词](docs/chatgpt-prompt.zh.md)、[依赖评估](docs/dependencies.md)、[进度与阻塞](docs/progress.md)、[真机验收](docs/device-validation.md)。
+需求与接续文档：[现行产品需求](docs/product-spec.md)、[数据模型](docs/data-model.md)、[导入协议](docs/protocol.md)、[ChatGPT 提示词](docs/chatgpt-prompt.zh.md)、[依赖评估](docs/dependencies.md)、[进度与阻塞](docs/progress.md)、[真机验收](docs/device-validation.md)。

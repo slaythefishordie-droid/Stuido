@@ -11,18 +11,11 @@
 
 Readium [#884](https://github.com/readium/swift-toolkit/issues/884) 报告拖动结束在 decoration 上影响点击，另有 [#927](https://github.com/readium/swift-toolkit/issues/927) ZIP 对齐问题、[#897](https://github.com/readium/swift-toolkit/issues/897) 依赖体积问题。后续必须用真实 EPUB 验证选文、保存、重开定位和分屏；当前仅完成资料/源码评估，未将它加入 App 依赖。
 
-## YouTube 与 SwiftUI
+## 网页采集与历史播放器依赖
 
-| 候选 | 检查版本/commit | 许可证/兼容性 | 决定与验证 |
-|---|---|---|---|
-| [YouTubePlayerKit](https://github.com/SvenTiigi/YouTubePlayerKit) | 2.0.5，`1ae827573024ab13dd6adea33b25d3eef6ff667c`，2025-11-30 | MIT；Swift tools 6.0，iOS 15+；无第三方传递依赖 | **已用 SPM exact 接入**。源码核实 WKWebView inline、getCurrentTime、seekTo、statePublisher、autoplayBlockedPublisher、错误 101/150/153 和 Bundle ID origin。用 VideoClock 隔离，包不会定义我们的 Card/Mark。原生编译交给 CI，真实播放仍待 iPad。 |
-| [官方 youtube-ios-player-helper](https://github.com/youtube/youtube-ios-player-helper) | 1.0.4，`f57129cd4380ec0a74dd3a59da3270a1d653d59b`，2021-12-10 | Apache-2.0；ObjC/WKWebView、iOS 10+ | 官方但发行较旧，SwiftUI/async 适配成本更高，未选。Issues 有登录要求和停止播放泄漏报告；不能因“官方”就假定全部情形可靠。 |
+正式采集采用随主 App 提供的 Safari Web Extension、Native Messaging 与 App Groups。用户提供的「YouTube 随手时间书签」2.0.0 作为迁移行为基准，原脚本使用第三方 Userscripts 的 GM 存储；新方案独立安装。仓库只记录功能对照，原脚本未声明许可证。后续若复用其代码，应先核实授权。[迁移对照](web-capture-roadmap.md)
 
-已读取 [IFrame API](https://developers.google.com/youtube/iframe_api_reference) 和 [Required Minimum Functionality](https://developers.google.com/youtube/terms/required-minimum-functionality)：必须提供 Referer；本地 HTML 可通过 `loadHTMLString:baseURL:` 设置；替代安装渠道使用系统安装的真实 app ID。原型显式把运行时 Bundle ID 生成的 HTTPS origin 传入包装层，避免 AltStore 重签后硬编码失效。`widget_referrer` 不是 HTTP Referer 的替代品；需真机确认请求身份没有被 WebKit 抑制。
-
-已知 [YouTubePlayerKit #165](https://github.com/SvenTiigi/YouTubePlayerKit/issues/165)：cued 状态可能从头播放，故回跳验收必须覆盖首次播放、暂停和重新进入，不能只测 playing。原型关闭自动播放、系统全屏按钮和 PiP，保留 App 内放大及原生 Mark，不提取媒体 URL。核心 8 项测试验证了失败/0 秒/落盘/竞态，但不验证 YouTube 服务本身。
-
-2026-11-18 复核锁定版本 2.0.5。iOS 包装在 `makeUIView` 中取得 `player.webView`，`updateUIView` 为空。App 用播放器实例标识绑定 SwiftUI 视图，使切换视频或重连时一并替换 WKWebView，放大和收起继续使用同一实例。显示画面与 Mark 归属的一致性列入真机验收。[上游实现](https://github.com/SvenTiigi/YouTubePlayerKit/blob/1ae827573024ab13dd6adea33b25d3eef6ff667c/Sources/UI/View/YouTubePlayerView.swift)
+v0.1.0 的旧原型实际锁定 YouTubePlayerKit 2.0.5（MIT），因此继续保留锁文件及许可证。其嵌入式播放器、Referer 配置与相关测试只适用于该版本。此前对官方 helper 和 YouTubePlayerKit 的比较可在[第一版评估记录](https://github.com/slaythefishordie-droid/Stuido/blob/v0.1.0/docs/dependencies.md)查阅。
 
 ## FSRS
 

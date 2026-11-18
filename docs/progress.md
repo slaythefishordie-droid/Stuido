@@ -1,5 +1,11 @@
 # 开发进度与验证记录
 
+## 第一版交接与网页采集架构更新
+
+`v0.1.0` 的提交为 `7df6ef182b73131878a07e568cf6799fc543cf0c`。本地 Swift 核心测试 8 项通过，导入协议测试 26 项通过。该提交的 GitHub 原生构建、模拟器测试、设备归档及 IPA 校验成功，协议 CI 成功。原始 CI 产物包括 `KnowledgeStudio-build-evidence-6`、`KnowledgeStudio-unsigned-ipa-6` 和 `protocol-evidence-3`。[原生 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44227526926) · [协议 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44227553771)
+
+上述运行只覆盖旧主 App。现行开发从含 Safari 扩展的构建和免费签名可行性开始。新计划与真机证据分别维护；以下日期条目保留为旧原型历史记录，其中的“下一步”和待办仅反映当时状态。[当前路线图](web-capture-roadmap.md) · [验证记录](device-validation.md)
+
 ## 2026-11-18 · 阶段 0 草稿复核
 
 - 当前草稿基于 `7322edd`。另一个提交 `a37dce8` 的原生 CI 已通过 iPad 模拟器测试、设备归档、IPA 校验并上传 `KnowledgeStudio-unsigned-ipa-4`。该产物早于本轮代码修改。[GitHub Actions 运行](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44203023658)
