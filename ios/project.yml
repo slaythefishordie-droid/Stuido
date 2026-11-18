@@ -54,7 +54,7 @@ targets:
         excludes: [Resources]
       - path: Shared
       - path: SafariExtension/Resources
-        type: folder
+        type: group
         buildPhase: resources
     settings:
       base:

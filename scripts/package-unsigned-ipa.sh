@@ -43,7 +43,7 @@ info = plistlib.loads((extension / 'Info.plist').read_bytes())
 assert info['NSExtension']['NSExtensionPointIdentifier'] == 'com.apple.Safari.web-extension'
 assert info['CFBundleSupportedPlatforms'] == ['iPhoneOS']
 assert re.search(r'platform\s+IOS\s*$', pathlib.Path('.build/extension-platform.txt').read_text(), re.M)
-assert (extension / 'Resources/manifest.json').is_file()
+assert (extension / 'manifest.json').is_file()
 CHECK
 # Ad-hoc signatures carry requested entitlements for the user's re-signing tool.
 # They do not provide an Apple provisioning profile or grant device permissions.
