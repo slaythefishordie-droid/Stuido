@@ -12,6 +12,8 @@ iPad 优先、本地优先的个人知识整理工具，采用 SwiftUI。当前�
 
 macOS 上运行 `bash scripts/bootstrap-xcodegen.sh` 生成 `ios/KnowledgeStudio.xcodeproj`，然后打开项目。最低 iPadOS 17；CI 使用 SDK 26.2。无 Apple ID、证书或密码进入 CI。
 
+2026-11-18 已通过 [Native iPadOS #4](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44203023658)：依赖检查、核心与 iPad 模拟器测试、设备归档、未签名 IPA 打包和产物上传。AltStore 重签安装及真机交互仍待用户设备验证。
+
 参见 [构建与 AltStore 安装](docs/build-and-install.md)、[网络诊断](docs/network.md)。编译成功、模拟器测试成功、重签安装成功和真机功能验证是不同状态。当前验证记录会随实际运行更新；不能用未签名 IPA 推断安装成功。
 
 需求与接续文档：[原始产品规范](docs/product-spec.md)、[数据模型](docs/data-model.md)、[导入协议](docs/protocol.md)、[ChatGPT 提示词](docs/chatgpt-prompt.zh.md)、[依赖评估](docs/dependencies.md)、[进度与阻塞](docs/progress.md)、[真机验收](docs/device-validation.md)。

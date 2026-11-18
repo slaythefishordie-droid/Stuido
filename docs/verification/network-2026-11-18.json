@@ -1,0 +1,122 @@
+{
+  "observed_at_utc": "2026-11-17T23:57:38.063Z",
+  "display_date": "2026-11-18",
+  "display_timezone": "Asia/Shanghai",
+  "runtime": {
+    "observations_current": true,
+    "phase": "running",
+    "network_state": "enforced",
+    "mode": "restricted",
+    "custom_allowed_hosts": [
+      "api.github.com",
+      "developer.android.com",
+      "developers.google.com"
+    ],
+    "presets": [
+      "package_managers"
+    ]
+  },
+  "saved_draft": {
+    "revision": 3,
+    "custom_allowed_hosts": [
+      "api.github.com",
+      "developer.android.com",
+      "developers.google.com",
+      "productionresultssa4.blob.core.windows.net",
+      "productionresultssa5.blob.core.windows.net",
+      "results-receiver.actions.githubusercontent.com"
+    ],
+    "applied_to_current_runtime": false
+  },
+  "probes": [
+    {
+      "host": "github.com",
+      "curl_exit": 0,
+      "connect_http": "200",
+      "target_http": "200",
+      "tls_verify_result": "0",
+      "error": "",
+      "classification": "https_reachable",
+      "tls_handshake_reached": true
+    },
+    {
+      "host": "api.github.com",
+      "curl_exit": 0,
+      "connect_http": "200",
+      "target_http": "200",
+      "tls_verify_result": "0",
+      "error": "",
+      "classification": "https_reachable",
+      "tls_handshake_reached": true
+    },
+    {
+      "host": "developer.android.com",
+      "curl_exit": 0,
+      "connect_http": "200",
+      "target_http": "200",
+      "tls_verify_result": "0",
+      "error": "",
+      "classification": "https_reachable",
+      "tls_handshake_reached": true
+    },
+    {
+      "host": "developers.google.com",
+      "curl_exit": 0,
+      "connect_http": "200",
+      "target_http": "200",
+      "tls_verify_result": "0",
+      "error": "",
+      "classification": "https_reachable",
+      "tls_handshake_reached": true
+    },
+    {
+      "host": "results-receiver.actions.githubusercontent.com",
+      "curl_exit": 56,
+      "connect_http": "403",
+      "target_http": "000",
+      "tls_verify_result": "0",
+      "error": "curl: (56) CONNECT tunnel failed, response 403",
+      "classification": "proxy_policy_rejection_before_tls",
+      "tls_handshake_reached": false
+    },
+    {
+      "host": "productionresultssa4.blob.core.windows.net",
+      "curl_exit": 56,
+      "connect_http": "403",
+      "target_http": "000",
+      "tls_verify_result": "0",
+      "error": "curl: (56) CONNECT tunnel failed, response 403",
+      "classification": "proxy_policy_rejection_before_tls",
+      "tls_handshake_reached": false
+    },
+    {
+      "host": "productionresultssa5.blob.core.windows.net",
+      "curl_exit": 56,
+      "connect_http": "403",
+      "target_http": "000",
+      "tls_verify_result": "0",
+      "error": "curl: (56) CONNECT tunnel failed, response 403",
+      "classification": "proxy_policy_rejection_before_tls",
+      "tls_handshake_reached": false
+    }
+  ],
+  "failed_log_download": {
+    "run_id": 44077503279,
+    "result": "blocked",
+    "destination_host": "results-receiver.actions.githubusercontent.com",
+    "message": "Forbidden; signed query deliberately omitted"
+  },
+  "notes": [
+    "Inherited platform proxy and default CA verification used; no TLS bypass.",
+    "A zero curl ssl_verify_result does not indicate a verified TLS connection when CONNECT fails.",
+    "Saving a draft does not publish it or apply it to this runtime."
+  ],
+  "latest_successful_run_downloads": {
+    "run_id": 44203023658,
+    "log": "blocked",
+    "ipa_artifact": "blocked",
+    "log_host": "results-receiver.actions.githubusercontent.com",
+    "ipa_artifact_host": "productionresultssa5.blob.core.windows.net"
+  },
+  "updated_at_utc": "2026-11-18T00:02:46.071Z"
+}

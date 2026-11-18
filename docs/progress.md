@@ -9,7 +9,7 @@
 - 保存原始需求、独立状态/对象模型、版本和事务约定、依赖评估、ChatGPT 提示词。
 - Draft 2020-12 Schema 与共享校验入口；四类内容、字段 provenance、Source/Relation 引用、具体错误、重复批次和内容预览；未实现正式导入事务或 AI Inbox UI。
 - SwiftUI YouTube 最小工程，固定 SPM 版本；原生 Mark/时间回跳/最近视频/原子原型存储/失败提示/超时/会话隔离。未扩展 PDF、EPUB、图谱等复杂界面。
-- macOS 15 + Xcode 26.2 Actions，核心测试、iPad 模拟器测试、真实 iphoneos archive、未签名 IPA 结构校验、日志/xcresult/产物上传与独立结果记录。
+- 标准 macOS 26 ARM64 + Xcode 26.2 Actions，核心测试、iPad 模拟器测试、真实 iphoneos archive、未签名 IPA 结构校验、日志/xcresult/产物上传与独立结果记录。
 - 网络诊断：四个目标域名 HTTPS 200/TLS 校验通过；平台提供的当前白名单已含 API 和 Google 开发文档。没有关闭验证或改写代理。
 
 ## 当前验证证据
@@ -22,10 +22,11 @@
 | 工作流静态检查 | actionlint 1.7.12 通过 | 不等于 GitHub Runner 已执行 |
 | Shell 语法 | bash -n 通过 | 不等于 macOS 打包成功 |
 | GitHub 协议 CI | 成功 | [run 44077240571](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44077240571)，commit `e9b42987189de313ec85f026c6b6b6acd4bf8b9c`，日志 Artifact 已上传 |
-| 原生 CI 的 SPM / 核心测试 | 成功 | [run 44077503279](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44077503279)，commit `eac8adb4dfd3d00ac6782d7c5aee268ded4ff64a`；实际 macos-15-intel / Xcode 26.2 |
-| 原生 App 编译与模拟器测试 | 成功 | 同次 CI 的 simulator 步骤通过，强制断言至少 10 个测试、0 失败；包含 8 个核心和 2 个 App 测试 |
-| device archive | 命令成功 | generic/platform=iOS Release archive 通过；后续 IPA 校验尚未通过 |
-| unsigned IPA 打包校验 | **失败，待日志诊断** | IPA 未上传；构建证据 Artifact `KnowledgeStudio-build-evidence-2` 已上传。未把普通归档称为可安装包 |
+| 原生 CI 的 SPM / 核心测试 | 成功 | [run 44203023658](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44203023658)，commit `a37dce8cf1ca47e8a70befa36808eb8f9f82632e`；标准 macos-26 ARM64 / Xcode 26.2 |
+| 原生 App 编译与模拟器测试 | 成功 | 同次 CI 的 simulator 步骤通过，强制断言至少 10 个测试、0 失败；工程包含 8 个核心和 2 个 App 测试。完整 xcresult 尚未下载到本云环境 |
+| device archive | 成功 | generic/platform=iOS Release archive 通过；后续确认 arm64 / iPhoneOS / iPad 设备族及未签名状态 |
+| unsigned IPA 打包校验 | **成功，已上传候选 IPA** | `KnowledgeStudio-unsigned-ipa-4`；Payload 结构、ZIP CRC 和 SHA-256 生成步骤通过；不等于 AltStore 安装成功 |
+| 日志与测试证据上传 | 成功 | `KnowledgeStudio-build-evidence-4`；本云环境下载仍被网络策略拒绝，当前记录依据 Actions API 的逐步结果与产物元数据 |
 | AltStore 重签安装 | 未执行 | 必须用用户实际设备验证 |
 | iPad 真实播放/Mark/回跳/恢复 | 未执行 | 见 device-validation.md |
 
@@ -33,10 +34,10 @@
 
 ## 当前限制与下步
 
-1. IPA 打包修复正在复测：旧脚本把输入文件放在 `lipo -verify_arch arm64` 之后；Apple cctools 参数解析源码确认这会把文件路径当作架构名称。已改为 `lipo <binary> -verify_arch arm64`，保留全部架构/平台/签名/ZIP 检查，并为失败增加 GitHub 原生错误注解。完整旧日志仍受网络限制，不能断言这是唯一失败原因；以新的实际 CI 结果为准。
-2. 当前生效白名单仍是原来的三个域名，草稿另有 `productionresultssa4.blob.core.windows.net` 和 `results-receiver.actions.githubusercontent.com`，**草稿未应用到运行实例**。待环境设置保存并发布后重试日志下载；不再把下载限制当作无法检查本地脚本的理由。
+1. IPA 打包修复已通过实际 CI：旧脚本把输入文件放在 `lipo -verify_arch arm64` 之后；Apple cctools 参数解析源码确认这会把文件路径当作架构名称。已改为 `lipo <binary> -verify_arch arm64`，保留全部架构/平台/签名/ZIP 检查，并为失败增加 GitHub 原生错误注解。完整旧日志仍受网络限制，因此不追认这是旧运行的唯一失败原因。
+2. 当前生效白名单仍是原来的三个域名，草稿另有 `productionresultssa4.blob.core.windows.net`、`productionresultssa5.blob.core.windows.net` 和 `results-receiver.actions.githubusercontent.com`，**草稿未应用到运行实例**。新的 IPA 实际下载跳转到了 `productionresultssa5`，再次返回 Forbidden。待环境设置保存并发布后重试；用户 Windows 浏览器不受本云环境白名单影响。
 3. 阶段 0 只有 YouTube 纵向原型；没有虚构 Today/Library/Dictionary 等已实现页面。严格导入工具可执行，但原生 JSONSchema 适配层、Source 匹配 UI 与数据库事务仍属阶段 2。
-4. 通过 CI 后，请用户下载未签名 IPA 在 AltStore Classic 重签，并按真机清单报告实际结果；CI 不需要 Apple 密码、证书或签名密钥。
+4. CI 已通过，请用户下载未签名 IPA 在 AltStore Classic 重签，并按真机清单记录实际结果；CI 不需要 Apple 密码、证书或签名密钥。当前只能确认未签名设备 App 的构建与打包，不宣称已验证 AltStore / iPadOS 26.2 安装兼容性。
 5. 原生构建流程确认后进入阶段 1：数据库迁移、原型 Mark 迁入、回收站、备份恢复与失败回滚。继续保留所有稳定 ID 与原始秒数，不清空原型文件。
 6. 待产品体验后决定复习正反面；提案在 data-model.md，可调整。FSRS 日界与用户时区差异在依赖评估中记录。
 
@@ -48,6 +49,10 @@
 
 ## 2026-11-18 · 构建调度与网络复查
 
-修复提交 `7322edda9371f017acd5c76d0187e7937ed67783` 对应 [run 44081549150](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44081549150) 未执行任何步骤。GitHub 注解明确为 `The job was not acquired by Runner of type hosted even after multiple attempts`，是托管 Runner 调度失败，不能记为新代码编译失败或测试失败。改用经官方 ARM64 镜像清单核实的标准 `macos-26`，继续固定 Xcode 26.2 / iOS 26.2 模拟器。尚待新运行验证。
+修复提交 `7322edda9371f017acd5c76d0187e7937ed67783` 对应 [run 44081549150](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44081549150) 未执行任何步骤。GitHub 注解明确为 `The job was not acquired by Runner of type hosted even after multiple attempts`，是托管 Runner 调度失败，不能记为新代码编译失败或测试失败。改用经官方 ARM64 镜像清单核实的标准 `macos-26`，继续固定 Xcode 26.2 / iOS 26.2 模拟器；新 run `44203023658` 已全部成功，详见 [机器记录](verification/native-run-44203023658.json)。没有切换到付费 larger runner。
 
-云实例已恢复为 running。当前生效白名单仍为原来三项；本次绑定的新草稿 revision 1 没有自定义域名，旧草稿的两项追加没有出现在新草稿中。已经把原有三项及两项下载域名再次保存到当前草稿；没有声称已更改生效网络策略。完整日志下载仍返回 403，失败细节也可由新增的 GitHub 原生错误注解报告。
+云实例已恢复为 running。当前生效白名单仍为原来三项；本次绑定的新草稿 revision 1 没有自定义域名，旧草稿的两项追加没有出现在新草稿中。已经保留原有三项、重新加入两项旧下载域名，再根据本次实际跳转追加 `productionresultssa5.blob.core.windows.net`；当前草稿 revision 3 共六项。保存不等于发布，完整日志和 IPA 下载仍受限。见 [网络记录](verification/network-2026-11-18.json)。
+
+最新运行的 IPA Artifact 大小为 331,594 字节，证据 Artifact 为 152,314 字节；这是外层 Artifact ZIP 大小，API 返回的 digest 也仅属于外层 ZIP。IPA 本身的 SHA-256 在产物内的 `.ipa.sha256` 文件中，本云环境尚未取到文件，未伪造其摘要。两个 Artifact 均保留 7 天，下载入口见 [构建与安装](build-and-install.md)。
+
+运行另有两个非失败注解：固定的 checkout / upload-artifact 版本声明 Node 20，GitHub 已用 Node 24 执行且步骤成功；标准 macOS ARM64 容量紧张可能导致排队。它们没有导致本次构建失败，不为消除提示重复触发 macOS 构建。

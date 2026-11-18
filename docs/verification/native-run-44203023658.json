@@ -1,0 +1,194 @@
+{
+  "observed_at_utc": "2026-11-18T00:01:06.556520+00:00",
+  "run": {
+    "id": 44203023658,
+    "run_number": 4,
+    "html_url": "https://github.com/slaythefishordie-droid/Stuido/actions/runs/44203023658",
+    "status": "completed",
+    "conclusion": "success",
+    "head_sha": "a37dce8cf1ca47e8a70befa36808eb8f9f82632e",
+    "created_at": "2026-11-17T23:51:50Z",
+    "updated_at": "2026-11-17T23:59:06Z"
+  },
+  "jobs": [
+    {
+      "id": 134461716406,
+      "name": "Xcode 26.2 · iPadOS",
+      "status": "completed",
+      "conclusion": "success",
+      "started_at": "2026-11-17T23:51:53Z",
+      "completed_at": "2026-11-17T23:59:05Z",
+      "labels": [
+        "macos-26"
+      ],
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-17T23:51:53Z",
+          "completed_at": "2026-11-17T23:51:54Z"
+        },
+        {
+          "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-17T23:51:54Z",
+          "completed_at": "2026-11-17T23:51:56Z"
+        },
+        {
+          "name": "Record toolchain",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-17T23:51:56Z",
+          "completed_at": "2026-11-17T23:52:04Z"
+        },
+        {
+          "name": "Generate project with verified XcodeGen 2.44.1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-17T23:52:04Z",
+          "completed_at": "2026-11-17T23:52:05Z"
+        },
+        {
+          "name": "Resolve and check locked Swift packages",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-17T23:52:05Z",
+          "completed_at": "2026-11-17T23:52:25Z"
+        },
+        {
+          "name": "Run Swift core tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-17T23:52:25Z",
+          "completed_at": "2026-11-17T23:53:01Z"
+        },
+        {
+          "name": "Test the native App on an iPad simulator",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-17T23:53:01Z",
+          "completed_at": "2026-11-17T23:58:07Z"
+        },
+        {
+          "name": "Archive the actual iPadOS device App without signing",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 8,
+          "started_at": "2026-11-17T23:58:07Z",
+          "completed_at": "2026-11-17T23:58:52Z"
+        },
+        {
+          "name": "Package and verify unsigned IPA candidate",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-11-17T23:58:52Z",
+          "completed_at": "2026-11-17T23:58:55Z"
+        },
+        {
+          "name": "Record separate verification outcomes",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-11-17T23:58:55Z",
+          "completed_at": "2026-11-17T23:58:56Z"
+        },
+        {
+          "name": "Upload unsigned IPA candidate",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-11-17T23:58:56Z",
+          "completed_at": "2026-11-17T23:58:57Z"
+        },
+        {
+          "name": "Upload logs, test results and generated project",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-11-17T23:58:57Z",
+          "completed_at": "2026-11-17T23:58:58Z"
+        },
+        {
+          "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 24,
+          "started_at": "2026-11-17T23:58:58Z",
+          "completed_at": "2026-11-17T23:58:59Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 25,
+          "started_at": "2026-11-17T23:58:59Z",
+          "completed_at": "2026-11-17T23:59:03Z"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 14381948469,
+      "name": "KnowledgeStudio-build-evidence-4",
+      "size_in_bytes": 152314,
+      "digest": "sha256:5cbd46a62524730e8db91d1f93bbeb8cfc72b8361ad77731c1b67613e3a2e833",
+      "expired": false,
+      "created_at": "2026-11-17T23:58:58Z",
+      "expires_at": "2026-11-24T23:58:58Z"
+    },
+    {
+      "id": 14381774045,
+      "name": "KnowledgeStudio-unsigned-ipa-4",
+      "size_in_bytes": 331594,
+      "digest": "sha256:f2534d457c8b6ae9d1bd6dfc65ff814ba16417909a2fbc504d2e68e04ecacfc3",
+      "expired": false,
+      "created_at": "2026-11-17T23:58:57Z",
+      "expires_at": "2026-11-24T23:58:56Z"
+    }
+  ],
+  "annotations": [
+    {
+      "annotation_level": "warning",
+      "message": "Node.js 20 is deprecated. The following actions target Node.js 20 but are being forced to run on Node.js 24: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683, actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02. For more information see: https://github.blog/changelog/2025-09-19-deprecation-of-node-20-on-github-actions-runners/"
+    },
+    {
+      "annotation_level": "notice",
+      "message": "Due to capacity constraints, jobs targeting macOS arm64 runners may experience longer queue times."
+    }
+  ],
+  "evidence_scope": {
+    "source": "GitHub Actions REST API job and artifact metadata",
+    "simulator_step_enforces": {
+      "minimum_total_test_count": 10,
+      "failed_test_count": 0
+    },
+    "package_step_checks": [
+      "device arm64",
+      "iPhoneOS platform",
+      "iPad device family",
+      "unsigned archive",
+      "Payload layout",
+      "ZIP CRC",
+      "IPA SHA-256 generated"
+    ],
+    "local_download": "blocked by cloud network policy; no local reinspection of IPA or full test report",
+    "blocked_download_hosts": [
+      "results-receiver.actions.githubusercontent.com",
+      "productionresultssa5.blob.core.windows.net"
+    ],
+    "artifact_digest_scope": "outer Actions artifact ZIP, not inner IPA",
+    "altstore_installation": "not_tested",
+    "physical_ipad_validation": "not_tested"
+  }
+}

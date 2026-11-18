@@ -18,6 +18,13 @@ Windows / iPadOS 26.2 用户不需要实体 Mac 来下载 CI 产物。GitHub Act
 
 ## 下载和安装
 
+已验证运行：[Native iPadOS #4](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44203023658)，构建提交 `a37dce8cf1ca47e8a70befa36808eb8f9f82632e`，2026-11-18（北京时间）全部 CI 步骤成功。
+
+- [下载未签名 IPA Artifact](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44203023658/artifacts/14381774045)：`KnowledgeStudio-unsigned-ipa-4`。
+- [下载日志、测试和工程 Artifact](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44203023658/artifacts/14381948469)：`KnowledgeStudio-build-evidence-4`。
+- 本次产物预计于北京时间 2026-11-25 07:58 左右到期，过期后可手动运行工作流重新构建。下载可能需要登录 GitHub。
+- 本云环境的下载跳转仍被白名单限制；上传成功已由 Actions API 确认，未声称已经在本地下载复验，也未验证 AltStore 安装。Windows 浏览器下载不使用本云环境网络策略。
+
 1. 仓库 → Actions → `Native iPadOS` → 成功的运行。
 2. 下载 `KnowledgeStudio-unsigned-ipa-<run_number>` Artifact，先解压外层 Artifact ZIP，取得 `KnowledgeStudio-unsigned.ipa` 与 SHA-256 文件。
 3. 可在 Windows PowerShell 运行 `Get-FileHash .\KnowledgeStudio-unsigned.ipa -Algorithm SHA256`，与 `.ipa.sha256` 的摘要比较。这是 IPA 文件摘要，不是外层 Artifact ZIP 的摘要。
