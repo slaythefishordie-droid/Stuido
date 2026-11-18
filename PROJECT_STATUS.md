@@ -1,6 +1,6 @@
 # Knowledge Studio 第一版交接
 
-新模型开始新任务前，先读 [AGENTS.md](AGENTS.md) 和本文件。第一版交付范围是阶段 0 的 iPad 学习原型、导入协议工具及构建流程。产品全貌见[原始计划](docs/product-spec.md)。
+新模型开始新任务前，先读 [AGENTS.md](AGENTS.md)、本文件、[完整开发计划](docs/product-spec.md)及[初版计划与 YouTube 补充](docs/development-plan-original.md)。第一版交付范围是阶段 0 的 iPad 学习原型、导入协议工具及构建流程。两份计划保留了用户原文。接续时按本文件的实际进度选择任务。
 
 ## 已完成
 

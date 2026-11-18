@@ -1,6 +1,6 @@
 # Knowledge Studio 开发约定
 
-每个新 Codex 模型或新会话开始开发前，必须先读本文件和 [PROJECT_STATUS.md](PROJECT_STATUS.md)，再阅读 README.md、docs/progress.md 以及本次任务涉及的协议或模型文档。先核对当前分支、未提交改动和用户本轮目标。使用当前 checkout。
+每个新 Codex 模型或新会话开始开发前，必须先读本文件、[PROJECT_STATUS.md](PROJECT_STATUS.md)、[开发计划与验收标准](docs/product-spec.md) 和[初版计划及 YouTube 补充](docs/development-plan-original.md)，再阅读 README.md、docs/progress.md 以及本次任务涉及的协议或模型文档。先核对当前分支、未提交改动和用户本轮目标。使用当前 checkout。
 
 ## 架构与技术栈
 
