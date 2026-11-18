@@ -11,19 +11,47 @@ struct SharedProbeStore {
 
     let directory: URL
 
+    enum StoreError: LocalizedError {
+        case invalidGroupConfiguration
+        case unavailableGroup(String)
+        case mismatchedWriter
+
+        var errorDescription: String? {
+            switch self {
+            case .invalidGroupConfiguration:
+                "App Group 配置无效，需要一个明确的共享组标识。"
+            case .unavailableGroup(let identifier):
+                "无法访问共享组 \(identifier)。请记录 AltStore 重签结果及共享权限。"
+            case .mismatchedWriter:
+                "共享验证记录的来源不匹配。"
+            }
+        }
+    }
+
     static func configured() throws -> SharedProbeStore {
-        // AltStore records the provisioned group IDs after re-signing.
-        let provisioned = Bundle.main.object(forInfoDictionaryKey: "ALTAppGroups") as? [String]
-        let configured = Bundle.main.object(forInfoDictionaryKey: "SharedAppGroup") as? String
-        let group = provisioned.map { $0.count == 1 ? $0.first : nil } ?? configured
-        guard let group,
-              let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)
-        else {
-            throw NSError(domain: "SharedProbe", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "无法访问 App Group。请记录 AltStore 重签结果及共享权限。"
-            ])
+        let group = try groupIdentifier(in: Bundle.main.infoDictionary ?? [:])
+        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group) else {
+            throw StoreError.unavailableGroup(group)
         }
         return SharedProbeStore(directory: container.appendingPathComponent("SharingProbe-v1"))
+    }
+
+    static func groupIdentifier(in info: [String: Any]) throws -> String {
+        // A present AltStore value must be valid. Falling back could select a different container.
+        if let provisioned = info["ALTAppGroups"] {
+            guard let groups = provisioned as? [String],
+                  groups.count == 1,
+                  let group = groups.first,
+                  !group.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                throw StoreError.invalidGroupConfiguration
+            }
+            return group
+        }
+        guard let group = info["SharedAppGroup"] as? String,
+              !group.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            throw StoreError.invalidGroupConfiguration
+        }
+        return group
     }
 
     func write(from writer: Writer) throws -> Record {
@@ -35,12 +63,15 @@ struct SharedProbeStore {
 
     func read(from writer: Writer) throws -> Record? {
         let url = file(for: writer)
-        guard FileManager.default.fileExists(atPath: url.path) else { return nil }
-        let record = try JSONDecoder().decode(Record.self, from: Data(contentsOf: url))
+        let data: Data
+        do {
+            data = try Data(contentsOf: url)
+        } catch CocoaError.fileReadNoSuchFile {
+            return nil
+        }
+        let record = try JSONDecoder().decode(Record.self, from: data)
         guard record.writer == writer else {
-            throw NSError(domain: "SharedProbe", code: 2, userInfo: [
-                NSLocalizedDescriptionKey: "共享验证记录的来源不匹配。"
-            ])
+            throw StoreError.mismatchedWriter
         }
         return record
     }
