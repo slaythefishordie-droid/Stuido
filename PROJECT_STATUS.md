@@ -13,7 +13,7 @@
 
 ## 验证记录与已知限制
 
-- 本轮在 Linux Swift 6.2.1 复跑核心测试，8 项通过。协议测试 26 项通过，联合样例得到 4 张候选卡、0 条警告。测试命令见 AGENTS.md。
+- 第一版交接时在 Linux Swift 6.2.1 复跑核心测试，8 项通过，协议测试 26 项通过。本轮代码审查后，协议及 Safari 面板测试共 31 项通过；新增超时恢复、异常响应和指纹兼容性检查。测试命令见 AGENTS.md，历次原生验证见 [进度记录](docs/progress.md)。
 - 标签 `v0.1.0` 指向 `7df6ef1`。该提交的两项 CI 均已通过，原生流程覆盖模拟器、设备归档和未签名 IPA 校验。Actions Artifact 保留 7 天，标签附注及进度文档长期保留结果摘要。[原生 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44227526926) · [协议 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44227553771)
 - 旧构建没有 Safari 扩展。免费账户重签能否保留扩展和共享权限仍是工程条件。新方案的构建、安装、Safari 识别及 App Groups 读写分别记录。[验收清单](docs/device-validation.md)
 - 存储仍是 Application Support 下的 `KnowledgeStudio/prototype-v1.json`。正式数据库、迁移、回收站、备份与恢复尚未交付。协议工具独立运行；原生 AI Inbox、Source 匹配、确认导入事务和四类卡片编辑界面尚未交付。

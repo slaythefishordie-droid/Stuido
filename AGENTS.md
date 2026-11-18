@@ -7,6 +7,8 @@
 - 网页采集统一在 Safari 网站原页面，由主 App 随附的一个 Web Extension 和多个站点适配器承担。本地 Native Messaging 与 App Groups 完成交接。先验证免费重签、扩展识别和共享读写，再实现 QuickMark 到 My Inbox。
 - 第一版基线中，`Sources/KnowledgeCore` 是 Swift 6 的 SwiftPM 包。`YouTubeVideoID` 校验输入，`MarkCapture` 管理会话和异步取时，`MarkStore` 验证快照并原子落盘。
 - `ios/KnowledgeStudio` 是 SwiftUI 应用层。以下播放器类只描述 v0.1.0 旧原型。`YouTubeStudyView` 展示界面，`YouTubeStudyModel` 协调播放器和状态，`YouTubeClock` 通过核心层的 `VideoClock` 接口接入 YouTubePlayerKit。编辑 XcodeGen 的 `ios/project.yml` 维护工程配置。
+- 当前主 App 入口为 `ExtensionSetupView`，用于里程碑 1 双向共享诊断。`ios/Shared/SharedProbeStore.swift` 由主 App 和 Safari 扩展共用，各端独立原子写入自己的记录文件；这不是正式 Mark 队列。AltStore 提供的 `ALTAppGroups` 存在时必须有效，不可静默回退至原组。缺失记录表示尚未写入，损坏、来源不符和其他读取错误必须报告。
+- `ios/SafariExtension/Resources/popup.js` 处理诊断面板，原生处理器接收 `readProbe` / `writeProbe`。请求设定超时并防止重入；超时不代表原生写入已取消，应先读取核实结果。扩展资源必须复制到包根目录以便 Safari 找到 manifest。
 - `schemas/` 维护 Draft 2020-12 导入协议。`tools/protocol/` 使用 Node.js 22+、Ajv、ajv-formats 和 jsonc-parser。文件和粘贴文本共用校验入口。`examples/import/` 提供可运行的协议样例。
 - 原型快照格式、导入协议、未来的数据库迁移与备份格式分别演进。变更持久化或协议时，应验证现有数据能重新打开，以及失败后的数据完整性。
 
@@ -23,7 +25,7 @@
 ## 相关检查
 
 - Swift 核心：`bash scripts/test-core.sh`（需要 Swift 6+）。
-- 协议：`npm ci --ignore-scripts`，`npm test`，`npm run validate -- examples/import/valid-four-types.json`。
+- 协议及 Safari 面板：`npm ci --ignore-scripts`，`npm test`，`npm run validate -- examples/import/valid-four-types.json`。面板测试位于 `tools/safari/`，以模拟 Native Messaging 验证错误恢复；协议指纹优化必须保持已有指纹兼容。
 - 原生：`.github/workflows/ipados.yml`，固定标准 macos-26 (ARM64) / Xcode 26.2；本地 macOS 可用 `bash scripts/bootstrap-xcodegen.sh` 生成工程。
 - 只运行与本次更改相称的检查。文档修改无需重复 macOS 构建。
 - 分开记录核心测试、原生编译、模拟器测试、IPA 结构、AltStore 免费签名安装、Safari 识别扩展、App Groups 实际共享及真机交互。Mock 测试不是 YouTube 播放成功；Linux 不能验证 SwiftUI 或签名安装。

@@ -1,5 +1,17 @@
 # 开发进度与验证记录
 
+## 代码审查与维护整理 · 2026-11-18
+
+代码提交 `831c391caacfef61221448b90c9b53d3e83ab8cc`，位于 `feature/safari-extension`。采用局部修复，保留现有持久化格式、导入协议和依赖版本；当前小规模共享诊断无需额外引入数据库或并发框架。
+
+- Safari 面板的 Native Messaging 增加 10 秒超时和请求重入保护，异常或无效响应后恢复按钮。迟到响应不能覆盖后续读取结果。超时不会取消原生写入，因此提示先读取确认，再决定是否重试。
+- 共享组配置采用明确的错误类型。AltStore 元数据存在却格式错误、为空或包含多个组时报告错误，不再默默使用旧组。读取直接处理文件缺失，减少一次文件系统查询；损坏数据、来源不符及其他读取错误继续上报并保留原文件。
+- 导入去重排序为每个元素只生成一次规范化排序键，避免每次比较反复序列化。固定已有样例的指纹作为回归基线，确认结果兼容。10,000 条合成关系、5 次运行的本地中位数为优化前约 46 ms、优化后约 23 ms；这是局部微基准，不代表整个 App 的性能提升。
+
+本地 Node 测试 31/31 通过，包含 27 项协议测试和 4 项 Safari 面板恢复测试；[GitHub 协议及面板 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44292215642) 同样通过。修改的 Swift 文件通过语法解析；新增两项原生测试，覆盖组配置和读取异常，模拟器通过门槛由至少 12 项提高至至少 14 项。
+
+[本轮原生 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44292208343) 已触发，等待 macOS runner，尚不能将本轮 Swift 改动记为原生验证通过。免费重签、Safari 识别和实际 App Groups 共享仍须在 iPad 上分别验证。本轮未推进 QuickMark / My Inbox 功能或修改 main 与 v0.1.0。
+
 ## Safari 里程碑 1 · 2026-11-18
 
 `feature/safari-extension` 的提交 `547eaf4020001c0a4462263a36a03dfe2a277905` 已通过原生 CI。核心测试、iPad 模拟器测试、设备归档和含 Safari 扩展的 IPA 校验均成功。模拟器门槛提升为至少 12 个测试且失败数为 0，包含新增的独立写入重开和损坏记录保留测试。Linux 核心测试另行复跑 8 项通过。[原生运行](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44245690553) · [验证元数据](verification/safari-m1-run-44245690553.json)
