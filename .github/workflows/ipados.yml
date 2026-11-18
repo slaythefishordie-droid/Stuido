@@ -91,6 +91,18 @@ jobs:
           assert result['totalTestCount'] >= 12, 'Expected core and App tests to actually run'
           assert result['failedTests'] == 0, 'Simulator tests failed'
           PY
+      - name: Surface simulator build errors
+        if: failure()
+        run: |
+          python3 - <<'PYERROR'
+          from pathlib import Path
+          log = Path('artifacts/logs/simulator-tests.log')
+          if log.exists():
+              for line in log.read_text(errors='replace').splitlines():
+                  if 'error:' in line or 'failed' in line.lower() or 'Testing failed' in line:
+                      escaped = line.replace('%', '%25').replace('\r', '%0D')
+                      print('::error::' + escaped[:2000])
+          PYERROR
       - name: Archive the actual iPadOS device App without signing
         id: archive
         run: |
