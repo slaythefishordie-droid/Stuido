@@ -12,7 +12,11 @@ struct SharedProbeStore {
     let directory: URL
 
     static func configured() throws -> SharedProbeStore {
-        guard let group = Bundle.main.object(forInfoDictionaryKey: "SharedAppGroup") as? String,
+        // AltStore records the provisioned group IDs after re-signing.
+        let provisioned = Bundle.main.object(forInfoDictionaryKey: "ALTAppGroups") as? [String]
+        let configured = Bundle.main.object(forInfoDictionaryKey: "SharedAppGroup") as? String
+        let group = provisioned.map { $0.count == 1 ? $0.first : nil } ?? configured
+        guard let group,
               let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: group)
         else {
             throw NSError(domain: "SharedProbe", code: 1, userInfo: [
