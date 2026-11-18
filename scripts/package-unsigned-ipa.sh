@@ -50,8 +50,8 @@ CHECK
 codesign --force --sign - --generate-entitlement-der --entitlements ios/SafariExtension/SafariExtension.entitlements "$ks_extension"
 codesign --force --sign - --generate-entitlement-der --entitlements ios/KnowledgeStudio/KnowledgeStudio.entitlements "$ks_app"
 codesign --verify --deep --strict "$ks_app"
-codesign -d --entitlements :- "$ks_app" > .build/app-entitlements.plist
-codesign -d --entitlements :- "$ks_extension" > .build/extension-entitlements.plist
+codesign -d --entitlements - "$ks_app" > .build/app-entitlements.plist
+codesign -d --entitlements - "$ks_extension" > .build/extension-entitlements.plist
 python3 - <<'CHECK'
 import plistlib, pathlib
 for name in ['app', 'extension']:

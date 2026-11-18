@@ -22,6 +22,14 @@ on:
       - 'THIRD_PARTY_NOTICES.md'
       - '.github/workflows/ipados.yml'
   workflow_dispatch:
+    inputs:
+      runner:
+        description: 'Standard macOS runner (use Intel if ARM64 capacity is unavailable)'
+        type: choice
+        default: macos-26
+        options:
+          - macos-26
+          - macos-15-intel
 
 permissions:
   contents: read
@@ -33,7 +41,7 @@ concurrency:
 jobs:
   build:
     name: Xcode 26.2 · iPadOS
-    runs-on: macos-26
+    runs-on: ${{ inputs.runner || 'macos-26' }}
     timeout-minutes: 25
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
@@ -50,7 +58,7 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/logs
           test -d "$DEVELOPER_DIR"
-          { sw_vers; xcodebuild -version; xcrun swift --version; xcodebuild -showsdks; } | tee artifacts/logs/toolchain.log
+          { sw_vers; uname -m; xcodebuild -version; xcrun swift --version; xcodebuild -showsdks; } | tee artifacts/logs/toolchain.log
       - name: Generate project with verified XcodeGen 2.44.1
         run: |
           set -euo pipefail
