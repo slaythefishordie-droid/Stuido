@@ -30,4 +30,4 @@
 
 其余产品工作仍包括正式数据库和旧记录迁移、回收站与备份、四类卡片及双 Inbox、PDF/EPUB/本地视频学习、知识组织和用户自选复习。各项验收条件见[产品需求](docs/product-spec.md)。
 
-里程碑 1 构建及测试证据见[运行记录](docs/verification/safari-m1-run-44245690553.json)，安装与实测见[操作步骤](docs/build-and-install.md)。
+最新里程碑 1 开发包在修复提交 `ea8ca267db640c6d9996367ea6aebcb72f96aa3c` 通过 [Native iPadOS #14](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44432216488)：核心 8/8、模拟器 14/14、设备归档、签名权限与 IPA 校验均通过。默认改用标准 Intel runner 应对 ARM64 分配失败；完整日志已读取，附件在当前云端仍受网络限制。详见[运行记录](docs/verification/native-run-44432216488.json)与[下载、安装和排障](docs/build-and-install.md)。

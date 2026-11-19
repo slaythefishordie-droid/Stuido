@@ -1,51 +1,52 @@
 # 云环境网络诊断
 
-初次检查于 2026-11-17，最新复查于 2026-11-18（北京时间）。始终使用平台原有 HTTPS 代理与 CA，未关闭 TLS 验证、未替换代理、未修改生效网络策略。最新机器记录见 [network-2026-11-18.json](verification/network-2026-11-18.json)。
+最新复查：2026-11-19（北京时间）。通过环境状态接口、真实 HTTPS 请求和 GitHub 日志 / Artifact 下载分别核实。始终使用平台原有 HTTPS 代理与 CA，不关闭 TLS 校验、不更改代理或绕过网络策略。
 
-| 地址 | 初始观察 | 最新 HTTPS 结果 |
-|---|---|---|
-| `github.com` | 仓库、Releases 可访问 | CONNECT 200，站点 200 |
-| `api.github.com` | 代理 CONNECT 403，curl 56 | CONNECT 200，站点 200，仓库 API 可读 |
-| `developer.android.com` | 初始未单独测试 | CONNECT 200，站点 200 |
-| `developers.google.com` | 代理 CONNECT 403 | CONNECT 200，站点 200，IFrame API 和嵌入要求已读取 |
-| `results-receiver.actions.githubusercontent.com` | Actions 日志下载跳转目标 | CONNECT 403，curl 56，尚未建立 TLS |
-| `productionresultssa4.blob.core.windows.net` | Artifact 下载跳转目标 | CONNECT 403，curl 56，尚未建立 TLS |
-| `productionresultssa5.blob.core.windows.net` | 最新成功运行的 IPA 下载跳转目标 | CONNECT 403，curl 56，尚未建立 TLS |
+## 当前生效状态
 
-当前环境状态报告 `restricted` / `enforced`，自定义允许域名已经包含 `api.github.com`、`developer.android.com`、`developers.google.com`。这是环境提供的现状，不是本次代码修改的结果。`github.com`、`raw.githubusercontent.com`、发行资产域名等在既有 package_managers 预设内。
+11 月 18 日实例报告 `running`、`observations_current=true`、网络 `restricted/enforced`。11 月 19 日接口仍报告相同的 **8 条**自定义名单，但网络状态为 `unknown`，不能仅凭配置断言所有规则已生效；以具体请求结果为准：
 
-初次检查时四个域名的本机 `getaddrinfo` 均出现临时 DNS 失败，但继承代理的 HTTPS 均成功，TLS `ssl_verify_result=0`；最新复查四个 HTTPS 仍成功。代理负责目的地址解析；不能据此把本机 DNS 报错当成服务不可达或 TLS 故障。对于 CONNECT 已被拒绝的三个下载域名，TLS 尚未开始，curl 的 `ssl_verify_result=0` 不能证明 TLS 校验通过。
+```text
+api.github.com
+developer.android.com
+developer.apple.com
+developers.google.com
+docs.swift.org
+productionresultssa4.blob.core.windows.net
+productionresultssa5.blob.core.windows.net
+results-receiver.actions.githubusercontent.com
+```
 
-## 区分错误层
+`package_managers` 预设保留，包含 GitHub 源码、发行资产及常用包管理器域名。配置草稿第 5 版有 **41 条**自定义规则，包含 `*.blob.core.windows.net`、`*.actions.githubusercontent.com`、`*.githubusercontent.com` 及项目文档 / YouTube 相关域名；草稿已保存不代表当前实例已应用。完整两份名单与实测记录见 [本轮网络证据](verification/network-recheck-2026-11-18.json)。
 
-- CONNECT 403、HTTP code 000、TLS 尚未建立：平台代理/策略拒绝，不是 GitHub 密码错误。
-- TLS 验证失败通常对应 curl 60；本轮没有观察到。
-- 目标站点 HTTP 401/403：检查响应权限说明。`GET /repos/.../actions/permissions` 返回 `Resource not accessible by integration`，是 GitHub 集成对管理接口权限不足；不证明 Actions 运行、Git push 或 API 全部不可用。
-- Git read 与 GitHub API 读已经单独测试。变量仅检查名称/是否存在，未输出认证值。
-- Public 仓库的页面可访问与 Private API 权限是不同事实。目标仓库实际 `private=false`，已由用户确认允许公开推送。
+11 月 19 日已下载运行 `44309054436` 的完整日志；其测试附件仍被 `productionresultssa17.blob.core.windows.net` 拒绝。最新成功运行 `44432216488` 的完整日志同样下载成功，但 IPA 与测试附件被 `productionresultssa31.blob.core.windows.net` 拒绝。已有草稿的 `*.blob.core.windows.net` 包含这两个目标，但不能据此宣称当前连接已放行。见 [最新状态](verification/network-recheck-2026-11-19.json)和[成功运行下载证据](verification/native-run-44432216488.json)。
 
-## 需要的白名单与手动设置
+## 11 月 18 日实测结果
 
-当前四个目标已通，无需重复添加。若在其他环境复现，增量加入 `api.github.com`（Actions 查询）、`developers.google.com`（YouTube 官方文档）；`developer.android.com` 仅用于跨平台官方资料检查，非 iPad App 构建必要依赖。保留既有域名，不用这些域名替换整份名单。
+| 请求 | 结果 | 能说明什么 |
+| --- | --- | --- |
+| `github.com`、`api.github.com`、`developer.apple.com`、`docs.swift.org` | HTTPS 200 | 这些入口可访问；GitHub API 可查询构建、重试和手动触发工作流 |
+| `docs.github.com`、`developer.mozilla.org`、`altstore.io`、`youtube.com` | CONNECT 403，curl 56 / HTTP 000 | 代理拒绝连接，尚未开始目标 TLS；不是目标站点账户错误 |
+| `productionresultssa18.blob.core.windows.net`、`productionresultssa30.blob.core.windows.net` | CONNECT 403 | 草稿中的新增存储规则仍未在此实例生效 |
+| 原生运行 `44245690553`、`44244882996` 的完整日志 ZIP | 下载成功，ZIP CRC 通过 | 这两条实际日志下载路径已可用，已读日志核实测试和旧错误 |
+| 运行 `44245690553` 的 IPA 和测试 Artifact | 下载被拒，跳转主机为 `productionresultssa18.blob.core.windows.net` | 日志可下载不意味着附件也可下载 |
+| 第一版 `v0.1.0` 的 IPA Artifact `14394892490` | 下载被拒，跳转主机为 `productionresultssa16.blob.core.windows.net` | 存储主机会随产物变化；已保存的通配规则覆盖该主机，但运行实例尚未应用 |
 
-可选文档仍被当前策略阻止：`developer.apple.com`（Xcode/签名官方文档）、`docs.github.com`（Actions/额度）、`faq.altstore.io`（Classic 安装说明）。如需在此环境直接核对这些资料，请在环境设置的 Internet access 允许域名中增量加入这三个精确域名并保存，再重试。这里未声称已添加。
+日志复核与下载结果见 [本轮日志证据](verification/log-review-2026-11-18.json)。不把一次入口请求成功推广为所有子域名、重定向或 App 真机网络都可用。
 
-下载 `protocol-evidence-1` Artifact 时发现实际重定向目标 `productionresultssa4.blob.core.windows.net` 被平台拒绝；原生失败日志入口 `results-receiver.actions.githubusercontent.com` 也被拒绝。需要增量允许这两个精确域名，才能在当前云环境读取失败细节；它们与 `api.github.com` 的授权分开。已保留原有三项白名单并把这两项写入配置**草稿**，工具确认保存，但未应用当前网络、未发布。用户在环境设置审核保存并按界面发布后，需要重新测试访问。没有添加通配整个 Azure Storage 的权限，也没有把临时签名下载 URL 写入仓库。未来若 GitHub 使用不同的具体存储主机，再依据实际重定向补充。Windows 浏览器下载不使用本云环境白名单。
+## 如何应用已经保存的规则
 
-2026-11-18 复查：云实例为 `running`，观测为当前版本，实际生效的自定义名单只有 API 和两个 Google 文档域名。新成功运行 `44203023658` 的 IPA 跳转到 `productionresultssa5.blob.core.windows.net`，也返回 Forbidden；已按实际跳转追加到草稿，当前 revision 3 共六项自定义域名。新旧运行的完整日志下载仍被 `results-receiver.actions.githubusercontent.com` 拒绝。需要处理的是“已保存草稿尚未应用”，无需再次输入 Apple 凭据或更换 GitHub Token。
+在环境设置的 Internet access 中保留现有规则和 `package_managers` 预设，审阅、保存草稿，然后发布环境配置，并确认后续任务连接到该配置版本。当前代理工具可以读配置和保存草稿，不提供发布或直接切换运行实例配置的操作；不能通过重新保存同一草稿宣称规则已经生效。
 
-手动处理：打开本环境设置中的 Internet access，保留既有预设和三项域名，确认以下三项下载域名后保存，并发布环境配置：
+新的实例连接后，检查生效名单是否包含新增域名，再重试真实日志和 IPA 下载。不要只凭草稿列表或环境启动成功作判断。`*.blob.core.windows.net` 可覆盖变化的 GitHub Actions 存储主机，同时也放行该域下其他 Azure 存储站点。
 
-- `results-receiver.actions.githubusercontent.com`：Actions 完整日志。
-- `productionresultssa4.blob.core.windows.net`：先前运行的 Artifact。
-- `productionresultssa5.blob.core.windows.net`：本次成功运行的 IPA Artifact。
+如果暂时无法更新此云实例，可以在自己的浏览器登录 GitHub，从成功运行的 Artifacts 下载。该浏览器不使用本云环境的代理规则。[IPA 下载和安装](build-and-install.md)
 
-然后检查任务运行实例是否加载了新配置；验收依据是生效白名单包含新增域名，且实际日志/Artifact 下载成功，不能只看草稿已保存。当前工具只允许保存草稿，不提供发布或修改运行实例网络策略的操作。
+## 区分其他失败
 
-真实 YouTube 播放还需要 iPad 自身能访问 YouTube；云环境文档白名单不等于 iPad 网络可播放，也不等于 GitHub macOS Runner 的网络策略。
+- GitHub API 返回 `Resource not accessible by integration`：对应接口权限不足，不等于网络不可达。源码读取、工作流触发和管理接口权限要分别验证。
+- GitHub 注解 `The job was not acquired by Runner of type hosted even after multiple attempts`：托管 runner 调度失败，与本云环境白名单无关；尚未执行的测试不能算失败或通过。工作流现在提供标准 Intel runner 手动备选。
+- 本机 DNS 查询失败不等于代理请求失败，保持平台提供的代理和 CA 配置。
+- iPad 播放 YouTube、AltStore 免费重签、Safari 识别和 App Groups 共享均需用户设备单独验证，云端 HTTPS 成功不能替代这些结果。
 
-## Safari 扩展构建的下载域名
-
-2026-11-18，运行 44244882996 的日志和 Artifact 实际下载域名为 `productionresultssa30.blob.core.windows.net`。运行中白名单含 sa4、sa5，但缺少 sa30，下载返回 Forbidden。已经保存增量加入 sa30 的配置草稿，工具要求发布后应用。重新启动或应用配置后，先检查环境策略再重试真实日志下载。GitHub 会使用不同的存储主机，应以实际重定向为准。
-
-运行 44245690553 的 IPA 与测试产物使用 `productionresultssa18.blob.core.windows.net`。sa18 也已加入配置草稿，当前运行实例尚未应用。
+早期网络和构建记录保留在 [进度历史](progress.md) 与 [早期网络证据](verification/network-2026-11-18.json)；以本文件和本轮证据判断当前状态。

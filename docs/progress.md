@@ -1,5 +1,24 @@
 # 开发进度与验证记录
 
+## IPA 构建恢复 · 2026-11-19
+
+修复后的 [Native iPadOS #14](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44432216488) 已全部通过，代码提交为 `ea8ca267db640c6d9996367ea6aebcb72f96aa3c`。核心 8/8、iPad 模拟器 14/14 通过，设备归档、两端签名与 App Groups 声明检查、IPA ZIP 校验及上传成功。[机器验证记录](verification/native-run-44432216488.json)
+
+[下载 Safari 共享验证版 IPA 产物](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44432216488/artifacts/14488745224)：`KnowledgeStudio-resignable-ipa-14`，保留至 2026-11-26。解压外层 ZIP 后，用 AltStore Classic 重签其中的 `KnowledgeStudio-resignable.ipa`。这是里程碑 1 诊断包，完整 QuickMark / My Inbox 尚未实现；免费重签、Safari 识别和双向共享仍待真机验证。
+
+本次模拟器步骤总耗时 12 分 09 秒；完整日志显示编译后、测试启动前存在 8 分 42 秒的日志空档，随后测试套件约 1.738 秒完成。没有证据把空档认定为业务测试死锁，日志也不足以进一步确定模拟器启动慢的内部原因。未签名模拟器出现 App Group `NOT_CODESIGNED`，不能用临时目录的单元测试代替真实跨进程共享验收。
+
+完整日志 ZIP 已取回并通过 CRC；IPA 和 xcresult 附件的下载被当前云端代理拒绝，重定向主机为 `productionresultssa31.blob.core.windows.net`。当前只完成了 CI 内的 IPA 校验，未声称已在本地重新验包。用户浏览器可从上述 GitHub 入口下载。
+
+已经区分两类故障并在 `feature/safari-extension` 修复构建配置：
+
+- 运行 `44292208343` 的首次尝试没有取得 ARM64 runner，GitHub 注解为 `The job was not acquired by Runner of type hosted even after multiple attempts`，并提示 ARM64 容量不足。没有任何测试步骤执行。重试也未取得机器，后被同分支的新运行取消。
+- Intel 运行 `44309054436` 正常取得 runner；Swift 核心 8/8、iPad 模拟器 14/14 通过，设备归档成功。模拟器步骤总耗时约 6 分 52 秒。失败发生在打包阶段：将 `codesign --entitlements :-` 改为 `--entitlements -` 后，输出无法由 `plistlib` 解析，产生 `InvalidFileException`。这不是调度或网络失败。[日志与测试证据](verification/native-run-44309054436.json)
+
+修复提交 `ea8ca267db640c6d9996367ea6aebcb72f96aa3c` 恢复 XML-only 导出方式，保留签名、设备架构和 App Groups 声明检查；冒号弃用提示暂作为非致命警告保留。工作流默认使用标准 `macos-15-intel`，手动仍可选择 `macos-26`，两者固定 Xcode 26.2 / iOS 26.2 和同样的测试门槛。没有使用付费 larger runner，也没有修改业务功能。
+
+已取回旧失败与成功运行的完整日志，并更新网络诊断和手动排障说明。日志与附件的可访问性要分别验证；云实例仍报告原来的 8 条名单，草稿 41 条不等于运行实例已应用。[网络记录](network.md) · [安装与排障](build-and-install.md)
+
 ## 代码审查与维护整理 · 2026-11-18
 
 代码提交 `831c391caacfef61221448b90c9b53d3e83ab8cc`，位于 `feature/safari-extension`。采用局部修复，保留现有持久化格式、导入协议和依赖版本；当前小规模共享诊断无需额外引入数据库或并发框架。
@@ -10,7 +29,7 @@
 
 本地 Node 测试 31/31 通过，包含 27 项协议测试和 4 项 Safari 面板恢复测试；[GitHub 协议及面板 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44292215642) 同样通过。修改的 Swift 文件通过语法解析；新增两项原生测试，覆盖组配置和读取异常，模拟器通过门槛由至少 12 项提高至至少 14 项。
 
-[本轮原生 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44292208343) 已触发，等待 macOS runner，尚不能将本轮 Swift 改动记为原生验证通过。免费重签、Safari 识别和实际 App Groups 共享仍须在 iPad 上分别验证。本轮未推进 QuickMark / My Inbox 功能或修改 main 与 v0.1.0。
+[首次原生 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44292208343) 后续确认因托管 runner 无法分配而未执行；上述 Swift 改动已在 Intel 运行 `44309054436` 通过原生编译与 14 项模拟器测试，但该运行的打包阶段失败。修复和后续结果见本文件顶部。免费重签、Safari 识别和实际 App Groups 共享仍须在 iPad 上分别验证。本轮未推进 QuickMark / My Inbox 功能或修改 main 与 v0.1.0。
 
 ## Safari 里程碑 1 · 2026-11-18
 

@@ -45,9 +45,15 @@ Windows / iPadOS 26.2 用户不需要实体 Mac 来下载 CI 产物。GitHub Act
 
 ## Safari 里程碑 1 开发包
 
+最新已验证构建：[Native iPadOS #14](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44432216488)，commit `ea8ca267db640c6d9996367ea6aebcb72f96aa3c`。核心 8 项、模拟器 14 项测试通过，设备归档及 IPA 打包校验通过。
+
+**[下载 KnowledgeStudio-resignable-ipa-14](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44432216488/artifacts/14488745224)**（GitHub 登录后下载，保留至 2026-11-26）。外层 ZIP 的 SHA-256 为 `a349b8ab5d5bca5a30ff043b856bc2e5902c3d0e02935f1bd3db6144657b2d94`。IPA 本体摘要在包内 `.ipa.sha256` 中，两者不要混用。云端代理无法下载附件时，直接在用户自己的浏览器下载；本轮未完成本地 IPA 复验。
+
+解压后，在 Windows PowerShell 执行 `Get-FileHash .\KnowledgeStudio-resignable.ipa -Algorithm SHA256`，与包内 `.ipa.sha256` 对比。再把 `.ipa` 传到 iPad「文件」，在 AltStore Classic → My Apps → ＋ 选择它，并保留 Safari 扩展。
+
 在 `feature/safari-extension` 上手动运行 Native iPadOS。新产物名为 `KnowledgeStudio-resignable-ipa-<run_number>`，内含 `KnowledgeStudio-resignable.ipa`。归档后先验证嵌入的 SafariExtension.appex 的设备架构、扩展类型和 manifest，再用 ad-hoc 签名携带两端的 App Groups 声明。该签名没有 Apple 配置文件，安装仍由 AltStore Classic 免费账户重签。
 
-Actions → Native iPadOS → Run workflow：分支选 `feature/safari-extension`，runner 默认 `macos-15-intel`。如果运行没有执行任何步骤，且注解为 `The job was not acquired by Runner of type hosted even after multiple attempts`，可改选 `macos-15-intel` 重试。这是调度失败，不等于代码或测试失败。命令行等价操作：`gh workflow run ipados.yml --ref feature/safari-extension -f runner=macos-15-intel`。
+Actions → Native iPadOS → Run workflow：分支选 `feature/safari-extension`，runner 默认 `macos-15-intel`。如果选择 ARM64 后运行没有执行任何步骤，且注解为 `The job was not acquired by Runner of type hosted even after multiple attempts`，改回 `macos-15-intel` 重试。如果 Intel 也无法分配，可稍后重试或手动选择 `macos-26`。这是调度失败，不等于代码或测试失败。命令行等价操作：`gh workflow run ipados.yml --ref feature/safari-extension -f runner=macos-15-intel`。
 
 安装时保留 Safari 扩展。主 App 启动进入「Safari 扩展」验证页面。到 iPad 设置中的 Safari 扩展列表启用 Knowledge Studio，再在 Safari 页面菜单打开它。
 
@@ -58,3 +64,17 @@ Actions → Native iPadOS → Run workflow：分支选 `feature/safari-extension
 5. 关闭并重新打开主 App，复核两条记录仍可读取。
 
 首次构建请求组名 `group.org.knowledge-studio.prototype`。AltStore 如果写入 `ALTAppGroups`，程序使用其中唯一的实际组名；空列表或多个组名会报告无法访问。出现错误时请记录原文和安装时对扩展的选项。可访问目录只证明当前进程能访问，两个方向的编号一致才证明共享成功。
+
+
+## Actions 看似无响应时
+
+先打开具体运行并区分以下状态，不要连续触发重复构建：
+
+| 状态 | 含义和操作 |
+| --- | --- |
+| `Queued` 且没有步骤、没有 runner 名称 | GitHub 尚未分配机器。若注解提示 ARM64 容量不足，选择默认的 `macos-15-intel`。如果两个标准池都不可用，只能等待 GitHub 恢复，或使用另行配置且具有 Xcode 26.2 / iOS 26.2 的 Mac runner。Windows 无法本地执行原生 Xcode 归档。 |
+| `In progress`，步骤持续推进 | runner 已工作。Intel 两次成功的完整模拟器步骤分别用时约 6 分 52 秒和 12 分 09 秒，包含编译、启动模拟器和测试，不代表测试本身运行了这么久。工作流有 25 分钟 job 超时。 |
+| 红色失败且存在失败步骤 | 打开该步骤日志。运行 44309054436 的测试与归档都通过，但打包解析权限失败；已恢复 XML-only 导出语法。不要将这种脚本错误归咎于 runner 或云端域名规则。 |
+| 成功运行但云端下载提示 Forbidden | 登录自己的 GitHub 浏览器，在运行页 Artifacts 下载；云端代理规则与用户浏览器网络分开。具体下载域名会变化，不能只验证 API 域名。 |
+
+安装包只取成功运行中的 `KnowledgeStudio-resignable-ipa-*`，解压外层 ZIP 后导入 `.ipa`。日志和 xcresult 附件不能安装。当前 `codesign --entitlements :-` 的冒号弃用提示不导致失败；在替代方式经过实际工具链验证前保留该已验证导出路径。

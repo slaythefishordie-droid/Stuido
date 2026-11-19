@@ -1,0 +1,193 @@
+{
+  "checked_at": "2026-11-19T08:48:58.003391+08:00",
+  "run": {
+    "id": 44309054436,
+    "html_url": "https://github.com/slaythefishordie-droid/Stuido/actions/runs/44309054436",
+    "head_sha": "be6bd2f8d1263b3002c238306288ee5dfbb9853a",
+    "run_number": 13,
+    "run_attempt": 1,
+    "conclusion": "failure",
+    "updated_at": "2026-11-18T13:08:59Z"
+  },
+  "jobs": [
+    {
+      "id": 134818150194,
+      "name": "Xcode 26.2 · iPadOS",
+      "conclusion": "failure",
+      "runner_name": "GitHub Actions 1000000023",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-18T12:58:48Z",
+          "completed_at": "2026-11-18T12:58:49Z"
+        },
+        {
+          "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-18T12:58:49Z",
+          "completed_at": "2026-11-18T12:58:52Z"
+        },
+        {
+          "name": "Record toolchain",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-18T12:58:52Z",
+          "completed_at": "2026-11-18T12:59:09Z"
+        },
+        {
+          "name": "Generate project with verified XcodeGen 2.44.1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-18T12:59:09Z",
+          "completed_at": "2026-11-18T12:59:10Z"
+        },
+        {
+          "name": "Resolve and check locked Swift packages",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-18T12:59:10Z",
+          "completed_at": "2026-11-18T12:59:46Z"
+        },
+        {
+          "name": "Run Swift core tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-18T12:59:46Z",
+          "completed_at": "2026-11-18T13:00:54Z"
+        },
+        {
+          "name": "Test the native App on an iPad simulator",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-18T13:00:54Z",
+          "completed_at": "2026-11-18T13:07:46Z"
+        },
+        {
+          "name": "Surface simulator build errors",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 8,
+          "started_at": "2026-11-18T13:07:46Z",
+          "completed_at": "2026-11-18T13:07:46Z"
+        },
+        {
+          "name": "Archive the actual iPadOS device App without signing",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-11-18T13:07:46Z",
+          "completed_at": "2026-11-18T13:08:49Z"
+        },
+        {
+          "name": "Package and verify re-signable IPA candidate",
+          "status": "completed",
+          "conclusion": "failure",
+          "number": 10,
+          "started_at": "2026-11-18T13:08:49Z",
+          "completed_at": "2026-11-18T13:08:51Z"
+        },
+        {
+          "name": "Record separate verification outcomes",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-11-18T13:08:51Z",
+          "completed_at": "2026-11-18T13:08:52Z"
+        },
+        {
+          "name": "Upload re-signable IPA candidate",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 12,
+          "started_at": "2026-11-18T13:08:52Z",
+          "completed_at": "2026-11-18T13:08:52Z"
+        },
+        {
+          "name": "Upload logs, test results and generated project",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-11-18T13:08:52Z",
+          "completed_at": "2026-11-18T13:08:54Z"
+        },
+        {
+          "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 26,
+          "started_at": "2026-11-18T13:08:54Z",
+          "completed_at": "2026-11-18T13:08:55Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27,
+          "started_at": "2026-11-18T13:08:55Z",
+          "completed_at": "2026-11-18T13:08:56Z"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 14429933300,
+      "name": "KnowledgeStudio-build-evidence-13",
+      "digest": "sha256:6eb0a3c80c946db3c75b71d56cdf74bd5ab6f822b9d9bc67e9e87df93bbaa552",
+      "size_in_bytes": 168312,
+      "expires_at": "2026-11-25T13:08:52Z",
+      "expired": false
+    }
+  ],
+  "downloads": [
+    {
+      "name": "logs",
+      "exit": 0,
+      "bytes": 69371,
+      "zip_valid": true,
+      "redirect_hosts": [],
+      "forbidden": false,
+      "sha256": "4b1ea6c3a87d533f51d2b8b1daaa71015c3f2552f300bbecc0b90dfadbf18b79",
+      "zip_crc": "passed"
+    },
+    {
+      "name": "KnowledgeStudio-build-evidence-13",
+      "exit": 1,
+      "bytes": 0,
+      "zip_valid": false,
+      "redirect_hosts": [
+        "productionresultssa17.blob.core.windows.net"
+      ],
+      "forbidden": true
+    }
+  ],
+  "physical_ipad": {
+    "altstore_installation": "not_tested",
+    "safari_recognition": "not_tested",
+    "app_group_sharing": "not_tested"
+  },
+  "analysis": {
+    "runner": "Intel runner acquired and executed normally; not a scheduling failure",
+    "swift_core": {
+      "tests": 8,
+      "failures": 0
+    },
+    "ipad_simulator": {
+      "tests": 14,
+      "failures": 0
+    },
+    "device_archive": "passed",
+    "package_failure": "plistlib.InvalidFileException while parsing codesign entitlement output after changing :- to -",
+    "correction": "Restore previously verified XML-only export using :-; retain entitlement and signature assertions"
+  }
+}

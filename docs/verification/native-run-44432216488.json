@@ -1,0 +1,220 @@
+{
+  "checked_at": "2026-11-19T09:08:05.227500+08:00",
+  "run": {
+    "id": 44432216488,
+    "html_url": "https://github.com/slaythefishordie-droid/Stuido/actions/runs/44432216488",
+    "head_sha": "ea8ca267db640c6d9996367ea6aebcb72f96aa3c",
+    "run_number": 14,
+    "run_attempt": 1,
+    "conclusion": "success",
+    "updated_at": "2026-11-19T01:07:30Z"
+  },
+  "jobs": [
+    {
+      "id": 135252176516,
+      "name": "Xcode 26.2 · iPadOS",
+      "conclusion": "success",
+      "runner_name": "GitHub Actions 1000000024",
+      "steps": [
+        {
+          "name": "Set up job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 1,
+          "started_at": "2026-11-19T00:50:29Z",
+          "completed_at": "2026-11-19T00:50:36Z"
+        },
+        {
+          "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 2,
+          "started_at": "2026-11-19T00:50:36Z",
+          "completed_at": "2026-11-19T00:50:44Z"
+        },
+        {
+          "name": "Record toolchain",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 3,
+          "started_at": "2026-11-19T00:50:44Z",
+          "completed_at": "2026-11-19T00:51:05Z"
+        },
+        {
+          "name": "Generate project with verified XcodeGen 2.44.1",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 4,
+          "started_at": "2026-11-19T00:51:05Z",
+          "completed_at": "2026-11-19T00:51:06Z"
+        },
+        {
+          "name": "Resolve and check locked Swift packages",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 5,
+          "started_at": "2026-11-19T00:51:06Z",
+          "completed_at": "2026-11-19T00:52:04Z"
+        },
+        {
+          "name": "Run Swift core tests",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 6,
+          "started_at": "2026-11-19T00:52:04Z",
+          "completed_at": "2026-11-19T00:53:41Z"
+        },
+        {
+          "name": "Test the native App on an iPad simulator",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 7,
+          "started_at": "2026-11-19T00:53:41Z",
+          "completed_at": "2026-11-19T01:05:50Z"
+        },
+        {
+          "name": "Surface simulator build errors",
+          "status": "completed",
+          "conclusion": "skipped",
+          "number": 8,
+          "started_at": "2026-11-19T01:05:50Z",
+          "completed_at": "2026-11-19T01:05:50Z"
+        },
+        {
+          "name": "Archive the actual iPadOS device App without signing",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 9,
+          "started_at": "2026-11-19T01:05:50Z",
+          "completed_at": "2026-11-19T01:07:18Z"
+        },
+        {
+          "name": "Package and verify re-signable IPA candidate",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 10,
+          "started_at": "2026-11-19T01:07:18Z",
+          "completed_at": "2026-11-19T01:07:23Z"
+        },
+        {
+          "name": "Record separate verification outcomes",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 11,
+          "started_at": "2026-11-19T01:07:23Z",
+          "completed_at": "2026-11-19T01:07:23Z"
+        },
+        {
+          "name": "Upload re-signable IPA candidate",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 12,
+          "started_at": "2026-11-19T01:07:23Z",
+          "completed_at": "2026-11-19T01:07:25Z"
+        },
+        {
+          "name": "Upload logs, test results and generated project",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 13,
+          "started_at": "2026-11-19T01:07:25Z",
+          "completed_at": "2026-11-19T01:07:27Z"
+        },
+        {
+          "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 26,
+          "started_at": "2026-11-19T01:07:27Z",
+          "completed_at": "2026-11-19T01:07:28Z"
+        },
+        {
+          "name": "Complete job",
+          "status": "completed",
+          "conclusion": "success",
+          "number": 27,
+          "started_at": "2026-11-19T01:07:28Z",
+          "completed_at": "2026-11-19T01:07:28Z"
+        }
+      ]
+    }
+  ],
+  "artifacts": [
+    {
+      "id": 14488805232,
+      "name": "KnowledgeStudio-build-evidence-14",
+      "digest": "sha256:03bc44127b21bade19abc53e87aee3fd63720ebfe7fb48ae95dcff106b487f60",
+      "size_in_bytes": 182008,
+      "expires_at": "2026-11-26T01:07:26Z",
+      "expired": false
+    },
+    {
+      "id": 14488745224,
+      "name": "KnowledgeStudio-resignable-ipa-14",
+      "digest": "sha256:a349b8ab5d5bca5a30ff043b856bc2e5902c3d0e02935f1bd3db6144657b2d94",
+      "size_in_bytes": 339030,
+      "expires_at": "2026-11-26T01:07:24Z",
+      "expired": false
+    }
+  ],
+  "downloads": [
+    {
+      "name": "logs",
+      "exit": 0,
+      "bytes": 147403,
+      "zip_valid": true,
+      "redirect_hosts": [],
+      "forbidden": false,
+      "sha256": "92c0bb472ff86bcb96c93a3e08d5e8c915f931b41f27223ff1fa4add185feeb4",
+      "zip_crc": "passed"
+    },
+    {
+      "name": "KnowledgeStudio-build-evidence-14",
+      "exit": 1,
+      "bytes": 0,
+      "zip_valid": false,
+      "redirect_hosts": [
+        "productionresultssa31.blob.core.windows.net"
+      ],
+      "forbidden": true
+    },
+    {
+      "name": "KnowledgeStudio-resignable-ipa-14",
+      "exit": 1,
+      "bytes": 0,
+      "zip_valid": false,
+      "redirect_hosts": [
+        "productionresultssa31.blob.core.windows.net"
+      ],
+      "forbidden": true
+    }
+  ],
+  "physical_ipad": {
+    "altstore_installation": "not_tested",
+    "safari_recognition": "not_tested",
+    "app_group_sharing": "not_tested"
+  },
+  "verification": {
+    "swift_core": {
+      "tests": 8,
+      "failures": 0
+    },
+    "ipad_simulator": {
+      "tests": 14,
+      "failures": 0,
+      "step_duration_seconds": 729,
+      "test_suite_duration_seconds": 1.738,
+      "pre_test_log_gap_seconds": 522
+    },
+    "device_archive": "passed",
+    "ipa_signature_and_entitlements": "passed in CI",
+    "ipa_zip_crc": "passed in CI",
+    "local_ipa_verification": "unavailable; artifact download blocked by proxy",
+    "notes": [
+      "Full log ZIP downloaded and CRC verified.",
+      "The log gap occurred after compilation and before the test suite started; a more specific simulator startup cause is not established.",
+      "Unsigned simulator logged App Group NOT_CODESIGNED; passing unit tests does not establish real cross-process App Group access.",
+      "codesign colon deprecation warning retained; current entitlement XML parse and exact App Group assertion passed."
+    ]
+  }
+}

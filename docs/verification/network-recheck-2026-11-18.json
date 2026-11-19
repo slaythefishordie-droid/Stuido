@@ -1,0 +1,129 @@
+{
+  "checked_at": "2026-11-18T12:59:26.522Z",
+  "environment_id": "ccarenv_b64_Y2NhcmVudl85MmU2NDM2ZGEyY2M4MTkxYTkxNDkwMzI0MTkwNTFhYQ",
+  "source_config_version_id": "ea14bc589ee1a4c566a9ca662b8dab5274b006c1fb914e24183e24ccd449dcad~cecfgver_6afcee0c9b1081a29efc70662f609a15",
+  "observations_current": true,
+  "runtime_policy": {
+    "state": "enforced",
+    "mode": "restricted",
+    "custom_hosts": [
+      "api.github.com",
+      "developer.android.com",
+      "developer.apple.com",
+      "developers.google.com",
+      "docs.swift.org",
+      "productionresultssa4.blob.core.windows.net",
+      "productionresultssa5.blob.core.windows.net",
+      "results-receiver.actions.githubusercontent.com"
+    ],
+    "presets": [
+      "package_managers"
+    ]
+  },
+  "draft": {
+    "revision": 5,
+    "base_version_id": "ea14bc589ee1a4c566a9ca662b8dab5274b006c1fb914e24183e24ccd449dcad~cecfgver_6afcee0c9b1081a29efc70662f609a15",
+    "custom_hosts": [
+      "*.actions.githubusercontent.com",
+      "*.altstore.io",
+      "*.blob.core.windows.net",
+      "*.developer.apple.com",
+      "*.githubusercontent.com",
+      "*.googlevideo.com",
+      "*.gstatic.com",
+      "*.readium.org",
+      "*.swiftpackageindex.com",
+      "*.youtube.com",
+      "*.ytimg.com",
+      "ajv.js.org",
+      "altstore.io",
+      "api.github.com",
+      "consent.google.com",
+      "developer.android.com",
+      "developer.apple.com",
+      "developer.mozilla.org",
+      "developers.google.com",
+      "docs.github.com",
+      "docs.swift.org",
+      "github.blog",
+      "githubstatus.com",
+      "groue.github.io",
+      "help.apple.com",
+      "json-schema.org",
+      "open-spaced-repetition.github.io",
+      "productionresultssa18.blob.core.windows.net",
+      "productionresultssa30.blob.core.windows.net",
+      "productionresultssa4.blob.core.windows.net",
+      "productionresultssa5.blob.core.windows.net",
+      "readium.org",
+      "results-receiver.actions.githubusercontent.com",
+      "support.apple.com",
+      "swift.org",
+      "swiftpackageindex.com",
+      "www.githubstatus.com",
+      "www.swift.org",
+      "youtu.be",
+      "youtube.com",
+      "youtubei.googleapis.com"
+    ]
+  },
+  "https_checks": [
+    {
+      "host": "api.github.com",
+      "http_status": 200,
+      "curl_exit": 0
+    },
+    {
+      "host": "github.com",
+      "http_status": 200,
+      "curl_exit": 0
+    },
+    {
+      "host": "developer.apple.com",
+      "http_status": 200,
+      "curl_exit": 0
+    },
+    {
+      "host": "docs.swift.org",
+      "http_status": 200,
+      "curl_exit": 0
+    },
+    {
+      "host": "docs.github.com",
+      "http_status": 0,
+      "curl_exit": 56,
+      "proxy_connect_status": 403
+    },
+    {
+      "host": "developer.mozilla.org",
+      "http_status": 0,
+      "curl_exit": 56,
+      "proxy_connect_status": 403
+    },
+    {
+      "host": "altstore.io",
+      "http_status": 0,
+      "curl_exit": 56,
+      "proxy_connect_status": 403
+    },
+    {
+      "host": "youtube.com",
+      "http_status": 0,
+      "curl_exit": 56,
+      "proxy_connect_status": 403
+    },
+    {
+      "host": "productionresultssa18.blob.core.windows.net",
+      "http_status": 0,
+      "curl_exit": 56,
+      "proxy_connect_status": 403
+    },
+    {
+      "host": "productionresultssa30.blob.core.windows.net",
+      "http_status": 0,
+      "curl_exit": 56,
+      "proxy_connect_status": 403
+    }
+  ],
+  "scope": "Representative real HTTPS requests, not proof that every domain or redirected URL is reachable. No runtime policy was modified."
+}
