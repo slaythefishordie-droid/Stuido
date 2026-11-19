@@ -15,6 +15,8 @@ public struct ReadingLocator: Codable, Equatable, Sendable {
     public var href: String?
     public var progression: Double?
     public var nativeJSON: String?
+    public var fileFingerprint: String?
+    public var anchorText: String?
     public var rectangles: [HighlightRect] = []
     public init(
         kind: String, page: Int? = nil, seconds: Double? = nil, href: String? = nil,
@@ -152,6 +154,7 @@ public struct LibraryProject: Codable, Identifiable, Equatable, Sendable {
     public var sourceIDs: [UUID] = []
     public var cardIDs: [UUID] = []
     public var relationIDs: [UUID] = []
+    public var board: ProjectBoard?
     public var deletedAt: Date?
     public init(title: String) { self.title = title }
 }
@@ -266,6 +269,7 @@ public struct LibraryState: Codable, Equatable, Sendable {
             else { throw LibraryError.invalid("关系端点缺失或自引用") }
         }
         for project in projects {
+            try project.board?.validate(sourceIDs: sourceIDs, cardIDs: cardIDs)
             guard Set(project.sourceIDs).isSubset(of: sourceIDs), Set(project.cardIDs).isSubset(of: cardIDs),
                 Set(project.relationIDs).isSubset(of: relationIDs)
             else { throw LibraryError.invalid("项目关联对象缺失") }

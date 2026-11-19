@@ -57,10 +57,11 @@ enum StudyTheme {
 }
 
 enum StudySection: String, CaseIterable, Identifiable {
-    case library, inbox, cards, imports, manager, settings
+    case home, library, inbox, cards, imports, manager, settings
     var id: Self { self }
     var title: String {
         switch self {
+        case .home: "书桌"
         case .library: "资料库"
         case .inbox: "收集箱"
         case .cards: "知识卡片"
@@ -71,6 +72,7 @@ enum StudySection: String, CaseIterable, Identifiable {
     }
     var symbol: String {
         switch self {
+        case .home: "sun.max"
         case .library: "books.vertical"
         case .inbox: "tray"
         case .cards: "rectangle.stack"

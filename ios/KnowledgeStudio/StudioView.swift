@@ -6,14 +6,14 @@ struct StudioView: View {
     @StateObject private var model = StudioModel()
     @Environment(\.scenePhase) private var phase
     @State private var quickCard = false
-    @State private var destination: StudySection? = .library
+    @State private var destination: StudySection? = .home
     @AppStorage("compactDisplay") private var compactDisplay = false
     @AppStorage("appAppearance") private var appearance = "system"
     var body: some View {
         NavigationSplitView {
             List(selection: $destination) {
                 Section("阅读与思考") {
-                    ForEach([StudySection.library, .inbox, .cards]) { section in
+                    ForEach([StudySection.home, .library, .inbox, .cards]) { section in
                         NavigationLink(value: section) { Label(section.title, systemImage: section.symbol) }
                     }
                 }
@@ -35,7 +35,8 @@ struct StudioView: View {
             }
         } detail: {
             Group {
-                switch destination ?? .library {
+                switch destination ?? .home {
+                case .home: StudyHomeView()
                 case .library: LibraryView()
                 case .inbox: InboxView()
                 case .cards: CardsView()

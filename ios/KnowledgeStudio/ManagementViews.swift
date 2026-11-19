@@ -231,6 +231,7 @@ struct ProjectView: View {
                         }
                     }
                 }
+                NavigationLink("研究白板") { ProjectBoardView(projectID: projectID) }
                 if !managingLinks {
                     Section("项目资料") {
                         ForEach(

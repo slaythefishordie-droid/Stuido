@@ -74,3 +74,9 @@ My Inbox 和卡片/Dictionary/Corpus 都查询该库。Safari 原始交接文件
 ## 设计章程的待实施模型约束 · 2026-11-19
 
 同一 Source 跨 Project 默认共享原文件、高亮与 Mark；项目研究笔记、解释和工作语境独立，未来可选独立副本。此为用户已确定的产品语义，不表示现有聚合快照已实现项目语境字段。具体结构及迁移需单独设计，重大调整按工作流取得同意，覆盖备份恢复与删除关联验证。自由白板允许混合对象，但不扩展四类 Card，也不将移除节点当作删除内容。实施待办统一见工程问题 UX-01。
+
+## V2 增量候选 · 2026-11-20
+
+ReadingLocator 新增可选 fileFingerprint / anchorText，保留旧 page/rectangles/nativeJSON。PDF 精度依赖当前文件指纹、合法页序/区域及实际文字核验；缺失信息降级，不猜测匹配。旧快照缺字段可解码。
+
+LibraryProject 新增可选 ProjectBoard（节点与连线）；节点类型为 source/card/concept/note，自由概念与笔记不是新增一级 Card。source/card 指向既有 UUID，连线仅引用白板节点；聚合状态校验拒绝缺失引用、重复 ID、无效坐标/端点。移除节点仅清理布局及其连线；删除原对象若仍被引用则事务失败。备份自动包含聚合数据；旧项目 board=nil，无清库迁移。

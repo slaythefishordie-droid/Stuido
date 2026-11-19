@@ -31,6 +31,51 @@ final class LibraryTests: XCTestCase {
             XCTAssertEqual(old.note, mark.note)
         }
     }
+    func testPDFAnchorNeverOverstatesPrecision() throws {
+        var locator = ReadingLocator(kind: "pdf", page: 2)
+        locator.rectangles = [HighlightRect(page: 2, x: 10, y: 20, width: 50, height: 30)]
+        XCTAssertEqual(locator.pdfAccuracy(currentFingerprint: "same", pageCount: 3), .pageOnly)
+        locator.fileFingerprint = "same"
+        XCTAssertEqual(locator.pdfAccuracy(currentFingerprint: "same", pageCount: 3), .exactRegion)
+        XCTAssertEqual(locator.pdfAccuracy(currentFingerprint: "different", pageCount: 3), .unavailable)
+        XCTAssertEqual(locator.pdfAccuracy(currentFingerprint: "same", pageCount: 1), .unavailable)
+        XCTAssertEqual(locator.pdfAccuracy(currentFingerprint: "same", pageCount: 0), .unavailable)
+        locator.anchorText = "Original"
+        XCTAssertEqual(
+            locator.pdfAccuracy(currentFingerprint: "same", pageCount: 3, textVerified: true), .exactText)
+        let restored = try JSONDecoder().decode(ReadingLocator.self, from: JSONEncoder().encode(locator))
+        XCTAssertEqual(restored, locator)
+        locator.rectangles[0].width = .nan
+        XCTAssertEqual(locator.pdfAccuracy(currentFingerprint: "same", pageCount: 3), .pageOnly)
+    }
+    func testBoardRoundTripAndRemovalNeverDeletesReferencedContent() throws {
+        try withStore { repository, root in
+            let source = LibrarySource(kind: .pdf, title: "Book")
+            let card = LibraryCard(type: .keyword, content: ["term": "Concept", "explanation": "Meaning"])
+            var project = LibraryProject(title: "Study")
+            var board = ProjectBoard()
+            let sourceNode = BoardNode(kind: .source, text: source.title, targetID: source.id)
+            let cardNode = BoardNode(kind: .card, text: card.title, targetID: card.id)
+            board.nodes = [sourceNode, cardNode]
+            board.edges = [BoardEdge(from: sourceNode.id, to: cardNode.id)]
+            project.board = board
+            try repository.update {
+                $0.sources.append(source)
+                $0.cards.append(card)
+                $0.projects.append(project)
+            }
+            XCTAssertEqual(
+                try LibraryRepository(url: root.appendingPathComponent("library.sqlite")).read().projects[0]
+                    .board, board)
+            XCTAssertThrowsError(try repository.update { $0.sources.removeAll() })
+            try repository.update { $0.projects[0].board?.removeNode(sourceNode.id) }
+            let state = try repository.read()
+            XCTAssertEqual(state.sources.count, 1)
+            XCTAssertEqual(state.cards.count, 1)
+            XCTAssertEqual(state.projects[0].board?.nodes.count, 1)
+            XCTAssertEqual(state.projects[0].board?.edges.count, 0)
+        }
+    }
     private func withStore(_ body: (LibraryRepository, URL) throws -> Void) throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
