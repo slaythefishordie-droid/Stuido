@@ -58,6 +58,7 @@ public struct WebMarkStore: Sendable {
         try locked {
             let url = directory.appendingPathComponent(id.uuidString + ".json")
             var mark = try JSONDecoder().decode(WebMark.self, from: Data(contentsOf: url))
+            guard mark.id == id else { throw VideoError.corruptStore }
             if let note { mark.note = note }
             if let deleted { mark.deletedAt = deleted ? Date().timeIntervalSince1970 * 1000 : nil }
             mark.updatedAt = Date().timeIntervalSince1970 * 1000

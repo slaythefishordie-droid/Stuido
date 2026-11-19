@@ -69,10 +69,13 @@ final class LibraryTests: XCTestCase {
             let file = root.appendingPathComponent("prototype-v1.json")
             let old = try MarkStore(fileURL: file)
             let source = try old.select(videoID: YouTubeVideoID("dQw4w9WgXcQ"))
+            let mark = try old.append(sourceID: source.id, seconds: 12.345678)
             let bytes = try Data(contentsOf: file)
             try repository.migratePrototype(at: file)
             try repository.migratePrototype(at: file)
             XCTAssertEqual(try repository.read().sources.map(\.id), [source.id])
+            XCTAssertEqual(try repository.read().marks.first?.id, mark.id)
+            XCTAssertEqual(try repository.read().marks.first?.locator.seconds, 12.345678)
             XCTAssertEqual(try Data(contentsOf: file), bytes)
         }
     }

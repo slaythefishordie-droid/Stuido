@@ -24,7 +24,7 @@
 
 ## 相关检查
 
-- Swift 核心：`bash scripts/test-core.sh`（需要 Swift 6+）。
+- Swift 核心：`bash scripts/test-core.sh`（需要 Swift 6.1+）。
 - 协议及 Safari 面板：`npm ci --ignore-scripts`，`npm test`，`npm run validate -- examples/import/valid-four-types.json`。面板测试位于 `tools/safari/`，以模拟 Native Messaging 验证错误恢复；协议指纹优化必须保持已有指纹兼容。
 - 原生：`.github/workflows/ipados.yml`，默认标准 macos-15-intel / Xcode 26.2，规避近期 ARM64 调度容量不足；手动运行仍可选 macos-26 (ARM64)，两者固定相同工具链和测试要求。本地 macOS 可用 `bash scripts/bootstrap-xcodegen.sh` 生成工程。
 - 只运行与本次更改相称的检查。文档修改无需重复 macOS 构建。
@@ -35,3 +35,5 @@
 ## 用户更新的功能优先规范（2026-11-19）
 
 本轮按 docs/release-0.3-plan.md 完成两份计划阶段 1–4。优先端到端功能，仅阅读相关代码和运行针对性测试，不重复全量审计、无关重构或重复验证已通过部分。普通非阻塞优化写入待办。数据删除/迁移/备份恢复、对象关联与持久化、共享传输及权限安全必须保留关键验证。同一错误连续两次修复无进展则记录阻塞和尝试，继续独立功能。阶段稳定化时集中完整构建回归；未经验证不得宣称通过或发布稳定版。用户已报告里程碑 1 真机双向共享成功。
+
+0.3 新模块：LibraryRepository/LibraryState 负责事务与引用校验，ImportService 使用核心资源副本的 1.0 Schema；修改 schemas/import-package-1.0.schema.json 时同步 Sources/KnowledgeCore/Resources 中同名文件。StudioModel/StudioView、ManagementViews、SourceReaders、BackupService 分别承担应用协调、主界面、管理/导入、阅读和备份。新测试仅按修改风险运行，版本稳定化才做完整原生回归。

@@ -91,3 +91,7 @@
 - Safari 页面 DOM、可选网站权限与动态脚本注册，以及 Readium 真书定位须真机验收。未适配的视频广告标识/页面变体记录后补齐，不假定所有网站音频可读。
 - 备份限制为单文件 4 GiB、合计 8 GiB、20,002 项，知识库/清单单项 64 MiB；超限明确拒绝。大文件操作进度、后台执行和取消属于后续性能/体验优化。
 - 本地系统目录不可安装 apt 包，已改为工作区解压 Swift/SQLite 开发包。已能实际运行核心测试，不再重复尝试系统安装。
+
+## BUILD-05 · SwiftUI 属性包装器多变量声明（0.3 稳定化）
+
+运行 44475088781 的依赖解析、锁文件和核心测试通过；App 编译报 `property wrapper can only apply to a single variable`，位置在 ManagementViews/StudioView 的 @State 声明。改为每个属性单独声明。Linux `swiftc -frontend -parse` 不执行该层类型检查，不能替代 Xcode 编译。修复复测另行记录，不重跑未变更的 Node 测试。

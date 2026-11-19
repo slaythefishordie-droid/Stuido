@@ -72,4 +72,20 @@ final class LibraryAppTests: XCTestCase {
         XCTAssertFalse(FileManager.default.fileExists(atPath: orphan.path))
     }
 
+    func testRestoreRejectsFalseUncompressedSize() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let model = StudioModel(root: root)
+        model.saveCard(LibraryCard(type: .expression, content: ["text": String(repeating: "A", count: 10000)]))
+        let original = model.state
+        let zip = try await BackupService.export(model: model)
+        defer { try? FileManager.default.removeItem(at: zip) }
+        var bytes = try Data(contentsOf: zip)
+        let central = try XCTUnwrap(bytes.range(of: Data([0x50, 0x4b, 0x01, 0x02])))
+        bytes.replaceSubrange((central.lowerBound + 24)..<(central.lowerBound + 28), with: [1, 0, 0, 0])
+        try bytes.write(to: zip)
+        do { _ = try await BackupService.validate(zip); XCTFail("False size accepted") } catch { }
+        XCTAssertEqual(model.state, original)
+    }
+
 }

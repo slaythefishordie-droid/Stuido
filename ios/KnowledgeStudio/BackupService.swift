@@ -59,7 +59,12 @@ enum BackupService {
                     entry.uncompressedSize <= 4_294_967_296 else { throw LibraryError.invalid("备份包含非法路径、链接或过大文件") }
                 total += entry.uncompressedSize
                 guard total <= 8_589_934_592, path.hasPrefix("assets/") || entry.uncompressedSize <= 67_108_864 else { throw LibraryError.invalid("备份解压大小超过限制") }
-                let crc = try await archive.extract(entry, to: stage.appendingPathComponent(path))
+                let sink = try BoundedBackupSink(url: stage.appendingPathComponent(path), limit: entry.uncompressedSize)
+                let crc: UInt32
+                do {
+                    crc = try await archive.extract(entry) { chunk in try await sink.write(chunk) }
+                    try await sink.finish()
+                } catch { await sink.cancel(); throw error }
                 guard crc == entry.checksum else { throw LibraryError.invalid("备份 ZIP 校验失败") }
             }
             let manifest = try JSONDecoder().decode(BackupManifest.self, from: Data(contentsOf: stage.appendingPathComponent("manifest.json")))
@@ -98,4 +103,25 @@ enum BackupService {
         try repository.restore(validated.state)
         model.refresh()
     }
+}
+
+/// Enforce the limit on bytes actually inflated, not only untrusted ZIP metadata.
+private actor BoundedBackupSink {
+    private let handle: FileHandle
+    private let limit: UInt64
+    private var count: UInt64 = 0
+    init(url: URL, limit: UInt64) throws {
+        try FileManager.default.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+        guard FileManager.default.createFile(atPath: url.path, contents: nil) else { throw LibraryError.invalid("无法创建恢复临时文件") }
+        handle = try FileHandle(forWritingTo: url); self.limit = limit
+    }
+    func write(_ data: Data) throws {
+        guard UInt64(data.count) <= limit - count else { throw LibraryError.invalid("实际解压大小超过声明，已停止恢复") }
+        try handle.write(contentsOf: data); count += UInt64(data.count)
+    }
+    func finish() throws {
+        try handle.close()
+        guard count == limit else { throw LibraryError.invalid("解压文件大小不符") }
+    }
+    func cancel() { try? handle.close() }
 }

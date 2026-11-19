@@ -81,7 +81,8 @@ struct MarkDetailView: View {
 
 struct CardsView: View {
     @EnvironmentObject private var model: StudioModel
-    @State private var search = "", category = "全部"
+    @State private var search = ""
+    @State private var category = "全部"
     @State private var editor: LibraryCard?
     var cards: [LibraryCard] { model.state.cards.filter { card in card.deletedAt == nil && (category == "全部" || (category == "Dictionary" ? [.word, .keyword].contains(card.type) : [.expression, .key_sentence].contains(card.type))) && (search.isEmpty || (card.title + card.note + card.tags.joined(separator: " ")).localizedCaseInsensitiveContains(search)) } }
     var body: some View {

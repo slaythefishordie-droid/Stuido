@@ -102,6 +102,8 @@ public enum ImportService {
             let chosen = preview.cards.filter { selected.contains($0.id) }
             guard !chosen.isEmpty else { throw LibraryError.invalid("至少选择一张候选卡片") }
             let needed = Set(chosen.flatMap { $0.sourceRefs.map(\.sourceID) })
+            let available = Set(state.sources.filter { $0.deletedAt == nil }.map(\.id)).union(preview.sources.map(\.id))
+            guard needed.isSubset(of: available) else { throw LibraryError.invalid("预览中的资料已被删除，请重新匹配") }
             for source in preview.sources where needed.contains(source.id) {
                 if !state.sources.contains(where: { $0.id == source.id }) { state.sources.append(source) }
             }

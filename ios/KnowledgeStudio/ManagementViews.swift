@@ -4,7 +4,8 @@ import KnowledgeCore
 
 struct AIInboxView: View {
     @EnvironmentObject private var model: StudioModel
-    @State private var text = "", importing = false
+    @State private var text = ""
+    @State private var importing = false
     @State private var pending: PendingImport?
     var body: some View {
         NavigationStack {
@@ -83,7 +84,9 @@ struct ImportReviewView: View {
 
 struct LibraryView: View {
     @EnvironmentObject private var model: StudioModel
-    @State private var importing = false, search = "", projectTitle = ""
+    @State private var importing = false
+    @State private var search = ""
+    @State private var projectTitle = ""
     var body: some View {
         NavigationStack {
             List {
@@ -106,7 +109,8 @@ struct LibraryView: View {
 struct ProjectView: View {
     @EnvironmentObject private var model: StudioModel
     let projectID: UUID
-    @State private var title = "", note = ""
+    @State private var title = ""
+    @State private var note = ""
     var body: some View {
         Form {
             if let project = model.state.projects.first(where: { $0.id == projectID }) {
@@ -126,10 +130,18 @@ struct ProjectView: View {
 
 struct DataManagerView: View {
     @EnvironmentObject private var model: StudioModel
-    @State private var trash = false, kind = "全部", search = ""
-    @State private var selected: Set<UUID> = [], confirming = false, permanent = false
-    @State private var backup: URL?, restoring = false, busy = false, confirmCleanup = false
-    @State private var validated: BackupService.Validated?, confirmRestore = false
+    @State private var trash = false
+    @State private var kind = "全部"
+    @State private var search = ""
+    @State private var selected: Set<UUID> = []
+    @State private var confirming = false
+    @State private var permanent = false
+    @State private var backup: URL?
+    @State private var restoring = false
+    @State private var busy = false
+    @State private var confirmCleanup = false
+    @State private var validated: BackupService.Validated?
+    @State private var confirmRestore = false
     struct Row: Identifiable { let id: UUID; let title: String; let kind: String; let deleted: Bool }
     var rows: [Row] {
         var all: [Row] = model.state.sources.map { Row(id: $0.id, title: $0.title, kind: "资料", deleted: $0.deletedAt != nil) }
