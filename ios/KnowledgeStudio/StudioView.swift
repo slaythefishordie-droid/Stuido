@@ -45,6 +45,7 @@ struct InboxView: View {
     @EnvironmentObject private var model: StudioModel
     @State private var search = ""
     @State private var editor: LibraryCard?
+    @State private var selected: Set<UUID> = []
     var marks: [LibraryMark] {
         model.state.marks.filter {
             $0.deletedAt == nil && $0.organization == .inbox
@@ -57,13 +58,15 @@ struct InboxView: View {
     }
     var body: some View {
         NavigationStack {
-            List {
+            List(selection: $selected) {
                 if let warning = model.sharedWarning { Text(warning).foregroundStyle(.orange) }
                 if marks.isEmpty {
                     ContentUnavailableView(
-                        "没有待整理标记", systemImage: "tray", description: Text("在 Safari、PDF、EPUB 或本地视频中保存 Mark。"))
+                        "没有待整理标记", systemImage: "tray", description: Text("在 Safari、PDF、EPUB 或本地视频中保存标记。"))
                 }
-                ForEach(marks) { mark in
+                ForEach(Array(Set(marks.map(\.sourceID))).sorted { $0.uuidString < $1.uuidString }, id: \.self) { sourceID in
+                  Section(model.state.sources.first { $0.id == sourceID }?.title ?? "资料不可用") {
+                    ForEach(marks.filter { $0.sourceID == sourceID }) { mark in
                     VStack(alignment: .leading, spacing: 10) {
                         Label(mark.highlightKind.title, systemImage: "circle.fill").font(.caption).foregroundStyle(mark.highlightKind.color)
                         Text(sourceTitle(mark)).font(.headline)
@@ -71,7 +74,8 @@ struct InboxView: View {
                         if !mark.note.isEmpty { Text(mark.note).foregroundStyle(.secondary) }
                         Text(locationLabel(mark.locator)).font(.caption)
                         HStack {
-                            Menu("整理为卡片") {
+                            Button("整理为\(mark.highlightKind.title)") { editor = model.card(from: mark, type: mark.highlightKind) }
+                            Menu("其他类型") {
                                 ForEach(CardKind.allCases, id: \.self) { kind in
                                     Button(kind.title) { editor = model.card(from: mark, type: kind) }
                                 }
@@ -92,10 +96,21 @@ struct InboxView: View {
                             }
                         }.buttonStyle(.borderless)
                         NavigationLink("备注与详情") { MarkDetailView(markID: mark.id) }
-                    }.padding(.vertical, 4)
+                    }.padding(.vertical, 4).tag(mark.id)
+                }
+                  }
                 }
             }.navigationTitle("收集箱").searchable(text: $search).refreshable { model.refresh() }
-                .toolbar { Button("接收 Safari 标记") { model.refresh() } }
+                .toolbar {
+                    EditButton()
+                    Button("接收标记") { model.refresh() }
+                    if !selected.isEmpty {
+                        Button("归档所选") { model.change { state in
+                            for i in state.marks.indices where selected.contains(state.marks[i].id) { state.marks[i].organization = .archived }
+                        }; selected.removeAll() }
+                        Button("移入回收站", role: .destructive) { model.delete(Array(selected)); selected.removeAll() }
+                    }
+                }
         }.sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
     }
 }
@@ -108,18 +123,26 @@ struct MarkDetailView: View {
     @EnvironmentObject private var model: StudioModel
     let markID: UUID
     @State private var note = ""
+    @State private var kind: CardKind = .expression
     var body: some View {
         Form {
             if let mark = model.state.marks.first(where: { $0.id == markID }) {
                 Label(mark.highlightKind.title, systemImage: "circle.fill").foregroundStyle(mark.highlightKind.color)
                 Text(mark.excerpt)
                 Text(locationLabel(mark.locator))
+                Picker("高亮类型", selection: $kind) { ForEach(CardKind.allCases, id: \.self) { Text($0.title).tag($0) } }
                 TextField("个人备注", text: $note, axis: .vertical)
-                Button("保存备注") { model.setMarkNote(id: markID, note: note) }
+                Button("保存备注与颜色") {
+                    model.setMarkNote(id: markID, note: note)
+                    if model.message == nil { model.change { state in
+                        if let i = state.marks.firstIndex(where: { $0.id == markID }) { state.marks[i].cardKind = kind }
+                    } }
+                }
                 Text(mark.id.uuidString).font(.caption).textSelection(.enabled)
             }
         }.navigationTitle("标记详情").onAppear {
             note = model.state.marks.first { $0.id == markID }?.note ?? ""
+            kind = model.state.marks.first { $0.id == markID }?.highlightKind ?? .expression
         }
     }
 }
@@ -159,7 +182,7 @@ struct CardsView: View {
                             }
                             Text(
                                 "\(card.type.title) · \(studioLabel(card.organization.rawValue)) · \(studioLabel(card.review.rawValue))"
-                            ).font(.caption)
+                            ).font(.caption).foregroundStyle(card.type.color)
                         }
                     }
                 }
@@ -183,7 +206,7 @@ struct CardEditor: View {
                 }
                 ForEach(LibraryCard.fields(for: card.type), id: \.self) { field in
                     TextField(
-                        studioLabel(field),
+                        studioFieldLabel(field),
                         text: Binding(
                             get: { card.content[field] ?? "" },
                             set: { value in
@@ -249,9 +272,9 @@ struct CardDetailView: View {
             if let card = model.state.cards.first(where: { $0.id == cardID }) {
                 ForEach(LibraryCard.fields(for: card.type), id: \.self) { field in
                     if let value = card.content[field] {
-                        Section(studioLabel(field)) {
+                        Section(studioFieldLabel(field)) {
                             Text(value).textSelection(.enabled)
-                            Text(card.provenance[field]?.kind ?? "user_input").font(.caption).foregroundStyle(
+                            Text(studioLabel(card.provenance[field]?.kind ?? "user_input")).font(.caption).foregroundStyle(
                                 .secondary)
                         }
                     }

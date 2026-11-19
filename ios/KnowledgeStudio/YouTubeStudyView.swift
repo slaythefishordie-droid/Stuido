@@ -71,7 +71,7 @@ struct YouTubeStudyView: View {
             .safeAreaInset(edge: .bottom) {
                 if model.player != nil {
                     HStack(spacing: 16) {
-                        Button(action: model.saveMark) { Label("Mark", systemImage: "bookmark.fill") }
+                        Button(action: model.saveMark) { Label("标记", systemImage: "bookmark.fill") }
                             .buttonStyle(.borderedProminent).controlSize(.large)
                             .disabled(!model.isReady || model.isBusy)
                         Button(expanded ? "收起" : "放大") { expanded.toggle() }

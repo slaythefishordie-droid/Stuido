@@ -3,7 +3,7 @@
   if (!root) return;
   const section = root.querySelector('section');
   const tools = document.createElement('details');
-  tools.innerHTML = `<summary style="padding:10px;cursor:pointer">精听与历史</summary>
+  tools.innerHTML = `<summary style="padding:10px;cursor:pointer">阅读控制</summary>
     <div id="adjust"></div><div><button id="a">设 A</button><button id="b">设 B</button><button id="clear">清除循环</button></div>
     <p id="loop" role="status">未启用循环</p><details id="history"><summary style="padding:10px">历史书签</summary>
     <input id="search" placeholder="搜索标题、备注或时间" aria-label="搜索历史" style="width:90%;min-height:40px">
@@ -12,6 +12,8 @@
     <button id="export">导出书签 JSON</button><label>导入旧书签<input id="import" type="file" accept="application/json,.json"></label></details>
     <p id="feedback" role="status" aria-live="polite"></p>`;
   section.append(tools);
+  const preRollLabel = root.querySelector('label');
+  if (preRollLabel) tools.append(preRollLabel);
   const find = id => tools.querySelector('#' + id), feedback = find('feedback');
   let a = null, b = null, boundVideo = null, marks = [], limit = 50;
   const clear = () => { a = b = null; find('loop').textContent = '未启用循环'; };
@@ -64,7 +66,7 @@
       button('回看', () => { clear(); if (mark.videoID === id) video().currentTime = mark.seconds; else location.assign(`https://www.youtube.com/watch?v=${mark.videoID}&t=${mark.seconds}s`); });
       button('备注', async () => { const note = prompt('书签备注', mark.note ?? ''); if (note !== null) { await request({ action: 'annotateMark', id: mark.id, note }); await refresh(); } });
       button('复制链接', async () => { await navigator.clipboard.writeText(`https://www.youtube.com/watch?v=${mark.videoID}&t=${mark.seconds}s`); feedback.textContent = '已复制出处链接'; });
-      button('删除', async () => { if (confirm('将此书签移入回收站？可在 App Data Manager 恢复。')) { await request({ action: 'annotateMark', id: mark.id, deleted: true }); await refresh(); } });
+      button('删除', async () => { if (confirm('将此书签移入回收站？可在 应用的数据管理 恢复。')) { await request({ action: 'annotateMark', id: mark.id, deleted: true }); await refresh(); } });
       find('rows').append(row);
     }
   }

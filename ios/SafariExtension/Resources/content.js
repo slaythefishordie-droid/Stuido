@@ -8,7 +8,7 @@
     section { max-width:260px; padding:10px; border-radius:12px; background:#182529; color:white; font:14px system-ui; box-shadow:0 2px 12px #0006; }
     button,select { min-height:44px; font:inherit; border-radius:8px; margin:3px; }
     p { margin:6px 2px; } button { padding:8px 16px; }
-  </style><section aria-label="Knowledge Studio"><button>QuickMark</button><label>回溯 <select aria-label="标记回溯秒数"><option value="0">0 秒</option><option value="1">1 秒</option><option value="2" selected>2 秒</option><option value="3">3 秒</option></select></label><p role="status" aria-live="polite">标记后可在 My Inbox 整理</p></section>`;
+  </style><section aria-label="Knowledge Studio"><button>标记</button><label>回溯 <select aria-label="标记回溯秒数"><option value="0">0 秒</option><option value="1">1 秒</option><option value="2" selected>2 秒</option><option value="3">3 秒</option></select></label><p role="status" aria-live="polite">标记后可在 收集箱 整理</p></section>`;
   document.documentElement.append(host);
   globalThis.KnowledgeQuickMarkUI = { root };
   const button = root.querySelector('button'), status = root.querySelector('p'), select = root.querySelector('select');
@@ -49,12 +49,12 @@
         new Promise((_, reject) => { timer = setTimeout(() => reject(new Error('保存结果待确认，请重试；不会重复建档。')), 10_000); })
       ]);
       if (result?.ok !== true || result.id !== pending.id) throw new Error(result?.error || '保存结果未确认，请重试。');
-      status.textContent = `已保存 ${pending.seconds} 秒，返回 My Inbox 查看。`;
+      status.textContent = `已保存 ${pending.seconds} 秒，返回 收集箱 查看。`;
       pending = null;
     } catch (error) { status.textContent = error.message; }
     finally {
       clearTimeout(timer); busy = false; button.disabled = false;
-      button.textContent = pending ? '重试上一条 Mark' : 'QuickMark';
+      button.textContent = pending ? '重试上一条标记' : '标记';
     }
   });
 })();

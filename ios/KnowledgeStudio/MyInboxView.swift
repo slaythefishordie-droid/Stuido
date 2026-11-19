@@ -28,7 +28,7 @@ struct MyInboxView: View {
                     }
                 }
             }
-            .navigationTitle("My Inbox")
+            .navigationTitle("收集箱")
             .toolbar { Button("刷新", action: refresh) }
             .refreshable { refresh() }
         }

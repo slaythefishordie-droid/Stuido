@@ -207,6 +207,7 @@ struct LibraryView: View {
 struct ProjectView: View {
     @EnvironmentObject private var model: StudioModel
     let projectID: UUID
+    @State private var managingLinks = false
     @State private var title = ""
     @State private var note = ""
     var body: some View {
@@ -223,6 +224,18 @@ struct ProjectView: View {
                         }
                     }
                 }
+                if !managingLinks {
+                    Section("项目资料") {
+                        ForEach(model.state.sources.filter { $0.deletedAt == nil && project.sourceIDs.contains($0.id) }) { source in
+                            NavigationLink(source.title) { SourceReaderView(source: source, location: source.lastLocation) }
+                        }
+                    }
+                    Section("项目卡片") {
+                        ForEach(model.state.cards.filter { $0.deletedAt == nil && project.cardIDs.contains($0.id) }) { card in
+                            NavigationLink(card.title) { CardDetailView(cardID: card.id) }
+                        }
+                    }
+                } else {
                 Section("关联资料") {
                     ForEach(model.state.sources.filter { $0.deletedAt == nil }) { source in
                         Toggle(
@@ -255,9 +268,10 @@ struct ProjectView: View {
                                 }))
                     }
                 }
+                }
                 Text("解除关联只影响项目，不删除卡片或资料。").font(.caption)
             }
-        }.navigationTitle("项目").onAppear {
+        }.navigationTitle("项目").toolbar { Button(managingLinks ? "完成关联" : "管理关联") { managingLinks.toggle() } }.onAppear {
             if let p = model.state.projects.first(where: { $0.id == projectID }) {
                 title = p.title
                 note = p.note
@@ -338,15 +352,16 @@ struct DataManagerView: View {
                 }
                 Section("对象") {
                     ForEach(rows) { row in
-                        Toggle(
-                            isOn: Binding(
-                                get: { selected.contains(row.id) },
-                                set: { if $0 { selected.insert(row.id) } else { selected.remove(row.id) } })
-                        ) {
+                        Button {
+                            if selected.contains(row.id) { selected.remove(row.id) } else { selected.insert(row.id) }
+                        } label: {
+                            HStack {
+                            Image(systemName: selected.contains(row.id) ? "checkmark.circle.fill" : "circle")
                             VStack(alignment: .leading) {
                                 Text(row.title)
                                 Text(row.kind).font(.caption)
                             }
+                            }.foregroundStyle(.primary)
                         }
                     }
                 }
@@ -374,7 +389,7 @@ struct DataManagerView: View {
                                 }
                                 selected = []
                             }
-                            Button("归档所选卡片与 Mark") {
+                            Button("归档所选卡片与标记") {
                                 model.change { state in
                                     for i in state.cards.indices where selected.contains(state.cards[i].id) {
                                         state.cards[i].organization = .archived

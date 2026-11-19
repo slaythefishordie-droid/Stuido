@@ -113,7 +113,7 @@ test('page button saves without pausing playback and acknowledges the captured p
   await page.click();
   assert.equal(sent.seconds, 10);
   assert.equal(page.elements.button.disabled, false);
-  assert.equal(page.elements.button.textContent, 'QuickMark');
+  assert.equal(page.elements.button.textContent, '标记');
   assert.match(page.elements.p.textContent, /已保存 10 秒/);
 });
 
@@ -124,11 +124,11 @@ test('failed page delivery retries its original position even after playback adv
     return sent.length === 1 ? { ok: false, error: 'offline' } : { ok: true, id };
   });
   await page.click();
-  assert.equal(page.elements.button.textContent, '重试上一条 Mark');
+  assert.equal(page.elements.button.textContent, '重试上一条标记');
   page.video.currentTime = 50;
   await page.click();
   assert.deepEqual(sent[0], sent[1]);
-  assert.equal(page.elements.button.textContent, 'QuickMark');
+  assert.equal(page.elements.button.textContent, '标记');
 });
 
 test('navigation blocks capture before replacement video metadata is ready', async () => {

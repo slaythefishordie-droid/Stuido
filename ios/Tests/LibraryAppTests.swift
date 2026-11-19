@@ -1,5 +1,6 @@
 import Foundation
 import KnowledgeCore
+import ReadiumShared
 @preconcurrency import ReadiumZIPFoundation
 import XCTest
 
@@ -7,6 +8,25 @@ import XCTest
 
 @MainActor
 final class LibraryAppTests: XCTestCase {
+    func testEPUBSelectionLocatorRoundTripPreservesTextContext() throws {
+        let json: [String: Any] = ["href": "chapter.xhtml", "type": "application/xhtml+xml",
+            "locations": ["progression": 0.35], "text": ["before": "Before ", "highlight": "Selected words", "after": " after"]]
+        let locator = try XCTUnwrap(try Locator(json: ReadiumShared.JSONValue(json), warnings: nil))
+        let stored = try EPUBSession.readingLocator(locator)
+        let decoded = try JSONSerialization.jsonObject(with: Data(XCTUnwrap(stored.nativeJSON).utf8))
+        let reopened = try XCTUnwrap(try Locator(json: ReadiumShared.JSONValue(decoded), warnings: nil))
+        XCTAssertEqual(reopened.text.highlight, "Selected words")
+        XCTAssertEqual(reopened.text.before, "Before ")
+        XCTAssertEqual(reopened.text.after, " after")
+        XCTAssertEqual(reopened.locations.progression, 0.35)
+        XCTAssertEqual(reopened.href.string, "chapter.xhtml")
+    }
+    func testHighlightPaletteMatchesCardTypes() {
+        XCTAssertEqual(CardKind.word.highlightColor, .systemBlue)
+        XCTAssertEqual(CardKind.expression.highlightColor, .systemYellow)
+        XCTAssertEqual(CardKind.keyword.highlightColor, .systemPurple)
+        XCTAssertEqual(CardKind.key_sentence.highlightColor, .systemGreen)
+    }
     func testBackupRestorePreservesCardsAndReferencedAsset() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

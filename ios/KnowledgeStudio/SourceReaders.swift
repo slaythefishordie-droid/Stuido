@@ -200,6 +200,7 @@ struct LocalVideoStudyView: View {
 final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
     var savePosition: ((ReadingLocator) -> Void)?
     var saveSelection: ((ReadingLocator, String, CardKind) -> Void)?
+    var selectMark: ((UUID) -> Void)?
     func navigator(_ navigator: Navigator, locationDidChange locator: Locator) {
         if let value = try? Self.readingLocator(locator) { savePosition?(value) }
     }
@@ -228,6 +229,10 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
                 let link = publication.readingOrder.first(where: { $0.href == href })
             {
                 initial = await publication.locate(link)
+                if let progression = location?.progression {
+                    initial = initial?.copy(locations: { $0.progression = progression })
+                }
+                locationWarning = "缺少完整选文定位，已回到章节阅读位置；不能保证精确到原句。"
             }
             if location != nil && initial == nil { locationWarning = "此定位无法精确还原，已打开资料。可在阅读器中重新标记。" }
             let reader = try StudyEPUBNavigator(publication: publication, initialLocation: initial,
@@ -242,6 +247,9 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
                 guard let locator = reader?.currentSelection?.locator, let text = locator.text.highlight, !text.isEmpty else { return }
                 do { self?.saveSelection?(try Self.readingLocator(locator), text, kind) }
                 catch { self?.error = "选文定位未保存：\(error.localizedDescription)" }
+            }
+            reader.observeDecorationInteractions(inGroup: "knowledge-marks") { [weak self] event in
+                if let id = UUID(uuidString: event.decoration.id) { self?.selectMark?(id) }
             }
             reader.delegate = self
             navigator = reader
@@ -278,6 +286,8 @@ struct EPUBStudyView: View {
     @AppStorage("readerTheme") private var theme = "sepia"
     @AppStorage("readerColumns") private var columns = true
     @State private var settings = false
+    @State private var selectedMark: LibraryMark?
+    @AppStorage("readerFont") private var font = "serif"
     var body: some View {
         VStack {
             if let warning = session.locationWarning { Text(warning).font(.caption).foregroundStyle(.orange) }
@@ -301,10 +311,15 @@ struct EPUBStudyView: View {
                 Button("阅读设置") { settings = true }
             }.padding()
         }.task {
+            session.selectMark = { id in selectedMark = model.state.marks.first { $0.id == id } }
             session.savePosition = { model.saveLocation(sourceID: source.id, locator: $0) }
             session.saveSelection = { model.saveMark(source: source, locator: $0, excerpt: $1, kind: $2) }
             await session.open(url: url, location: location)
             applyPreferences()
+        }
+        .onChange(of: font) { _, _ in applyPreferences() }
+        .sheet(item: $selectedMark) { mark in
+            NavigationStack { MarkDetailView(markID: mark.id).toolbar { Button("完成") { selectedMark = nil } } }.environmentObject(model)
         }
         .onChange(of: fontSize) { _, _ in applyPreferences() }
         .onChange(of: lineHeight) { _, _ in applyPreferences() }
@@ -313,6 +328,7 @@ struct EPUBStudyView: View {
         .sheet(isPresented: $settings) {
             NavigationStack {
                 Form {
+                    Picker("字体", selection: $font) { Text("衬线阅读体").tag("serif"); Text("无衬线体").tag("sans") }
                     Section("字号") { Slider(value: $fontSize, in: 80...180, step: 10); Text("\(Int(fontSize))%") }
                     Section("行距") { Slider(value: $lineHeight, in: 1.2...2.2, step: 0.1) }
                     Picker("书页", selection: $theme) { Text("纸白").tag("light"); Text("暖纸").tag("sepia"); Text("夜读").tag("dark") }
@@ -328,7 +344,7 @@ struct EPUBStudyView: View {
             }
     }
     private func applyPreferences() {
-        session.navigator?.submitPreferences(EPUBPreferences(columnCount: columns ? .auto : .one, fontFamily: .serif, fontSize: fontSize, lineHeight: lineHeight, theme: theme == "dark" ? .dark : theme == "light" ? .light : .sepia))
+        session.navigator?.submitPreferences(EPUBPreferences(columnCount: columns ? .auto : .one, fontFamily: font == "serif" ? .serif : .sansSerif, fontSize: fontSize, lineHeight: lineHeight, theme: theme == "dark" ? .dark : theme == "light" ? .light : .sepia))
     }
 
 }
