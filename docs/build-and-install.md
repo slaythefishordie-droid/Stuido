@@ -2,10 +2,10 @@
 
 ## 路径与工具
 
-Windows / iPadOS 26.2 用户不需要实体 Mac 来下载 CI 产物。GitHub Actions 使用标准 `macos-26` ARM64 Runner，固定 `DEVELOPER_DIR=/Applications/Xcode_26.2.app/Contents/Developer`。官方 Runner 清单在 2026-11-18 核对列有 Xcode 26.2、iOS 26.2 SDK 和相应 iPad 模拟器；如果后续移除该工具链，工作流会明确失败，不静默换 SDK。
+Windows / iPadOS 26.2 用户不需要实体 Mac 来下载 CI 产物。GitHub Actions 默认使用标准 `macos-15-intel` Runner（手动可选 `macos-26` ARM64），固定 `DEVELOPER_DIR=/Applications/Xcode_26.2.app/Contents/Developer`。官方 Runner 清单在 2026-11-18 核对列有 Xcode 26.2、iOS 26.2 SDK 和相应 iPad 模拟器；如果后续移除该工具链，工作流会明确失败，不静默换 SDK。
 
 - [官方 Runner 清单](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md)
-- ARM64 容量不足时，手动运行可选标准 `macos-15-intel`，仍使用 Xcode 26.2 / iOS 26.2 模拟器；自动构建继续默认 `macos-26`。2026-11-18 已核对 [Intel 镜像清单](https://github.com/actions/runner-images/blob/d9c48363ed37529f6ef929845cda83bbdae0ef74/images/macos/macos-15-Readme.md) 含相同工具链。日志记录实际主机架构；设备归档始终验证为 iPhoneOS arm64。
+- 因近期 ARM64 容量不足，自动与手动构建默认选择标准 `macos-15-intel`，仍使用 Xcode 26.2 / iOS 26.2 模拟器；`macos-26` 保留为手动备选。2026-11-18 已核对 [Intel 镜像清单](https://github.com/actions/runner-images/blob/d9c48363ed37529f6ef929845cda83bbdae0ef74/images/macos/macos-15-Readme.md) 含相同工具链。日志记录实际主机架构；设备归档始终验证为 iPhoneOS arm64。
 - XcodeGen 2.44.1：从官方发行下载并校验已发布 SHA-256；`ios/project.yml` 是工程来源。
 - Swift 6 语言模式，最低 iPadOS 17，iPad 单一设备族。
 - `ios/Package.resolved` 锁定唯一 App 第三方依赖；CI 禁止自动解析到其他版本并比较锁文件。
@@ -47,7 +47,7 @@ Windows / iPadOS 26.2 用户不需要实体 Mac 来下载 CI 产物。GitHub Act
 
 在 `feature/safari-extension` 上手动运行 Native iPadOS。新产物名为 `KnowledgeStudio-resignable-ipa-<run_number>`，内含 `KnowledgeStudio-resignable.ipa`。归档后先验证嵌入的 SafariExtension.appex 的设备架构、扩展类型和 manifest，再用 ad-hoc 签名携带两端的 App Groups 声明。该签名没有 Apple 配置文件，安装仍由 AltStore Classic 免费账户重签。
 
-Actions → Native iPadOS → Run workflow：分支选 `feature/safari-extension`，runner 默认 `macos-26`。如果运行没有执行任何步骤，且注解为 `The job was not acquired by Runner of type hosted even after multiple attempts`，可改选 `macos-15-intel` 重试。这是调度失败，不等于代码或测试失败。命令行等价操作：`gh workflow run ipados.yml --ref feature/safari-extension -f runner=macos-15-intel`。
+Actions → Native iPadOS → Run workflow：分支选 `feature/safari-extension`，runner 默认 `macos-15-intel`。如果运行没有执行任何步骤，且注解为 `The job was not acquired by Runner of type hosted even after multiple attempts`，可改选 `macos-15-intel` 重试。这是调度失败，不等于代码或测试失败。命令行等价操作：`gh workflow run ipados.yml --ref feature/safari-extension -f runner=macos-15-intel`。
 
 安装时保留 Safari 扩展。主 App 启动进入「Safari 扩展」验证页面。到 iPad 设置中的 Safari 扩展列表启用 Knowledge Studio，再在 Safari 页面菜单打开它。
 

@@ -24,12 +24,12 @@ on:
   workflow_dispatch:
     inputs:
       runner:
-        description: 'Standard macOS runner (use Intel if ARM64 capacity is unavailable)'
+        description: 'Standard macOS runner (Intel preferred while ARM64 capacity is constrained)'
         type: choice
-        default: macos-26
+        default: macos-15-intel
         options:
-          - macos-26
           - macos-15-intel
+          - macos-26
 
 permissions:
   contents: read
@@ -41,7 +41,7 @@ concurrency:
 jobs:
   build:
     name: Xcode 26.2 · iPadOS
-    runs-on: ${{ inputs.runner || 'macos-26' }}
+    runs-on: ${{ inputs.runner || 'macos-15-intel' }}
     timeout-minutes: 25
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
