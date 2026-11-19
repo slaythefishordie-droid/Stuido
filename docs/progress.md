@@ -2,6 +2,10 @@
 
 本文件按时间记录开发工作与验证结果；重复问题的查找入口是[开发与构建问题日志](engineering-issues.md)。历史条目中的“当前”“下一步”只反映该条目的时间点，接续开发以 [PROJECT_STATUS.md](../PROJECT_STATUS.md)和现行路线图为准。
 
+## v1.0.0 发布收尾与附件限制 · 2026-11-19（北京时间）
+
+已推送发布记录 b82e4ed 和 v1.0.0 标签。Release 草稿 ID 451054981 已创建，附件上传被 uploads.github.com 网络策略拒绝；环境重启后复验仍拒绝。GitHub Release 已于北京时间 2026-11-19 21:15:51 公开发布（isDraft=false、isPrerelease=false），并改用已成功构建的 Actions Artifact 入口和对话中的实际 IPA 交付，避免无效下载链接。附件永久上传待网络授权后补齐，不重建 IPA、不改写标签。见工程问题 NET-02。
+
 ## v1.0.0 交付与验证 · 2026-11-19（北京时间）
 
 - 两份计划阶段 1–4 的功能实现已完成，集中可读性与效率检查已完成。主开发仍在 feature/safari-extension；v0.1.0 和 main 未改写。

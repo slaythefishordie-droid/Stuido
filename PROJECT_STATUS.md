@@ -9,6 +9,7 @@
 - **v1.0.0：**d0938a5，版本 1.0.0 / build 4。原生运行 [44484104854](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44484104854) 全部通过：核心 21/21、iPad 模拟器 32/32、设备归档与 IPA 校验。协议/Safari 43/43 通过。[发布与下载](https://github.com/slaythefishordie-droid/Stuido/releases/tag/v1.0.0) · [完整证据](docs/verification/native-run-44484104854.json)。
 - **功能实现：**数据底座、卡片和双 Inbox、确认 JSON 导入、Data Manager 与备份恢复、Library/PDF/EPUB/本地视频、Safari 精听/历史/设置/通用采集。
 - **集中优化：**批量查询索引化、无变化不写库、文件复制/摘要/ZIP 后台执行、统一新增 Swift 模块格式。验证结果见 [开发日志](docs/progress.md)。
+- **发布状态：**v1.0.0 已公开发布；Release 安装包附件因 uploads.github.com 网络限制暂未上传。已验证 IPA 通过对话文件及 Actions Artifact 交付，永久附件归档待网络授权。见工程问题 NET-02。
 - **默认分支阻塞：**用户已授权修改默认分支，但 GitHub 管理 API 返回 integration 403；远端默认分支仍为 main。主开发继续在 Safari 分支。
 
 ## 功能与验证边界

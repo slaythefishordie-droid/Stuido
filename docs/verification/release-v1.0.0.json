@@ -1,0 +1,14 @@
+{
+  "tag": "v1.0.0",
+  "tag_commit": "b82e4ed80eb94e4626a06ad5add4acdcffc031e9",
+  "url": "https://github.com/slaythefishordie-droid/Stuido/releases/tag/v1.0.0",
+  "published_at": "2026-11-19T13:15:51Z",
+  "is_draft": false,
+  "is_prerelease": false,
+  "release_assets": [],
+  "attachment_blocker": "uploads.github.com absent from enforced cloud network allowlist; Forbidden after environment restart",
+  "ipa_artifact_url": "https://github.com/slaythefishordie-droid/Stuido/actions/runs/44484104854/artifacts/14510239330",
+  "artifact_expires_at": "2026-11-26T08:19:58Z",
+  "ipa_sha256": "c4de7372a639e8c9da5fa3dfc5ea3f5d8b78d81261163d207cf67ffe69749244",
+  "delivered_local_file": "artifacts/release-v1.0.0/KnowledgeStudio-v1.0.0.ipa"
+}

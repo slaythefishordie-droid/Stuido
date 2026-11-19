@@ -19,7 +19,7 @@ Windows / iPadOS 26.2 用户不需要实体 Mac 来下载 CI 产物。GitHub Act
 
 ## 当前 v1.0.0 下载和安装
 
-[GitHub Release](https://github.com/slaythefishordie-droid/Stuido/releases/tag/v1.0.0) 提供长期附件，直接下载 `KnowledgeStudio-v1.0.0.ipa` 和同名 `.sha256`，无需解开外层 Artifact ZIP。在 Windows PowerShell 执行 `Get-FileHash .\KnowledgeStudio-v1.0.0.ipa -Algorithm SHA256` 核对摘要，然后在 AltStore Classic 导入并保留 Safari 扩展。当前入口为 My Inbox；诊断位于设置中的 Safari 扩展页面。
+[GitHub Release](https://github.com/slaythefishordie-droid/Stuido/releases/tag/v1.0.0) 已公开发布代码版本及发布说明。安装包附件上传受云环境网络限制，暂从 [Actions 安装包](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44484104854/artifacts/14510239330) 下载，解压取得 `KnowledgeStudio-resignable.ipa`、`.sha256` 和报告；该 Artifact 保留至 2026-11-26。对话中还提供同内容的 `KnowledgeStudio-v1.0.0.ipa`。核对摘要后在 AltStore Classic 导入并保留 Safari 扩展。当前入口为 My Inbox；诊断位于设置中的 Safari 扩展页面。
 
 v1.0.0 已通过核心 21 项、iPad 模拟器 32 项、设备归档和含扩展 IPA 校验；用户此前已确认里程碑 1 双向共享。此次新增功能真机结果另记。产物包含 iPhone/iPad 设备族，本版只验收 iPad；配置待办见 BUILD-07。
 

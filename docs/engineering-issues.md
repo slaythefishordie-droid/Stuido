@@ -114,3 +114,7 @@ v1.0.0 的 project.yml 全局设置为 TARGETED_DEVICE_FAMILY=2，但生成工�
 ## v1.0.0 最终验证
 
 运行 44484104854 全部成功，核心 21/21、模拟器 32/32、设备归档和 IPA 校验通过，BUILD-05/06 已关闭。下载实包摘要与 CI 相符，1.0.0/build 4。命令行受 productionresultssa0 网络限制，GitHub 连接器下载成功，附件已可用于 Release；历史 NET-01 不再等于所有下载路径都不可用。新增真机与真实旧书签兼容仍未验证。完整记录见 [native-run-44484104854.json](verification/native-run-44484104854.json)。
+
+## NET-02 · GitHub Release 附件上传域名缺失（待配置）
+
+v1.0.0 标签与 Release 草稿创建成功；`gh release create/upload` 上传附件时，`uploads.github.com` 返回 Forbidden。环境重启后同样失败。当前观测为 running、observations_current=true、network_policy.state=enforced，完整允许列表没有 uploads.github.com；GitHub API 仍可管理 Release，不能将附件上传失败误报为版本发布无权限。无 request_changes 工具，未更改策略或绕过代理。安装包已从 GitHub 连接器下载并通过校验，直接交付工作区文件；Release 暂指向成功运行的 Actions Artifact（截至 2026-11-26），附件永久归档待环境设置允许 uploads.github.com 后完成。不要重复原生构建，不覆盖 v1.0.0 标签。
