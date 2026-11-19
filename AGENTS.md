@@ -2,6 +2,10 @@
 
 开始任务先核对分支、未提交改动及用户目标，读本文件和 [开发进度](docs/progress.md) 的当前基线。按任务定位 [产品计划](docs/product-spec.md)、[Safari 路线图](docs/web-capture-roadmap.md) 的相关章节，以及涉及模块和问题 ID；不每轮通读全部历史。详细执行规则见 [工作流](docs/workflow.md)，排障查 [工程问题](docs/engineering-issues.md)。主开发分支为 feature/safari-extension。
 
+## 产品与设计职责
+
+同时承担产品与 UX/UI 设计职责。界面任务遵循 [产品设计章程](docs/product-spec.md) 和 [设计工作方式](docs/workflow.md)：温暖安静的私人书房、内容优先、常用操作可见，点击打开、长按快捷操作、选择模式批量处理。较大界面开工前给 2–4 句设计判断，不写冗长报告。普通体验优化自主推进；重大页面方案先说明，方向/功能删除/对象关系或数据规则重大调整等必须取得用户同意。既有授权不重复询问。研究相关成熟模式，不为研究或完美主义阻塞交付。
+
 ## 架构与技术栈
 
 - 网页采集统一在 Safari 网站原页面，由主 App 随附的一个 Web Extension 和多个站点适配器承担。本地 Native Messaging 与 App Groups 完成交接。先验证免费重签、扩展识别和共享读写，再实现 QuickMark 到 My Inbox。

@@ -103,3 +103,13 @@ v1.0.0 的 project.yml 全局设置为 TARGETED_DEVICE_FAMILY=2，但生成工�
 ## NET-02 · GitHub Release 附件上传域名缺失（待配置）
 
 v1.0.0 标签与 Release 草稿创建成功；`gh release create/upload` 上传附件时，`uploads.github.com` 返回 Forbidden。环境重启后同样失败。当前观测为 running、observations_current=true、network_policy.state=enforced，完整允许列表没有 uploads.github.com；GitHub API 仍可管理 Release，不能将附件上传失败误报为版本发布无权限。无 request_changes 工具，未更改策略或绕过代理。安装包已从 GitHub 连接器下载并通过校验，直接交付工作区文件；Release 暂指向成功运行的 Actions Artifact（截至 2026-11-26），附件永久归档待环境设置允许 uploads.github.com 后完成。不要重复原生构建，不覆盖 v1.0.0 标签。
+
+## UX-01 · 设计章程落地（待实施核对，2026-11-19）
+
+来源：用户 Product Design Charter，规范已并入 product-spec.md。本条记录实施边界，不把未经界面核对的假设称为已发现缺陷。
+
+- 项目独立笔记/解释/语境需要与共享 Source、Mark、高亮分清作用域；现有数据结构是否满足在实施前核对。存储方案须说明跨项目可见性、解除关联/删除、导入、备份和恢复行为；重大迁移须获同意并验证，禁止仅改 UI 冒充独立语境。
+- 自由白板需表达概念、卡片、资料、笔记，保留四类一级 Card；节点移除不等于删除原对象。具体结构/关系变更先方案与必要授权，图谱不追记为 v1.0.0 已交付。
+- 直接移入回收站无需归档；仍保留引用保护、可恢复性及永久删除的必要确认。减少无意义弹窗不等于绕过数据安全机制。
+- QuickMark 新常驻/展开布局保留 ±2 秒既有功能；±1/3 秒和 A–B 优先可见，不将用户未提及的旧能力默认删除。
+- Home、多栏/密度、项目树、阅读对照和 Inbox 分组按具体页面分批落地；每批用“打开资料到继续思考”的实际路径验收，记录尚未完成和真机边界。确认满足后按项关闭，不做无关全 App 重构。
