@@ -1,31 +1,24 @@
 # Knowledge Studio 项目状态与交接
 
-新模型须先读 [AGENTS.md](AGENTS.md)、本文件、[现行产品需求](docs/product-spec.md)和[四个里程碑](docs/web-capture-roadmap.md)。第一版标签保存的是旧原型。主分支现行的网页采集架构为随 App 分发的 Safari Web Extension，扩展分发与双向共享验证代码已在 `feature/safari-extension` 通过构建，等待免费签名后的 iPad 验证。里程碑 2 的 QuickMark 与 My Inbox 已增加，原生 CI 和真机结果待验证。
+新模型须先读 [AGENTS.md](AGENTS.md)、本文件、[现行产品需求](docs/product-spec.md)和[Safari 路线图](docs/web-capture-roadmap.md)。网页采集采用随 App 分发的 Safari Web Extension。
 
 ## 当前状态 · 2026-11-19
 
-- **开发方向：**`feature/safari-extension`，目标为 [0.3 两份计划阶段 1–4](docs/release-0.3-plan.md)，以功能优先、必要数据安全验证、阶段稳定化推进。
-- **真机基线：**用户本轮确认里程碑 1 Safari 与 App 双向数据编号传输对应成功。
-- **已通过原生构建的代码：**94841ea，运行 [44437247550](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44437247550) 全部成功，包含 QuickMark → My Inbox。此结果不覆盖本轮 0.3 新增代码。
-- **0.3 开发代码：**数据底座、卡片和双 Inbox、确认 JSON 导入、Data Manager 与备份恢复、Library/PDF/EPUB/本地视频、Safari 精听/历史/设置/通用采集已接入，等待本轮原生稳定化与真机验证。验证和已知边界见 [开发日志](docs/progress.md)。
-- **已执行检查：**核心首轮 18 项通过；最新数据/导入/共享针对性 7 项通过；Node 协议/Safari 43 项通过。备份与删除 App 测试待 macOS 执行。
-- **默认分支阻塞：**用户已授权修改默认分支，但 GitHub 管理 API 返回 integration 403；尚未改变远端默认分支。开发继续在 Safari 分支，不因此阻塞功能工作。
+- **开发方向：**`feature/safari-extension`。本轮实现两份计划阶段 1–4，并按用户要求整理为 v1.0.0；历史开发清单文件名仍为 [release-0.3-plan.md](docs/release-0.3-plan.md)。
+- **真机基线：**用户确认里程碑 1 Safari 与 App 双向数据编号传输对应成功；新增功能真机验收单独记录。
+- **v1.0.0：**d0938a5，版本 1.0.0 / build 4。原生运行 [44484104854](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44484104854) 全部通过：核心 21/21、iPad 模拟器 32/32、设备归档与 IPA 校验。协议/Safari 43/43 通过。[发布与下载](https://github.com/slaythefishordie-droid/Stuido/releases/tag/v1.0.0) · [完整证据](docs/verification/native-run-44484104854.json)。
+- **功能实现：**数据底座、卡片和双 Inbox、确认 JSON 导入、Data Manager 与备份恢复、Library/PDF/EPUB/本地视频、Safari 精听/历史/设置/通用采集。
+- **集中优化：**批量查询索引化、无变化不写库、文件复制/摘要/ZIP 后台执行、统一新增 Swift 模块格式。验证结果见 [开发日志](docs/progress.md)。
+- **默认分支阻塞：**用户已授权修改默认分支，但 GitHub 管理 API 返回 integration 403；远端默认分支仍为 main。主开发继续在 Safari 分支。
 
-## v0.1.0 已有实现
+## 功能与验证边界
 
-| 工作流 | 当前可用行为 |
-| --- | --- |
-| 旧 YouTube 原型 | 粘贴 HTTPS 链接，在 App 内播放。原生 Mark 按钮保存播放器返回的秒数，支持回看和可选提前 3 秒。切换视频或重连时重新绑定播放器，放大和收起复用同一实例。 |
-| 本地保存 | 恢复最近选中的视频及其标记。原型文件保留稳定 ID、来源关联和原始秒数。取时失败或会话过期时放弃写入，0 秒是有效位置。 |
-| 四类卡片导入协议 | 交付 Schema、中文提示词、合法及错误样例。命令行工具可校验内容、字段来源与引用，预览批次和内容重复。 |
-| 构建与安装路线 | macOS 26 ARM64、Xcode 26.2、XcodeGen 2.44.1。Actions 锁定 Swift 包，执行核心及 iPad 模拟器测试，对设备归档并校验未签名 IPA。Windows 与 iPad 使用 AltStore Classic 重签。 |
-
-## 验证记录与已知限制
-
-- 第一版交接时在 Linux Swift 6.2.1 复跑核心测试，8 项通过，协议测试 26 项通过。本轮代码审查后，协议及 Safari 面板测试共 31 项通过；新增超时恢复、异常响应和指纹兼容性检查。测试命令见 AGENTS.md，历次原生验证见 [进度记录](docs/progress.md)。
-- 标签 `v0.1.0` 指向 `7df6ef1`。该提交的两项 CI 均已通过，原生流程覆盖模拟器、设备归档和未签名 IPA 校验。Actions Artifact 保留 7 天，标签附注及进度文档长期保留结果摘要。[原生 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44227526926) · [协议 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44227553771)
-- 旧构建没有 Safari 扩展。免费账户重签能否保留扩展和共享权限仍是工程条件。新方案的构建、安装、Safari 识别及 App Groups 读写分别记录。[验收清单](docs/device-validation.md)
-- 存储仍是 Application Support 下的 `KnowledgeStudio/prototype-v1.json`。正式数据库、迁移、回收站、备份与恢复尚未交付。协议工具独立运行；原生 AI Inbox、Source 匹配、确认导入事务和四类卡片编辑界面尚未交付。
+- 数据底座：GRDB 事务聚合快照、稳定 ID、旧 prototype-v1.json 非破坏迁移、引用校验、回收站、ZIP 备份恢复。
+- 卡片和双 Inbox：四类型编辑与出处、独立整理/复习状态、Safari/阅读 Mark 整理为卡片、JSON 文件/粘贴校验、来源匹配、重复提示和确认导入。
+- Library：项目资料关联、PDF 高亮与回跳、Readium EPUB 定位、本地视频时间 Mark、词典外链。
+- Safari：QuickMark 可靠交接、精听 ±1/2/3 秒、A–B 循环、历史搜索/备注/删除/导出、旧格式兼容解析、个性化与逐站授权的文章/页面音频采集。
+- 新增功能的真机流程仍待验证；旧书签兼容仅使用合成 v1 样例，真实旧文件尚未提供。扫描 PDF 不含 OCR，EPUB 不接 DRM，非标准网站音频需适配。
+- v0.1.0 标签保留旧 YouTube 原型；当前入口已经替换为完整工作区。详细历史结果保留于开发日志，不作为新增功能的验证证据。
 
 ## 后续开发必须保留的决策
 
@@ -33,10 +26,6 @@
 - 只有 word、expression、keyword、key_sentence 四类卡片。发现来源、字段作者身份、整理状态、复习状态分别保存。标记、收藏和加入复习各由独立操作触发。[数据模型](docs/data-model.md)
 - ChatGPT 在 App 外使用。导入需要用户预览、确认、引用重映射和原子写入。项目归属、个人笔记和复习状态由用户控制。[导入协议](docs/protocol.md)
 
-## 历史后续计划（以 0.3 清单为当前范围）
+## 后续工作
 
-依次验证含扩展的构建、免费签名安装、Safari 识别和共享读写；打通 Safari Mark 到 My Inbox；迁移完整 QuickMark；完善文章及播客可复用的适配器接口。[实施顺序与验收](docs/web-capture-roadmap.md)
-
-其余产品工作仍包括正式数据库和旧记录迁移、回收站与备份、四类卡片及双 Inbox、PDF/EPUB/本地视频学习、知识组织和用户自选复习。各项验收条件见[产品需求](docs/product-spec.md)。
-
-最新里程碑 1 开发包在修复提交 `ea8ca267db640c6d9996367ea6aebcb72f96aa3c` 通过 [Native iPadOS #14](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44432216488)：核心 8/8、模拟器 14/14、设备归档、签名权限与 IPA 校验均通过。默认改用标准 Intel runner 应对 ARM64 分配失败；完整日志已读取，附件在当前云端仍受网络限制。详见[运行记录](docs/verification/native-run-44432216488.json)与[下载、安装和排障](docs/build-and-install.md)。
+按 [真机清单](docs/device-validation.md) 验证本次新增工作流和实际旧备份；记录站点变体及真实资料兼容问题。产品阶段 5–6 的知识图谱和复习调度仍在后续计划。默认分支需有仓库管理权限的账号修改，主开发继续使用 Safari 分支。

@@ -7,7 +7,7 @@
 - 网页采集统一在 Safari 网站原页面，由主 App 随附的一个 Web Extension 和多个站点适配器承担。本地 Native Messaging 与 App Groups 完成交接。先验证免费重签、扩展识别和共享读写，再实现 QuickMark 到 My Inbox。
 - 第一版基线中，`Sources/KnowledgeCore` 是 Swift 6 的 SwiftPM 包。`YouTubeVideoID` 校验输入，`MarkCapture` 管理会话和异步取时，`MarkStore` 验证快照并原子落盘。
 - `ios/KnowledgeStudio` 是 SwiftUI 应用层。以下播放器类只描述 v0.1.0 旧原型。`YouTubeStudyView` 展示界面，`YouTubeStudyModel` 协调播放器和状态，`YouTubeClock` 通过核心层的 `VideoClock` 接口接入 YouTubePlayerKit。编辑 XcodeGen 的 `ios/project.yml` 维护工程配置。
-- 当前主 App 使用 My Inbox / 扩展设置双页；`ExtensionSetupView` 保留里程碑 1 双向共享诊断。`ios/Shared/SharedProbeStore.swift` 由主 App 和 Safari 扩展共用，各端独立原子写入自己的记录文件；这不是正式 Mark 队列。AltStore 提供的 `ALTAppGroups` 存在时必须有效，不可静默回退至原组。缺失记录表示尚未写入，损坏、来源不符和其他读取错误必须报告。
+- 当前主 App 使用 My Inbox / 卡片 / Library / AI Inbox / Data Manager / 设置；`ExtensionSetupView` 保留里程碑 1 双向共享诊断。`ios/Shared/SharedProbeStore.swift` 由主 App 和 Safari 扩展共用，各端独立原子写入自己的记录文件；这不是正式 Mark 队列。AltStore 提供的 `ALTAppGroups` 存在时必须有效，不可静默回退至原组。缺失记录表示尚未写入，损坏、来源不符和其他读取错误必须报告。
 - `ios/SafariExtension/Resources/popup.js` 处理诊断面板，原生处理器接收 `readProbe` / `writeProbe`，另以 `saveMark` 接收里程碑 2 的不可变记录。正式记录使用 `WebMarkStore`，不能复用诊断文件。请求设定超时并防止重入；超时不代表原生写入已取消，应先读取核实结果。扩展资源必须复制到包根目录以便 Safari 找到 manifest。
 - `schemas/` 维护 Draft 2020-12 导入协议。`tools/protocol/` 使用 Node.js 22+、Ajv、ajv-formats 和 jsonc-parser。文件和粘贴文本共用校验入口。`examples/import/` 提供可运行的协议样例。
 - 原型快照格式、导入协议、未来的数据库迁移与备份格式分别演进。变更持久化或协议时，应验证现有数据能重新打开，以及失败后的数据完整性。
@@ -36,4 +36,4 @@
 
 本轮按 docs/release-0.3-plan.md 完成两份计划阶段 1–4。优先端到端功能，仅阅读相关代码和运行针对性测试，不重复全量审计、无关重构或重复验证已通过部分。普通非阻塞优化写入待办。数据删除/迁移/备份恢复、对象关联与持久化、共享传输及权限安全必须保留关键验证。同一错误连续两次修复无进展则记录阻塞和尝试，继续独立功能。阶段稳定化时集中完整构建回归；未经验证不得宣称通过或发布稳定版。用户已报告里程碑 1 真机双向共享成功。
 
-0.3 新模块：LibraryRepository/LibraryState 负责事务与引用校验，ImportService 使用核心资源副本的 1.0 Schema；修改 schemas/import-package-1.0.schema.json 时同步 Sources/KnowledgeCore/Resources 中同名文件。StudioModel/StudioView、ManagementViews、SourceReaders、BackupService 分别承担应用协调、主界面、管理/导入、阅读和备份。新测试仅按修改风险运行，版本稳定化才做完整原生回归。
+v1.0.0 模块：LibraryRepository/LibraryState 负责事务与引用校验，ImportService 使用核心资源副本的 1.0 Schema；修改 schemas/import-package-1.0.schema.json 时同步 Sources/KnowledgeCore/Resources 中同名文件。StudioModel/StudioView、ManagementViews、SourceReaders、BackupService 分别承担应用协调、主界面、管理/导入、阅读和备份。新测试仅按修改风险运行，版本稳定化才做完整原生回归。

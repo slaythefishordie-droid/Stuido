@@ -89,20 +89,28 @@
 - 旧 QuickMark 原脚本/真实备份不在当前工作区，仅有 SHA-256 和行为对照。v1 兼容代码有合成样例测试，真实旧文件字段与端到端兼容待验；保留原备份。
 - SQLite 首版采用事务聚合快照，数据量增长后再进行分表/索引性能优化；不把它描述为已实现 SQL 外键表结构。
 - Safari 页面 DOM、可选网站权限与动态脚本注册，以及 Readium 真书定位须真机验收。未适配的视频广告标识/页面变体记录后补齐，不假定所有网站音频可读。
-- 备份限制为单文件 4 GiB、合计 8 GiB、20,002 项，知识库/清单单项 64 MiB；超限明确拒绝。大文件操作进度、后台执行和取消属于后续性能/体验优化。
+- 备份限制为单文件 4 GiB、合计 8 GiB、20,002 项，知识库/清单单项 64 MiB；超限明确拒绝。大文件操作已移到后台；细粒度进度和取消属于后续体验优化。
 - 本地系统目录不可安装 apt 包，已改为工作区解压 Swift/SQLite 开发包。已能实际运行核心测试，不再重复尝试系统安装。
 
-## BUILD-05 · SwiftUI 属性包装器多变量声明（0.3 稳定化）
+## BUILD-05 · SwiftUI 属性包装器多变量声明（已修复）
 
-运行 44475088781 的依赖解析、锁文件和核心测试通过；App 编译报 `property wrapper can only apply to a single variable`，位置在 ManagementViews/StudioView 的 @State 声明。改为每个属性单独声明。Linux `swiftc -frontend -parse` 不执行该层类型检查，不能替代 Xcode 编译。修复复测另行记录，不重跑未变更的 Node 测试。
+运行 44475088781 的依赖解析、锁文件和核心测试通过；App 编译报 `property wrapper can only apply to a single variable`，位置在 ManagementViews/StudioView 的 @State 声明。改为每个属性单独声明。Linux `swiftc -frontend -parse` 不执行该层类型检查，不能替代 Xcode 编译。运行 44484104854 原生编译和模拟器测试通过；不重跑未变更的 Node 测试。
 
-## BUILD-06 · Readium 3.11.1 定位桥接类型（发布准备）
+## BUILD-06 · Readium 3.11.1 定位桥接类型（已修复）
 
-运行 44482131742 已消除 @State 声明问题，依赖和核心测试通过；App 编译定位到 SourceReaders 的两处差异：Locator 要求 ReadiumShared.JSONValue，不接收 [String: Any]；Link.href 是 String，而 Locator.href 才是 AnyURL。已按锁定版本源码转换 JSONValue 并直接比较 Link.href，不改动依赖版本。修复随 v1.0.0 发布候选验证。
+运行 44482131742 已消除 @State 声明问题，依赖和核心测试通过；App 编译定位到 SourceReaders 的两处差异：Locator 要求 ReadiumShared.JSONValue，不接收 [String: Any]；Link.href 是 String，而 Locator.href 才是 AnyURL。已按锁定版本源码转换 JSONValue 并直接比较 Link.href，不改动依赖版本。运行 44484104854 原生编译和模拟器测试已通过；[失败记录](verification/native-run-44482131742.json) 保留原始步骤结果。
 
-## PERF-02 · 大量交接与大文件操作（已实现优化，原生验证待执行）
+## PERF-02 · 大量交接与大文件操作（原生测试已通过）
 
 - WebMark/PageCapture 交接使用临时 ID/来源字典和已接收集合，将循环中的线性查找改为索引查找；事务状态未变化时跳过 UPDATE。导入预览按来源 ID、卡片内容签名建立索引，保持重复判定规则。
 - 文件导入使用 1 MiB 分块复制并计算摘要，复核副本后移动为不可变资料；备份、校验及恢复资料复制在后台任务执行。最终数据库替换仍在应用服务边界提交，保留恢复前快照和失败回滚。
 - 代码统一为四空格、110 列的 Swift 格式；仅处理本轮新增/修改模块，没有重排无关播放器代码。
 - 本地 LibraryTests 8/8 通过，含 1,000 条标记首次与重复交接、来源类型分离。耗时是本地合成场景，不代表 iPad 真机吞吐；不为性能删减摘要或引用检查。
+
+## BUILD-07 · XcodeGen 设备族声明覆盖（非阻塞待办）
+
+v1.0.0 的 project.yml 全局设置为 TARGETED_DEVICE_FAMILY=2，但生成工程的目标平台默认值覆盖它，实际 Info.plist 与 package-report 为 [1,2]。CI 明确检查包含 iPad，32 项 iPad 模拟器测试与设备归档均通过。本版不承诺 iPhone 布局兼容。后续在各 target 明确设置后验证产物；不为此重复本次完整构建。
+
+## v1.0.0 最终验证
+
+运行 44484104854 全部成功，核心 21/21、模拟器 32/32、设备归档和 IPA 校验通过，BUILD-05/06 已关闭。下载实包摘要与 CI 相符，1.0.0/build 4。命令行受 productionresultssa0 网络限制，GitHub 连接器下载成功，附件已可用于 Release；历史 NET-01 不再等于所有下载路径都不可用。新增真机与真实旧书签兼容仍未验证。完整记录见 [native-run-44484104854.json](verification/native-run-44484104854.json)。

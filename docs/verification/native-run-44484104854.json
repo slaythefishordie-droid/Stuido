@@ -1,0 +1,109 @@
+{
+  "version": "1.0.0",
+  "build": "4",
+  "workflow_run": 44484104854,
+  "source_head": "d0938a5462c28e1aa36b4fdd3c071dc4e4b5681f",
+  "build_commit": "f7dae1954dd44b497806e0335962a824998af652",
+  "ipa": "KnowledgeStudio-v1.0.0.ipa",
+  "sha256": "c4de7372a639e8c9da5fa3dfc5ea3f5d8b78d81261163d207cf67ffe69749244",
+  "size": 8005262,
+  "zip_crc": "passed",
+  "version_and_platform": "passed",
+  "app_bundle_id": "org.knowledge-studio.prototype",
+  "extension_bundle_id": "org.knowledge-studio.prototype.SafariExtension",
+  "device_family": [
+    1,
+    2
+  ],
+  "requires_altstore_resigning": true,
+  "new_physical_device_flows": "not_tested",
+  "conclusion": "success",
+  "run_url": "https://github.com/slaythefishordie-droid/Stuido/actions/runs/44484104854",
+  "checks": {
+    "packages": "success",
+    "core": "success",
+    "simulator": "success",
+    "archive": "success",
+    "ipa": "success",
+    "commit": "f7dae1954dd44b497806e0335962a824998af652",
+    "altstore_installation": "not_tested",
+    "physical_ipad_validation": "not_tested"
+  },
+  "core_tests": {
+    "passed": 21,
+    "failed": 0
+  },
+  "simulator_summary": {
+    "devicesAndConfigurations": [
+      {
+        "device": {
+          "architecture": "x86_64",
+          "deviceId": "D2B2F30B-3072-4394-96B8-7DA9A0BE05C6",
+          "deviceName": "iPad (10th generation)",
+          "modelName": "iPad (10th generation)",
+          "osBuildNumber": "23C54",
+          "osVersion": "26.2",
+          "platform": "iOS Simulator"
+        },
+        "expectedFailures": 0,
+        "failedTests": 0,
+        "passedTests": 32,
+        "skippedTests": 0,
+        "testPlanConfiguration": {
+          "configurationId": "1",
+          "configurationName": "Test Scheme Action"
+        }
+      }
+    ],
+    "environmentDescription": "KnowledgeStudio · Built with macOS 15.7.9",
+    "expectedFailures": 0,
+    "failedTests": 0,
+    "finishTime": 1795075969.064,
+    "passedTests": 32,
+    "result": "Passed",
+    "skippedTests": 0,
+    "startTime": 1795075511.252,
+    "statistics": [],
+    "testFailures": [],
+    "title": "Test - KnowledgeStudio",
+    "topInsights": [
+      {
+        "category": "Longest Test Runs",
+        "impact": "55% of duration",
+        "text": "2 longest test runs with outlier durations exceeding 3.70s (three standard deviations)"
+      }
+    ],
+    "totalTestCount": 32
+  },
+  "protocol_tests": {
+    "passed": 43,
+    "run_id": 44484104729
+  },
+  "ipa_artifact_id": 14510239330,
+  "evidence_artifact_id": 14510798298,
+  "artifact_download": "GitHub connector succeeded; shell gh download blocked for productionresultssa0",
+  "package_report": {
+    "commit": "f7dae1954dd44b497806e0335962a824998af652",
+    "build_type": "Release iphoneos arm64",
+    "device_compilation": "passed",
+    "package_structure": "verified",
+    "signed": true,
+    "signing": "ad-hoc; user provisioning required",
+    "safari_extension_embedded": true,
+    "requested_app_group": "group.org.knowledge-studio.prototype",
+    "safari_recognition": "not_tested",
+    "app_group_sharing": "not_tested",
+    "requires_resigning": true,
+    "bundle_identifier": "org.knowledge-studio.prototype",
+    "minimum_os_version": "17.0",
+    "sdk": "iphoneos26.2",
+    "device_family": [
+      1,
+      2
+    ],
+    "altstore_installation": "not_tested",
+    "physical_ipad_validation": "not_tested",
+    "note": "Ad-hoc IPA for AltStore Classic re-signing; device extension and App Groups permissions require verification."
+  },
+  "code_note": "PR merge build f7dae19 has the d0938a5 feature code; release preparation after this build changes documentation only."
+}

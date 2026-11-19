@@ -2,6 +2,15 @@
 
 本文件按时间记录开发工作与验证结果；重复问题的查找入口是[开发与构建问题日志](engineering-issues.md)。历史条目中的“当前”“下一步”只反映该条目的时间点，接续开发以 [PROJECT_STATUS.md](../PROJECT_STATUS.md)和现行路线图为准。
 
+## v1.0.0 交付与验证 · 2026-11-19（北京时间）
+
+- 两份计划阶段 1–4 的功能实现已完成，集中可读性与效率检查已完成。主开发仍在 feature/safari-extension；v0.1.0 和 main 未改写。
+- d0938a5 的 [Native iPadOS #18](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44484104854) 全部成功：核心 **21/21**、iPad（第 10 代）/ iOS 26.2 模拟器 **32/32**、Release arm64 设备归档、两端签名权限和 IPA 校验。协议运行 44484104729 **43/43** 成功。
+- 下载实际 IPA 后复核 SHA-256、ZIP CRC、主 App/扩展 1.0.0（build 4）和 iPhoneOS 平台。IPA 8,005,262 字节，SHA-256 `c4de7372a639e8c9da5fa3dfc5ea3f5d8b78d81261163d207cf67ffe69749244`。正式附件命名 KnowledgeStudio-v1.0.0.ipa，保留摘要、package-report 和 release-manifest。
+- CI 使用 PR 合并提交 `f7dae1954dd44b497806e0335962a824998af652`，功能分支提交 `d0938a5462c28e1aa36b4fdd3c071dc4e4b5681f`；后续提交仅为发布文档，不重复完整构建。[验证记录](verification/native-run-44484104854.json) · [发布说明](releases/v1.0.0.md)
+- 命令行附件下载受 productionresultssa0 限制，GitHub 连接器成功下载 IPA 和全部证据；不把此问题当作构建失败。未修改运行环境白名单。
+- 已记录生成包 device family 为 [1,2] 的配置边界；iPad 验证通过，iPhone 未验收。新增真机流程、真实旧备份和站点变体仍待复验；用户此前里程碑 1 双向共享成功单独保留。
+
 ## v1.0.0 发布准备与集中代码检查 · 2026-11-19（北京时间）
 
 用户新增要求：功能完成后检查可读性和运行效率，提供 IPA 的同时发布 GitHub v1.0.0，更新开发日志及构建问题日志。已明确授权发布；当前只准备候选，原生构建未通过前不发布。

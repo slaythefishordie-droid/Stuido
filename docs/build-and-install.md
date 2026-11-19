@@ -7,8 +7,8 @@ Windows / iPadOS 26.2 用户不需要实体 Mac 来下载 CI 产物。GitHub Act
 - [官方 Runner 清单](https://github.com/actions/runner-images/blob/main/images/macos/macos-26-arm64-Readme.md)
 - 因近期 ARM64 容量不足，自动与手动构建默认选择标准 `macos-15-intel`，仍使用 Xcode 26.2 / iOS 26.2 模拟器；`macos-26` 保留为手动备选。2026-11-18 已核对 [Intel 镜像清单](https://github.com/actions/runner-images/blob/d9c48363ed37529f6ef929845cda83bbdae0ef74/images/macos/macos-15-Readme.md) 含相同工具链。日志记录实际主机架构；设备归档始终验证为 iPhoneOS arm64。
 - XcodeGen 2.44.1：从官方发行下载并校验已发布 SHA-256；`ios/project.yml` 是工程来源。
-- Swift 6 语言模式，最低 iPadOS 17，iPad 单一设备族。
-- `ios/Package.resolved` 锁定唯一 App 第三方依赖；CI 禁止自动解析到其他版本并比较锁文件。
+- Swift 6 语言模式，最低 iPadOS 17，iPad 优先（实际设备族见本版验证记录）。
+- `ios/Package.resolved` 锁定 App 全部第三方依赖；CI 禁止自动解析到其他版本并比较锁文件。
 - 第一版归档只包含主 App。新采集架构需要嵌入 Safari Web Extension，并验证主 App 和扩展在免费重签后实际共享 App Groups 数据。
 
 ## 自动触发与开销
@@ -17,7 +17,13 @@ Windows / iPadOS 26.2 用户不需要实体 Mac 来下载 CI 产物。GitHub Act
 
 用户最初描述 Private，但 API 返回 `private=false`；用户随后明确授权向当前 Public 仓库推送和运行。未改变仓库可见性。Public 仓库的标准托管 Runner 一般使用公开项目免费服务；若以后改为 Private，使用账户对应的 Actions 免费额度，macOS 消耗按 GitHub 当前计费规则计算。工作流无法保证账户永不超额；在 GitHub Billing 的 Actions budget 设置支出上限/停止超额用量。无需购买 macOS Runner。
 
-## 下载和安装
+## 当前 v1.0.0 下载和安装
+
+[GitHub Release](https://github.com/slaythefishordie-droid/Stuido/releases/tag/v1.0.0) 提供长期附件，直接下载 `KnowledgeStudio-v1.0.0.ipa` 和同名 `.sha256`，无需解开外层 Artifact ZIP。在 Windows PowerShell 执行 `Get-FileHash .\KnowledgeStudio-v1.0.0.ipa -Algorithm SHA256` 核对摘要，然后在 AltStore Classic 导入并保留 Safari 扩展。当前入口为 My Inbox；诊断位于设置中的 Safari 扩展页面。
+
+v1.0.0 已通过核心 21 项、iPad 模拟器 32 项、设备归档和含扩展 IPA 校验；用户此前已确认里程碑 1 双向共享。此次新增功能真机结果另记。产物包含 iPhone/iPad 设备族，本版只验收 iPad；配置待办见 BUILD-07。
+
+## 旧版下载与通用安装步骤
 
 已验证的旧主 App 版本为 `v0.1.0`（`7df6ef1`）。原生构建、模拟器测试、设备归档、IPA 校验及上传通过。[Native iPadOS #6](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44227526926)
 
@@ -43,9 +49,9 @@ Windows / iPadOS 26.2 用户不需要实体 Mac 来下载 CI 产物。GitHub Act
 
 本地机器为 Linux，Swift 6.2.1 官方工具链签名验证通过；核心测试可执行。Xcode、iPad 模拟器和设备归档只能由 macOS CI 验证。AltStore Classic 实际重签安装、Safari 识别扩展、App Groups 实际共享与网站采集仍需用户设备验证。
 
-## Safari 里程碑 1 开发包
+## Safari 里程碑 1 开发包（历史）
 
-最新已验证构建：[Native iPadOS #14](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44432216488)，commit `ea8ca267db640c6d9996367ea6aebcb72f96aa3c`。核心 8 项、模拟器 14 项测试通过，设备归档及 IPA 打包校验通过。
+当时已验证构建：[Native iPadOS #14](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44432216488)，commit `ea8ca267db640c6d9996367ea6aebcb72f96aa3c`。核心 8 项、模拟器 14 项测试通过，设备归档及 IPA 打包校验通过。
 
 **[下载 KnowledgeStudio-resignable-ipa-14](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44432216488/artifacts/14488745224)**（GitHub 登录后下载，保留至 2026-11-26）。外层 ZIP 的 SHA-256 为 `a349b8ab5d5bca5a30ff043b856bc2e5902c3d0e02935f1bd3db6144657b2d94`。IPA 本体摘要在包内 `.ipa.sha256` 中，两者不要混用。云端代理无法下载附件时，直接在用户自己的浏览器下载；本轮未完成本地 IPA 复验。
 
@@ -55,7 +61,7 @@ Windows / iPadOS 26.2 用户不需要实体 Mac 来下载 CI 产物。GitHub Act
 
 Actions → Native iPadOS → Run workflow：分支选 `feature/safari-extension`，runner 默认 `macos-15-intel`。如果选择 ARM64 后运行没有执行任何步骤，且注解为 `The job was not acquired by Runner of type hosted even after multiple attempts`，改回 `macos-15-intel` 重试。如果 Intel 也无法分配，可稍后重试或手动选择 `macos-26`。这是调度失败，不等于代码或测试失败。命令行等价操作：`gh workflow run ipados.yml --ref feature/safari-extension -f runner=macos-15-intel`。
 
-安装时保留 Safari 扩展。主 App 启动进入「Safari 扩展」验证页面。到 iPad 设置中的 Safari 扩展列表启用 Knowledge Studio，再在 Safari 页面菜单打开它。
+安装时保留 Safari 扩展。主 App 的设置中打开「Safari 扩展」验证页面。到 iPad 设置中的 Safari 扩展列表启用 Knowledge Studio，再在 Safari 页面菜单打开它。
 
 1. 在 Safari 面板按「写入 Safari 验证记录」，记下编号。
 2. 打开主 App，确认 Safari 记录编号相同。

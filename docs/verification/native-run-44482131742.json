@@ -1,0 +1,110 @@
+{
+  "conclusion": "failure",
+  "databaseId": 44482131742,
+  "headSha": "648a631457126980ed58ebd3fb5ae0a23ccfbb4f",
+  "jobs": [
+    {
+      "completedAt": "2026-11-19T07:51:46Z",
+      "conclusion": "failure",
+      "databaseId": 135416645469,
+      "name": "Xcode 26.2 \u00b7 iPadOS",
+      "startedAt": "2026-11-19T07:46:01Z",
+      "status": "completed",
+      "steps": [
+        {
+          "conclusion": "success",
+          "name": "Set up job",
+          "number": 1,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "number": 2,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Record toolchain",
+          "number": 3,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Generate project with verified XcodeGen 2.44.1",
+          "number": 4,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Resolve and check locked Swift packages",
+          "number": 5,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Run Swift core tests",
+          "number": 6,
+          "status": "completed"
+        },
+        {
+          "conclusion": "failure",
+          "name": "Test the native App on an iPad simulator",
+          "number": 7,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Surface simulator build errors",
+          "number": 8,
+          "status": "completed"
+        },
+        {
+          "conclusion": "skipped",
+          "name": "Archive the actual iPadOS device App without signing",
+          "number": 9,
+          "status": "completed"
+        },
+        {
+          "conclusion": "skipped",
+          "name": "Package and verify re-signable IPA candidate",
+          "number": 10,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Record separate verification outcomes",
+          "number": 11,
+          "status": "completed"
+        },
+        {
+          "conclusion": "skipped",
+          "name": "Upload re-signable IPA candidate",
+          "number": 12,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Upload logs, test results and generated project",
+          "number": 13,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Post Run actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "number": 26,
+          "status": "completed"
+        },
+        {
+          "conclusion": "success",
+          "name": "Complete job",
+          "number": 27,
+          "status": "completed"
+        }
+      ],
+      "url": "https://github.com/slaythefishordie-droid/Stuido/actions/runs/44482131742/job/135416645469"
+    }
+  ],
+  "observed_failure": "Readium 3.11.1 Locator JSONValue bridge and Link.href String; fixed in d0938a5, verification pending run 44484104854",
+  "physical_ipad_validation": "not_tested"
+}

@@ -1,15 +1,17 @@
 # Knowledge Studio
 
-iPad 优先、本地优先的个人知识整理工具，采用 SwiftUI。网页学习采用随 App 提供的 Safari Web Extension，首个适配器为 YouTube。用户已确认里程碑 1 真机双向共享成功。0.3 开发分支正在交付数据管理、卡片与导入、本地阅读和完整 Safari QuickMark；新功能验证状态见项目状态与开发日志。只保留四类卡片，不接入 AI 聊天或云同步。
+iPad 优先、本地优先的个人知识整理工具，采用 SwiftUI。网页学习采用随 App 提供的 Safari Web Extension，首个适配器为 YouTube。用户已确认里程碑 1 真机双向共享成功。v1.0.0 实现了数据管理、卡片与导入、本地阅读和完整 Safari QuickMark；新功能验证状态见项目状态与开发日志。只保留四类卡片，不接入 AI 聊天或云同步。
+
+使用说明见 [阶段 1–4 操作指南](docs/0.3-user-guide.md)，版本详情见 [v1.0.0 发布说明](docs/releases/v1.0.0.md)。
 
 新模型开始前先读 [AGENTS.md](AGENTS.md)、[项目状态](PROJECT_STATUS.md)、[产品需求](docs/product-spec.md) 和[四个里程碑](docs/web-capture-roadmap.md)。
 
-## 第一版已有实现（旧原型）
+## 构建与开发
 
-- `Sources/KnowledgeCore`：YouTube 链接校验、会话隔离、带版本的原子 Mark 存储。
-- `ios/`：SwiftUI YouTube 播放 / Mark / 回跳 / 最近视频原型。SPM 锁定 YouTubePlayerKit 2.0.5。
+- `Sources/KnowledgeCore`：GRDB 事务存储、对象与引用校验、迁移、严格 JSON 导入和共享采集存储。
+- `ios/`：SwiftUI 卡片与双 Inbox、管理与备份、PDFKit / Readium / AVKit 阅读播放，以及随 App 分发的 Safari 扩展。
 - `.github/workflows/ipados.yml`：标准 macos-15-intel / Xcode 26.2（可选 macos-26 ARM64），SPM 检查、核心测试、iPad 模拟器测试、未签名设备归档和 IPA 结构校验。
-- 本地核心测试：Swift 6.0+ 下运行 `bash scripts/test-core.sh`。
+- 本地核心测试：Swift 6.1+ 下运行 `bash scripts/test-core.sh`。
 - 协议验证：Node.js 22+ 下运行 `npm ci --ignore-scripts && npm test`；`npm run validate -- examples/import/valid-four-types.json`。
 
 macOS 上运行 `bash scripts/bootstrap-xcodegen.sh` 生成 `ios/KnowledgeStudio.xcodeproj`，然后打开项目。最低 iPadOS 17；CI 使用 SDK 26.2。无 Apple ID、证书或密码进入 CI。
