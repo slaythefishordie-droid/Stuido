@@ -6,27 +6,53 @@ struct StudioView: View {
     @StateObject private var model = StudioModel()
     @Environment(\.scenePhase) private var phase
     @State private var quickCard = false
+    @State private var destination: StudySection? = .library
+    @AppStorage("compactDisplay") private var compactDisplay = false
     @AppStorage("appAppearance") private var appearance = "system"
     var body: some View {
-        TabView {
-            InboxView().tabItem { Label("收集箱", systemImage: "tray") }
-            CardsView().tabItem { Label("卡片", systemImage: "rectangle.stack") }
-            LibraryView().tabItem { Label("资料库", systemImage: "books.vertical") }
-            AIInboxView().tabItem { Label("导入箱", systemImage: "tray.and.arrow.down") }
-            DataManagerView().tabItem { Label("数据管理", systemImage: "externaldrive") }
-            ExtensionSetupView().tabItem { Label("设置", systemImage: "gearshape") }
+        NavigationSplitView {
+            List(selection: $destination) {
+                Section("阅读与思考") {
+                    ForEach([StudySection.library, .inbox, .cards]) { section in
+                        NavigationLink(value: section) { Label(section.title, systemImage: section.symbol) }
+                    }
+                }
+                Section("整理与维护") {
+                    ForEach([StudySection.imports, .manager, .settings]) { section in
+                        NavigationLink(value: section) { Label(section.title, systemImage: section.symbol) }
+                    }
+                }
+            }
+            .navigationTitle("我的书房")
+            .navigationSplitViewColumnWidth(min: 200, ideal: 235, max: 290)
+            .safeAreaInset(edge: .bottom) {
+                Button {
+                    quickCard = true
+                } label: {
+                    Label("随手记一张卡片", systemImage: "square.and.pencil")
+                        .frame(maxWidth: .infinity, minHeight: 44)
+                }.buttonStyle(.borderedProminent).padding()
+            }
+        } detail: {
+            Group {
+                switch destination ?? .library {
+                case .library: LibraryView()
+                case .inbox: InboxView()
+                case .cards: CardsView()
+                case .imports: AIInboxView()
+                case .manager: DataManagerView()
+                case .settings: ExtensionSetupView()
+                }
+            }
+            .background(StudyTheme.paper)
         }
+        .navigationSplitViewStyle(.balanced)
+        .scrollContentBackground(.hidden)
+        .background(StudyTheme.paper)
+        .tint(StudyTheme.ink)
+        .environment(\.defaultMinListRowHeight, compactDisplay ? 44 : 60)
         .preferredColorScheme(appearance == "dark" ? .dark : appearance == "light" ? .light : nil)
         .environmentObject(model)
-        .overlay(alignment: .bottomTrailing) {
-            Button {
-                quickCard = true
-            } label: {
-                Image(systemName: "plus").font(.title2).padding().background(.tint, in: Circle())
-                    .foregroundStyle(.white)
-            }
-            .accessibilityLabel("快速建卡").padding(.bottom, 70).padding(.trailing, 20)
-        }
         .sheet(isPresented: $quickCard) {
             CardEditor(card: LibraryCard(type: .keyword, content: [:])).environmentObject(model)
         }
@@ -64,51 +90,66 @@ struct InboxView: View {
                     ContentUnavailableView(
                         "没有待整理标记", systemImage: "tray", description: Text("在 Safari、PDF、EPUB 或本地视频中保存标记。"))
                 }
-                ForEach(Array(Set(marks.map(\.sourceID))).sorted { $0.uuidString < $1.uuidString }, id: \.self) { sourceID in
-                  Section(model.state.sources.first { $0.id == sourceID }?.title ?? "资料不可用") {
-                    ForEach(marks.filter { $0.sourceID == sourceID }) { mark in
-                    VStack(alignment: .leading, spacing: 10) {
-                        Label(mark.highlightKind.title, systemImage: "circle.fill").font(.caption).foregroundStyle(mark.highlightKind.color)
-                        Text(sourceTitle(mark)).font(.headline)
-                        if !mark.excerpt.isEmpty { Text(mark.excerpt).lineLimit(5) }
-                        if !mark.note.isEmpty { Text(mark.note).foregroundStyle(.secondary) }
-                        Text(locationLabel(mark.locator)).font(.caption)
-                        HStack {
-                            Button("整理为\(mark.highlightKind.title)") { editor = model.card(from: mark, type: mark.highlightKind) }
-                            Menu("其他类型") {
-                                ForEach(CardKind.allCases, id: \.self) { kind in
-                                    Button(kind.title) { editor = model.card(from: mark, type: kind) }
-                                }
-                            }
-                            if let source = model.state.sources.first(where: {
-                                $0.id == mark.sourceID && $0.deletedAt == nil
-                            }) {
-                                NavigationLink("回到出处") {
-                                    SourceReaderView(source: source, location: mark.locator)
-                                }
-                            }
-                            Button("归档") {
-                                model.change { state in
-                                    if let i = state.marks.firstIndex(where: { $0.id == mark.id }) {
-                                        state.marks[i].organization = .archived
+                ForEach(
+                    Array(Set(marks.map(\.sourceID))).sorted { $0.uuidString < $1.uuidString }, id: \.self
+                ) { sourceID in
+                    Section(model.state.sources.first { $0.id == sourceID }?.title ?? "资料不可用") {
+                        ForEach(marks.filter { $0.sourceID == sourceID }) { mark in
+                            VStack(alignment: .leading, spacing: 10) {
+                                Label(mark.highlightKind.title, systemImage: "circle.fill").font(.caption)
+                                    .foregroundStyle(mark.highlightKind.color)
+                                Text(sourceTitle(mark)).font(.headline)
+                                if !mark.excerpt.isEmpty { Text(mark.excerpt).lineLimit(5) }
+                                if !mark.note.isEmpty { Text(mark.note).foregroundStyle(.secondary) }
+                                Text(locationLabel(mark.locator)).font(.caption)
+                                HStack {
+                                    Button("整理为\(mark.highlightKind.title)") {
+                                        editor = model.card(from: mark, type: mark.highlightKind)
                                     }
-                                }
+                                    Menu("其他类型") {
+                                        ForEach(CardKind.allCases, id: \.self) { kind in
+                                            Button(kind.title) { editor = model.card(from: mark, type: kind) }
+                                        }
+                                    }
+                                    if let source = model.state.sources.first(where: {
+                                        $0.id == mark.sourceID && $0.deletedAt == nil
+                                    }) {
+                                        NavigationLink("回到出处") {
+                                            SourceReaderView(source: source, location: mark.locator)
+                                        }
+                                    }
+                                    Button("归档") {
+                                        model.change { state in
+                                            if let i = state.marks.firstIndex(where: { $0.id == mark.id }) {
+                                                state.marks[i].organization = .archived
+                                            }
+                                        }
+                                    }
+                                }.buttonStyle(.borderless)
+                                NavigationLink("备注与详情") { MarkDetailView(markID: mark.id) }
+                            }.padding(.vertical, 4).tag(mark.id).contextMenu {
+                                Button("移入回收站", role: .destructive) { model.delete([mark.id]) }
                             }
-                        }.buttonStyle(.borderless)
-                        NavigationLink("备注与详情") { MarkDetailView(markID: mark.id) }
-                    }.padding(.vertical, 4).tag(mark.id)
-                }
-                  }
+                        }
+                    }
                 }
             }.navigationTitle("收集箱").searchable(text: $search).refreshable { model.refresh() }
                 .toolbar {
                     EditButton()
                     Button("接收标记") { model.refresh() }
                     if !selected.isEmpty {
-                        Button("归档所选") { model.change { state in
-                            for i in state.marks.indices where selected.contains(state.marks[i].id) { state.marks[i].organization = .archived }
-                        }; selected.removeAll() }
-                        Button("移入回收站", role: .destructive) { model.delete(Array(selected)); selected.removeAll() }
+                        Button("归档所选") {
+                            model.change { state in
+                                for i in state.marks.indices where selected.contains(state.marks[i].id) {
+                                    state.marks[i].organization = .archived
+                                }
+                            }
+                            selected.removeAll()
+                        }
+                        Button("移入回收站", role: .destructive) {
+                            model.delete(Array(selected))
+                            selected.removeAll()
+                        }
                     }
                 }
         }.sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
@@ -127,16 +168,23 @@ struct MarkDetailView: View {
     var body: some View {
         Form {
             if let mark = model.state.marks.first(where: { $0.id == markID }) {
-                Label(mark.highlightKind.title, systemImage: "circle.fill").foregroundStyle(mark.highlightKind.color)
+                Label(mark.highlightKind.title, systemImage: "circle.fill").foregroundStyle(
+                    mark.highlightKind.color)
                 Text(mark.excerpt)
                 Text(locationLabel(mark.locator))
-                Picker("高亮类型", selection: $kind) { ForEach(CardKind.allCases, id: \.self) { Text($0.title).tag($0) } }
+                Picker("高亮类型", selection: $kind) {
+                    ForEach(CardKind.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
                 TextField("个人备注", text: $note, axis: .vertical)
                 Button("保存备注与颜色") {
                     model.setMarkNote(id: markID, note: note)
-                    if model.message == nil { model.change { state in
-                        if let i = state.marks.firstIndex(where: { $0.id == markID }) { state.marks[i].cardKind = kind }
-                    } }
+                    if model.message == nil {
+                        model.change { state in
+                            if let i = state.marks.firstIndex(where: { $0.id == markID }) {
+                                state.marks[i].cardKind = kind
+                            }
+                        }
+                    }
                 }
                 Text(mark.id.uuidString).font(.caption).textSelection(.enabled)
             }
@@ -155,10 +203,7 @@ struct CardsView: View {
     var cards: [LibraryCard] {
         model.state.cards.filter { card in
             card.deletedAt == nil
-                && (category == "全部"
-                    || (category == "词汇"
-                        ? [.word, .keyword].contains(card.type)
-                        : [.expression, .key_sentence].contains(card.type)))
+                && (category == "全部" || card.type.title == category)
                 && (search.isEmpty
                     || (card.title + card.note + card.tags.joined(separator: " "))
                         .localizedCaseInsensitiveContains(search))
@@ -168,7 +213,7 @@ struct CardsView: View {
         NavigationStack {
             List {
                 Picker("视图", selection: $category) {
-                    ForEach(["全部", "词汇", "语料"], id: \.self) { Text($0) }
+                    ForEach(["全部"] + CardKind.allCases.map(\.title), id: \.self) { Text($0) }
                 }.pickerStyle(.segmented)
                 ForEach(cards) { card in
                     NavigationLink {
@@ -178,15 +223,19 @@ struct CardsView: View {
                             Text(card.type == .word ? card.content["example_en"] ?? "" : card.title)
                                 .lineLimit(3)
                             if card.type == .word {
+                                Text(card.content["word"] ?? "").font(.headline)
                                 Text(card.content["definition_en"] ?? "").foregroundStyle(.secondary)
                             }
                             Text(
                                 "\(card.type.title) · \(studioLabel(card.organization.rawValue)) · \(studioLabel(card.review.rawValue))"
                             ).font(.caption).foregroundStyle(card.type.color)
                         }
+                    }.contextMenu {
+                        Button("编辑卡片") { editor = card }
+                        Button("移入回收站", role: .destructive) { model.delete([card.id]) }
                     }
                 }
-            }.navigationTitle("卡片").searchable(text: $search)
+            }.navigationTitle("知识卡片").searchable(text: $search)
                 .toolbar { Button("新建") { editor = LibraryCard(type: .keyword, content: [:]) } }
         }.sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
     }
@@ -267,18 +316,41 @@ struct CardDetailView: View {
     @EnvironmentObject private var model: StudioModel
     let cardID: UUID
     @State private var editor: LibraryCard?
+    @State private var comparison: CardReference?
     var body: some View {
+        GeometryReader { geometry in
+            HStack(spacing: 0) {
+                content(showComparison: geometry.size.width >= 900)
+                    .frame(maxWidth: comparison != nil && geometry.size.width >= 900 ? 380 : .infinity)
+                if geometry.size.width >= 900, let ref = comparison,
+                    let source = model.state.sources.first(where: {
+                        $0.id == ref.sourceID && $0.deletedAt == nil
+                    })
+                {
+                    Divider()
+                    NavigationStack {
+                        SourceReaderView(source: source, location: ref.locator)
+                            .id(ref.id)
+                            .toolbar { Button("结束对照") { comparison = nil } }
+                    }
+                }
+            }
+        }.navigationTitle("卡片详情").sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
+    }
+    private func content(showComparison: Bool) -> some View {
         Form {
             if let card = model.state.cards.first(where: { $0.id == cardID }) {
                 ForEach(LibraryCard.fields(for: card.type), id: \.self) { field in
                     if let value = card.content[field] {
                         Section(studioFieldLabel(field)) {
                             Text(value).textSelection(.enabled)
-                            Text(studioLabel(card.provenance[field]?.kind ?? "user_input")).font(.caption).foregroundStyle(
-                                .secondary)
+                            Text(studioLabel(card.provenance[field]?.kind ?? "user_input")).font(.caption)
+                                .foregroundStyle(
+                                    .secondary)
                         }
                     }
                 }
+                if card.type == .word { Section("发音") { PronunciationButton(word: card.content["word"] ?? "") } }
                 Section("笔记") {
                     Text(card.note)
                     if !card.importAnnotation.isEmpty { Text("导入说明：\(card.importAnnotation)") }
@@ -290,6 +362,7 @@ struct CardDetailView: View {
                                 NavigationLink(source.title) {
                                     SourceReaderView(source: source, location: ref.locator)
                                 }
+                                if showComparison { Button("与原文并排对照") { comparison = ref } }
                             } else {
                                 Text("\(source.title)（在回收站）")
                             }
@@ -298,7 +371,11 @@ struct CardDetailView: View {
                 }
                 Section("关联标记") {
                     ForEach(card.markIDs, id: \.self) { id in
-                        NavigationLink(id.uuidString) { MarkDetailView(markID: id) }
+                        NavigationLink(
+                            model.state.marks.first { $0.id == id }?.excerpt.isEmpty == false
+                                ? String((model.state.marks.first { $0.id == id }?.excerpt ?? "").prefix(80))
+                                : "查看标记与备注"
+                        ) { MarkDetailView(markID: id) }
                     }
                 }
                 Section("词典外链") {
@@ -310,6 +387,6 @@ struct CardDetailView: View {
                 }
                 Button("编辑") { editor = card }
             }
-        }.tint(model.state.cards.first { $0.id == cardID }?.type.color ?? .accentColor).navigationTitle("卡片详情").sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
+        }.tint(model.state.cards.first { $0.id == cardID }?.type.color ?? .accentColor)
     }
 }

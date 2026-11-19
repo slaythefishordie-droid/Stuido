@@ -9,8 +9,11 @@ import XCTest
 @MainActor
 final class LibraryAppTests: XCTestCase {
     func testEPUBSelectionLocatorRoundTripPreservesTextContext() throws {
-        let json: [String: Any] = ["href": "chapter.xhtml", "type": "application/xhtml+xml",
-            "locations": ["progression": 0.35], "text": ["before": "Before ", "highlight": "Selected words", "after": " after"]]
+        let json: [String: Any] = [
+            "href": "chapter.xhtml", "type": "application/xhtml+xml",
+            "locations": ["progression": 0.35],
+            "text": ["before": "Before ", "highlight": "Selected words", "after": " after"],
+        ]
         let locator = try XCTUnwrap(try Locator(json: ReadiumShared.JSONValue(json), warnings: nil))
         let stored = try EPUBSession.readingLocator(locator)
         let decoded = try JSONSerialization.jsonObject(with: Data(XCTUnwrap(stored.nativeJSON).utf8))

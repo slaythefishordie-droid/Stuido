@@ -2,7 +2,9 @@ import SwiftUI
 
 struct ExtensionSetupView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("compactDisplay") private var compactDisplay = false
     @AppStorage("appAppearance") private var appearance = "system"
+    @AppStorage("pronunciationAccent") private var accent = "en-US"
     @State private var appRecord = "尚无记录"
     @State private var safariRecord = "尚无记录"
     @State private var status = "在 Safari 扩展菜单打开 Knowledge Studio，写入验证记录。"
@@ -16,6 +18,8 @@ struct ExtensionSetupView: View {
                         Text("浅色").tag("light")
                         Text("深色").tag("dark")
                     }
+                    Picker("发音口音偏好", selection: $accent) { Text("美式英语").tag("en-US"); Text("英式英语").tag("en-GB") }
+                    Toggle("紧凑显示", isOn: $compactDisplay)
                     Text("Safari 面板可设置回溯、字号、控件位置和网站适配器。文章与播客按网站主动授权；停用后刷新网页生效。")
                 }
                 Section("Safari 扩展验证") {
@@ -35,7 +39,7 @@ struct ExtensionSetupView: View {
                     Text("两端显示相同编号后，请再关闭并重新打开主 App，确认记录仍可读取。")
                 }
             }
-            .navigationTitle("Safari 扩展")
+            .navigationTitle("设置")
         }
         .onAppear { refresh() }
         .onChange(of: scenePhase) { _, phase in

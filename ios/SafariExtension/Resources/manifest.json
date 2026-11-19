@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Knowledge Studio",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "在 Safari YouTube 页面保存标记到本机收集箱。",
   "permissions": [
     "nativeMessaging",

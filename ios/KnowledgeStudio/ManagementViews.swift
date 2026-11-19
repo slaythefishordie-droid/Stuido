@@ -158,13 +158,15 @@ struct LibraryView: View {
         NavigationStack {
             List {
                 Section("项目") {
-                    HStack {
-                        TextField("新项目名称", text: $projectTitle)
-                        Button("创建") {
-                            let title = projectTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-                            if !title.isEmpty {
-                                model.change { $0.projects.append(LibraryProject(title: title)) }
-                                projectTitle = ""
+                    DisclosureGroup("新建研究项目") {
+                        HStack {
+                            TextField("新项目名称", text: $projectTitle)
+                            Button("创建") {
+                                let title = projectTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                                if !title.isEmpty {
+                                    model.change { $0.projects.append(LibraryProject(title: title)) }
+                                    projectTitle = ""
+                                }
                             }
                         }
                     }
@@ -186,8 +188,11 @@ struct LibraryView: View {
                         } label: {
                             VStack(alignment: .leading) {
                                 Text(source.title)
-                                Text(studioLabel(source.kind.rawValue)).font(.caption).foregroundStyle(.secondary)
+                                Text(studioLabel(source.kind.rawValue)).font(.caption).foregroundStyle(
+                                    .secondary)
                             }
+                        }.contextMenu {
+                            Button("移入回收站", role: .destructive) { model.delete([source.id]) }
                         }
                     }
                 }
@@ -213,70 +218,85 @@ struct ProjectView: View {
     var body: some View {
         Form {
             if let project = model.state.projects.first(where: { $0.id == projectID }) {
-                TextField("名称", text: $title)
-                TextField("描述", text: $note, axis: .vertical)
-                Button("保存") {
-                    model.change { state in
-                        if let i = state.projects.firstIndex(where: { $0.id == projectID }) {
-                            guard !title.isEmpty else { throw LibraryError.invalid("项目名称不能为空") }
-                            state.projects[i].title = title
-                            state.projects[i].note = note
+                DisclosureGroup("项目说明与编辑") {
+                    TextField("名称", text: $title)
+                    TextField("描述", text: $note, axis: .vertical)
+                    Button("保存") {
+                        model.change { state in
+                            if let i = state.projects.firstIndex(where: { $0.id == projectID }) {
+                                guard !title.isEmpty else { throw LibraryError.invalid("项目名称不能为空") }
+                                state.projects[i].title = title
+                                state.projects[i].note = note
+                            }
                         }
                     }
                 }
                 if !managingLinks {
                     Section("项目资料") {
-                        ForEach(model.state.sources.filter { $0.deletedAt == nil && project.sourceIDs.contains($0.id) }) { source in
-                            NavigationLink(source.title) { SourceReaderView(source: source, location: source.lastLocation) }
+                        ForEach(
+                            model.state.sources.filter {
+                                $0.deletedAt == nil && project.sourceIDs.contains($0.id)
+                            }
+                        ) { source in
+                            NavigationLink(source.title) {
+                                SourceReaderView(source: source, location: source.lastLocation)
+                            }
                         }
                     }
                     Section("项目卡片") {
-                        ForEach(model.state.cards.filter { $0.deletedAt == nil && project.cardIDs.contains($0.id) }) { card in
+                        ForEach(
+                            model.state.cards.filter {
+                                $0.deletedAt == nil && project.cardIDs.contains($0.id)
+                            }
+                        ) { card in
                             NavigationLink(card.title) { CardDetailView(cardID: card.id) }
                         }
                     }
                 } else {
-                Section("关联资料") {
-                    ForEach(model.state.sources.filter { $0.deletedAt == nil }) { source in
-                        Toggle(
-                            source.title,
-                            isOn: Binding(
-                                get: { project.sourceIDs.contains(source.id) },
-                                set: { enabled in
-                                    model.change { state in
-                                        if let i = state.projects.firstIndex(where: { $0.id == projectID }) {
-                                            state.projects[i].sourceIDs.removeAll { $0 == source.id }
-                                            if enabled { state.projects[i].sourceIDs.append(source.id) }
+                    Section("关联资料") {
+                        ForEach(model.state.sources.filter { $0.deletedAt == nil }) { source in
+                            Toggle(
+                                source.title,
+                                isOn: Binding(
+                                    get: { project.sourceIDs.contains(source.id) },
+                                    set: { enabled in
+                                        model.change { state in
+                                            if let i = state.projects.firstIndex(where: { $0.id == projectID }
+                                            ) {
+                                                state.projects[i].sourceIDs.removeAll { $0 == source.id }
+                                                if enabled { state.projects[i].sourceIDs.append(source.id) }
+                                            }
                                         }
-                                    }
-                                }))
+                                    }))
+                        }
                     }
-                }
-                Section("关联卡片") {
-                    ForEach(model.state.cards.filter { $0.deletedAt == nil }) { card in
-                        Toggle(
-                            card.title,
-                            isOn: Binding(
-                                get: { project.cardIDs.contains(card.id) },
-                                set: { enabled in
-                                    model.change { state in
-                                        if let i = state.projects.firstIndex(where: { $0.id == projectID }) {
-                                            state.projects[i].cardIDs.removeAll { $0 == card.id }
-                                            if enabled { state.projects[i].cardIDs.append(card.id) }
+                    Section("关联卡片") {
+                        ForEach(model.state.cards.filter { $0.deletedAt == nil }) { card in
+                            Toggle(
+                                card.title,
+                                isOn: Binding(
+                                    get: { project.cardIDs.contains(card.id) },
+                                    set: { enabled in
+                                        model.change { state in
+                                            if let i = state.projects.firstIndex(where: { $0.id == projectID }
+                                            ) {
+                                                state.projects[i].cardIDs.removeAll { $0 == card.id }
+                                                if enabled { state.projects[i].cardIDs.append(card.id) }
+                                            }
                                         }
-                                    }
-                                }))
+                                    }))
+                        }
                     }
-                }
                 }
                 Text("解除关联只影响项目，不删除卡片或资料。").font(.caption)
             }
-        }.navigationTitle("项目").toolbar { Button(managingLinks ? "完成关联" : "管理关联") { managingLinks.toggle() } }.onAppear {
-            if let p = model.state.projects.first(where: { $0.id == projectID }) {
-                title = p.title
-                note = p.note
+        }.navigationTitle("项目").toolbar { Button(managingLinks ? "完成关联" : "管理关联") { managingLinks.toggle() } }
+            .onAppear {
+                if let p = model.state.projects.first(where: { $0.id == projectID }) {
+                    title = p.title
+                    note = p.note
+                }
             }
-        }
     }
 }
 
@@ -330,8 +350,8 @@ struct DataManagerView: View {
     }
     var body: some View {
         NavigationStack {
-            List {
-                Section("备份与恢复") {
+            List(selection: $selected) {
+                DisclosureGroup("备份与恢复") {
                     Button(busy ? "正在处理…" : "生成完整备份 ZIP") {
                         busy = true
                         Task {
@@ -346,23 +366,23 @@ struct DataManagerView: View {
                     Button("选择备份并校验") { restoring = true }.disabled(busy)
                     Text("包含知识库和已存在的本地资料；在线资料仅备份链接。恢复替换当前知识库，确认前校验路径、大小、摘要和引用，并保留恢复前快照。").font(.caption)
                 }
-                Toggle("回收站", isOn: $trash).onChange(of: trash) { _, _ in selected = [] }
+                Picker("内容范围", selection: $trash) {
+                    Text("知识库").tag(false)
+                    Text("回收站").tag(true)
+                }.pickerStyle(.segmented).onChange(of: trash) { _, _ in selected = [] }
                 Picker("类型", selection: $kind) {
                     ForEach(["全部", "资料", "标记", "卡片", "项目", "关系", "复习记录"], id: \.self) { Text($0) }
                 }
                 Section("对象") {
                     ForEach(rows) { row in
-                        Button {
-                            if selected.contains(row.id) { selected.remove(row.id) } else { selected.insert(row.id) }
+                        NavigationLink {
+                            managedContent(row)
                         } label: {
-                            HStack {
-                            Image(systemName: selected.contains(row.id) ? "checkmark.circle.fill" : "circle")
-                            VStack(alignment: .leading) {
-                                Text(row.title)
-                                Text(row.kind).font(.caption)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(row.title).lineLimit(3)
+                                Text(row.kind).font(.caption).foregroundStyle(.secondary)
                             }
-                            }.foregroundStyle(.primary)
-                        }
+                        }.tag(row.id)
                     }
                 }
                 if !selected.isEmpty {
@@ -408,6 +428,9 @@ struct DataManagerView: View {
                     }
                 }
             }.navigationTitle("数据管理").searchable(text: $search)
+                .toolbar { EditButton() }
+                .onChange(of: kind) { _, _ in selected.removeAll() }
+                .onChange(of: search) { _, _ in selected.removeAll() }
         }.confirmationDialog(
             permanent ? "永久清理不可撤销，确认已备份？" : "将所选对象移入回收站？", isPresented: $confirming, titleVisibility: .visible
         ) {
@@ -450,4 +473,26 @@ struct DataManagerView: View {
             }
         }
     }
+    @ViewBuilder private func managedContent(_ row: Row) -> some View {
+        if row.deleted {
+            VStack(spacing: 16) {
+                Text(row.title).font(.title3)
+                Text("此内容在回收站中。返回后点选择可恢复或永久清理。").foregroundStyle(.secondary)
+            }.padding()
+        } else if let source = model.state.sources.first(where: { $0.id == row.id }) {
+            SourceReaderView(source: source, location: source.lastLocation)
+        } else if model.state.cards.contains(where: { $0.id == row.id }) {
+            CardDetailView(cardID: row.id)
+        } else if model.state.marks.contains(where: { $0.id == row.id }) {
+            MarkDetailView(markID: row.id)
+        } else if model.state.projects.contains(where: { $0.id == row.id }) {
+            ProjectView(projectID: row.id)
+        } else {
+            VStack(alignment: .leading, spacing: 16) {
+                Text(row.title).font(.title3)
+                Text(model.impact(of: row.id))
+            }.padding()
+        }
+    }
+
 }

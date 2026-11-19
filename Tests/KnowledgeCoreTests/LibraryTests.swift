@@ -7,17 +7,25 @@ final class LibraryTests: XCTestCase {
     func testHighlightTypeAndEPUBLocatorSurviveReopenAndLegacyDecode() throws {
         try withStore { repository, root in
             let source = LibrarySource(kind: .epub, title: "Book")
-            let locator = ReadingLocator(kind: "epub", href: "chapter.xhtml", progression: 0.4,
-                nativeJSON: "{\"href\":\"chapter.xhtml\",\"type\":\"application/xhtml+xml\",\"text\":{\"highlight\":\"Exact quote\",\"before\":\"Before \"}}")
+            let locator = ReadingLocator(
+                kind: "epub", href: "chapter.xhtml", progression: 0.4,
+                nativeJSON:
+                    "{\"href\":\"chapter.xhtml\",\"type\":\"application/xhtml+xml\",\"text\":{\"highlight\":\"Exact quote\",\"before\":\"Before \"}}"
+            )
             var mark = LibraryMark(sourceID: source.id, locator: locator, excerpt: "Exact quote")
             mark.note = "My annotation"
             mark.cardKind = .keyword
-            try repository.update { $0.sources.append(source); $0.marks.append(mark) }
+            try repository.update {
+                $0.sources.append(source)
+                $0.marks.append(mark)
+            }
             let reopened = try LibraryRepository(url: root.appendingPathComponent("library.sqlite")).read()
             XCTAssertEqual(reopened.marks.first, mark)
-            var json = try XCTUnwrap(JSONSerialization.jsonObject(with: JSONEncoder().encode(mark)) as? [String: Any])
+            var json = try XCTUnwrap(
+                JSONSerialization.jsonObject(with: JSONEncoder().encode(mark)) as? [String: Any])
             json.removeValue(forKey: "cardKind")
-            let old = try JSONDecoder().decode(LibraryMark.self, from: JSONSerialization.data(withJSONObject: json))
+            let old = try JSONDecoder().decode(
+                LibraryMark.self, from: JSONSerialization.data(withJSONObject: json))
             XCTAssertNil(old.cardKind)
             XCTAssertEqual(old.locator, locator)
             XCTAssertEqual(old.note, mark.note)
