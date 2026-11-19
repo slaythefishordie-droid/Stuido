@@ -1,5 +1,5 @@
-import SwiftUI
 import KnowledgeCore
+import SwiftUI
 
 struct MyInboxView: View {
     @Environment(\.scenePhase) private var scenePhase
@@ -16,9 +16,14 @@ struct MyInboxView: View {
                 ForEach(marks) { mark in
                     VStack(alignment: .leading, spacing: 8) {
                         Text(mark.title).font(.headline)
-                        Text("\(Int(mark.seconds)) 秒 · \(Date(timeIntervalSince1970: mark.createdAt / 1000).formatted())")
-                            .font(.caption).foregroundStyle(.secondary)
-                        Link("回到出处", destination: URL(string: mark.sourceURL.absoluteString + "&t=\(Int(mark.seconds))s")!)
+                        Text(
+                            "\(Int(mark.seconds)) 秒 · \(Date(timeIntervalSince1970: mark.createdAt / 1000).formatted())"
+                        )
+                        .font(.caption).foregroundStyle(.secondary)
+                        Link(
+                            "回到出处",
+                            destination: URL(
+                                string: mark.sourceURL.absoluteString + "&t=\(Int(mark.seconds))s")!)
                         Text(mark.id.uuidString).font(.caption2.monospaced()).textSelection(.enabled)
                     }
                 }

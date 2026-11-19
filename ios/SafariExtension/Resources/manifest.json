@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "Knowledge Studio",
-  "version": "0.3.0",
+  "version": "1.0.0",
   "description": "在 Safari YouTube 页面保存 QuickMark 到本机 My Inbox。",
   "permissions": [
     "nativeMessaging",

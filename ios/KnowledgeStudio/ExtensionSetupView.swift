@@ -12,7 +12,9 @@ struct ExtensionSetupView: View {
             Form {
                 Section("个性化") {
                     Picker("外观", selection: $appearance) {
-                        Text("跟随系统").tag("system"); Text("浅色").tag("light"); Text("深色").tag("dark")
+                        Text("跟随系统").tag("system")
+                        Text("浅色").tag("light")
+                        Text("深色").tag("dark")
                     }
                     Text("Safari 面板可设置回溯、字号、控件位置和网站适配器。文章与播客按网站主动授权；停用后刷新网页生效。")
                 }

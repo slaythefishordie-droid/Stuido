@@ -1,11 +1,14 @@
 import Foundation
 import XCTest
+
 @testable import KnowledgeCore
 
 final class WebMarkTests: XCTestCase {
     private func mark(id: UUID = UUID(), seconds: Double = 12.8) throws -> WebMark {
-        WebMark(version: 1, id: id, videoID: try YouTubeVideoID("dQw4w9WgXcQ"), title: "Example",
-                capturedSeconds: seconds, preRoll: 2, seconds: max(0, floor(seconds - 2)), createdAt: 1_700_000_000_000)
+        WebMark(
+            version: 1, id: id, videoID: try YouTubeVideoID("dQw4w9WgXcQ"), title: "Example",
+            capturedSeconds: seconds, preRoll: 2, seconds: max(0, floor(seconds - 2)),
+            createdAt: 1_700_000_000_000)
     }
 
     func testReopenAndDuplicateDeliveryPreserveIDAndOriginalTime() throws {
@@ -23,7 +26,8 @@ final class WebMarkTests: XCTestCase {
     func testConflictingIDAndCorruptionNeverOverwriteOriginal() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
-        let store = WebMarkStore(directory: directory), original = try mark()
+        let store = WebMarkStore(directory: directory)
+        let original = try mark()
         try store.save(original)
         XCTAssertThrowsError(try store.save(mark(id: original.id, seconds: 20)))
         XCTAssertEqual(try store.readAll(), [original])
@@ -43,9 +47,13 @@ final class WebMarkTests: XCTestCase {
         let valid = try mark()
         var json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(valid)) as! [String: Any]
         json["seconds"] = 12
-        XCTAssertThrowsError(try JSONDecoder().decode(WebMark.self, from: JSONSerialization.data(withJSONObject: json)).validate())
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(WebMark.self, from: JSONSerialization.data(withJSONObject: json))
+                .validate())
         json["version"] = 2
-        XCTAssertThrowsError(try JSONDecoder().decode(WebMark.self, from: JSONSerialization.data(withJSONObject: json)).validate())
+        XCTAssertThrowsError(
+            try JSONDecoder().decode(WebMark.self, from: JSONSerialization.data(withJSONObject: json))
+                .validate())
     }
 
     func testWriteFailureDoesNotReportSuccess() throws {
@@ -67,6 +75,7 @@ final class WebMarkTests: XCTestCase {
             }
             try await group.waitForAll()
         }
-        XCTAssertEqual(Set(try WebMarkStore(directory: directory).readAll().map(\.id)), Set(records.map(\.id)))
+        XCTAssertEqual(
+            Set(try WebMarkStore(directory: directory).readAll().map(\.id)), Set(records.map(\.id)))
     }
 }

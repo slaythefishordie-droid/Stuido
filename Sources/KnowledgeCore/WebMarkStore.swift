@@ -1,8 +1,9 @@
 import Foundation
+
 #if canImport(Darwin)
-import Darwin
+    import Darwin
 #else
-import Glibc
+    import Glibc
 #endif
 
 /// Immutable handoff record. Original playback seconds and adjusted locator are distinct.
@@ -14,19 +15,21 @@ public struct WebMark: Codable, Equatable, Identifiable, Sendable {
     public let capturedSeconds: Double
     public let preRoll: Int
     public let seconds: Double
-    public let createdAt: Double // Unix milliseconds, shared with JavaScript.
+    public let createdAt: Double  // Unix milliseconds, shared with JavaScript.
     public var note: String? = nil
     public var deletedAt: Double? = nil
     public var updatedAt: Double? = nil
 
     public func validate() throws {
         guard version == 1 else { throw VideoError.unsupportedVersion }
-        guard (note?.utf8.count ?? 0) <= 20_000, deletedAt == nil || (deletedAt!.isFinite && deletedAt! >= 0), updatedAt == nil || (updatedAt!.isFinite && updatedAt! >= 0),
-              !title.isEmpty, title.utf8.count <= 4096,
-              capturedSeconds.isFinite, capturedSeconds >= 0, capturedSeconds <= 3_155_760_000,
-              (0...3).contains(preRoll), seconds.isFinite,
-              seconds == max(0, floor(capturedSeconds - Double(preRoll))),
-              createdAt.isFinite, createdAt >= 0, createdAt <= 8_640_000_000_000_000 else { throw VideoError.corruptStore }
+        guard (note?.utf8.count ?? 0) <= 20_000, deletedAt == nil || (deletedAt!.isFinite && deletedAt! >= 0),
+            updatedAt == nil || (updatedAt!.isFinite && updatedAt! >= 0),
+            !title.isEmpty, title.utf8.count <= 4096,
+            capturedSeconds.isFinite, capturedSeconds >= 0, capturedSeconds <= 3_155_760_000,
+            (0...3).contains(preRoll), seconds.isFinite,
+            seconds == max(0, floor(capturedSeconds - Double(preRoll))),
+            createdAt.isFinite, createdAt >= 0, createdAt <= 8_640_000_000_000_000
+        else { throw VideoError.corruptStore }
     }
 
     public var sourceURL: URL { videoID.watchURL }
@@ -46,10 +49,12 @@ public struct WebMarkStore: Sendable {
                 let existing = try JSONDecoder().decode(WebMark.self, from: Data(contentsOf: url))
                 try existing.validate()
                 var original = existing
-                original.note = mark.note; original.deletedAt = mark.deletedAt; original.updatedAt = mark.updatedAt
+                original.note = mark.note
+                original.deletedAt = mark.deletedAt
+                original.updatedAt = mark.updatedAt
                 guard original == mark else { throw VideoError.corruptStore }
                 return
-            } catch CocoaError.fileReadNoSuchFile { }
+            } catch CocoaError.fileReadNoSuchFile {}
             try JSONEncoder().encode(mark).write(to: url, options: .atomic)
         }
     }
@@ -69,7 +74,8 @@ public struct WebMarkStore: Sendable {
 
     public func readAll() throws -> [WebMark] {
         try locked {
-            let files = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+            let files = try FileManager.default.contentsOfDirectory(
+                at: directory, includingPropertiesForKeys: nil)
             let marks = try files.filter { $0.pathExtension == "json" }.map { url in
                 let mark = try JSONDecoder().decode(WebMark.self, from: Data(contentsOf: url))
                 try mark.validate()
@@ -78,7 +84,10 @@ public struct WebMarkStore: Sendable {
                 }
                 return mark
             }
-            return marks.sorted { $0.createdAt == $1.createdAt ? $0.id.uuidString < $1.id.uuidString : $0.createdAt > $1.createdAt }
+            return marks.sorted {
+                $0.createdAt == $1.createdAt
+                    ? $0.id.uuidString < $1.id.uuidString : $0.createdAt > $1.createdAt
+            }
         }
     }
 
@@ -87,7 +96,9 @@ public struct WebMarkStore: Sendable {
         let descriptor = open(directory.appendingPathComponent(".lock").path, O_CREAT | O_RDWR, mode_t(0o600))
         guard descriptor >= 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
         defer { close(descriptor) }
-        guard flock(descriptor, LOCK_EX) == 0 else { throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO) }
+        guard flock(descriptor, LOCK_EX) == 0 else {
+            throw POSIXError(POSIXErrorCode(rawValue: errno) ?? .EIO)
+        }
         defer { _ = flock(descriptor, LOCK_UN) }
         return try operation()
     }

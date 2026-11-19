@@ -95,3 +95,14 @@
 ## BUILD-05 · SwiftUI 属性包装器多变量声明（0.3 稳定化）
 
 运行 44475088781 的依赖解析、锁文件和核心测试通过；App 编译报 `property wrapper can only apply to a single variable`，位置在 ManagementViews/StudioView 的 @State 声明。改为每个属性单独声明。Linux `swiftc -frontend -parse` 不执行该层类型检查，不能替代 Xcode 编译。修复复测另行记录，不重跑未变更的 Node 测试。
+
+## BUILD-06 · Readium 3.11.1 定位桥接类型（发布准备）
+
+运行 44482131742 已消除 @State 声明问题，依赖和核心测试通过；App 编译定位到 SourceReaders 的两处差异：Locator 要求 ReadiumShared.JSONValue，不接收 [String: Any]；Link.href 是 String，而 Locator.href 才是 AnyURL。已按锁定版本源码转换 JSONValue 并直接比较 Link.href，不改动依赖版本。修复随 v1.0.0 发布候选验证。
+
+## PERF-02 · 大量交接与大文件操作（已实现优化，原生验证待执行）
+
+- WebMark/PageCapture 交接使用临时 ID/来源字典和已接收集合，将循环中的线性查找改为索引查找；事务状态未变化时跳过 UPDATE。导入预览按来源 ID、卡片内容签名建立索引，保持重复判定规则。
+- 文件导入使用 1 MiB 分块复制并计算摘要，复核副本后移动为不可变资料；备份、校验及恢复资料复制在后台任务执行。最终数据库替换仍在应用服务边界提交，保留恢复前快照和失败回滚。
+- 代码统一为四空格、110 列的 Swift 格式；仅处理本轮新增/修改模块，没有重排无关播放器代码。
+- 本地 LibraryTests 8/8 通过，含 1,000 条标记首次与重复交接、来源类型分离。耗时是本地合成场景，不代表 iPad 真机吞吐；不为性能删减摘要或引用检查。

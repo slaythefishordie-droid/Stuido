@@ -7,10 +7,15 @@ let package = Package(
     products: [.library(name: "KnowledgeCore", targets: ["KnowledgeCore"])],
     dependencies: [
         .package(url: "https://github.com/groue/GRDB.swift.git", exact: "7.12.0"),
-        .package(url: "https://github.com/ajevans99/swift-json-schema.git", exact: "0.15.0")
+        .package(url: "https://github.com/ajevans99/swift-json-schema.git", exact: "0.15.0"),
     ],
     targets: [
-        .target(name: "KnowledgeCore", dependencies: [.product(name: "GRDB", package: "GRDB.swift"), .product(name: "JSONSchema", package: "swift-json-schema")], resources: [.copy("Resources")]),
-        .testTarget(name: "KnowledgeCoreTests", dependencies: ["KnowledgeCore"])
+        .target(
+            name: "KnowledgeCore",
+            dependencies: [
+                .product(name: "GRDB", package: "GRDB.swift"),
+                .product(name: "JSONSchema", package: "swift-json-schema"),
+            ], resources: [.copy("Resources")]),
+        .testTarget(name: "KnowledgeCoreTests", dependencies: ["KnowledgeCore"]),
     ]
 )
