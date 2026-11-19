@@ -1,165 +1,50 @@
-# 开发日志与验证记录
+# 开发进度日志
 
-本文件按时间记录开发工作与验证结果；重复问题的查找入口是[开发与构建问题日志](engineering-issues.md)。历史条目中的“当前”“下一步”只反映该条目的时间点，接续开发以 [PROJECT_STATUS.md](../PROJECT_STATUS.md)和现行路线图为准。
+本文件是交付状态、版本变更和真机结果的唯一入口。操作规则见[工作流](workflow.md)，错误与待办见[工程问题](engineering-issues.md)。日期使用北京时间；实现、自动验证、真机验收分别记录。
 
-## v1.0.0 发布收尾与附件限制 · 2026-11-19（北京时间）
+## 当前基线 · 2026-11-19
 
-已推送发布记录 b82e4ed 和 v1.0.0 标签。Release 草稿 ID 451054981 已创建，附件上传被 uploads.github.com 网络策略拒绝；环境重启后复验仍拒绝。GitHub Release 已于北京时间 2026-11-19 21:15:51 公开发布（isDraft=false、isPrerelease=false），并改用已成功构建的 Actions Artifact 入口和对话中的实际 IPA 交付，避免无效下载链接。附件永久上传待网络授权后补齐，不重建 IPA、不改写标签。见工程问题 NET-02。
+- 主开发分支：`feature/safari-extension`；远端默认仍为 main（管理权限阻塞见 ADMIN-01）。
+- [v1.0.0 已公开发布](https://github.com/slaythefishordie-droid/Stuido/releases/tag/v1.0.0)，2026-11-19 21:15:51，非草稿、非预发布。标签提交 b82e4ed；功能提交 d0938a5；CI PR 合并提交 f7dae1954dd44b497806e0335962a824998af652。后续提交仅文档维护。
+- 版本 1.0.0 / build 4；原生运行 [44484104854](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44484104854)：核心 21/21、iPad 模拟器 32/32、设备归档、签名权限和 IPA 校验通过。协议/Safari 运行 44484104729：43/43。
+- 实包 8,005,262 字节；SHA-256 `c4de7372a639e8c9da5fa3dfc5ea3f5d8b78d81261163d207cf67ffe69749244`。下载后 ZIP、版本及 iPhoneOS 平台复核通过。
+- Release 安装包附件尚未上传（NET-02）；已通过对话文件与 [Actions Artifact](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44484104854/artifacts/14510239330) 交付，Artifact 到期日 2026-11-26。不要为上传重建 IPA。
+- [原生证据](verification/native-run-44484104854.json) · [发布证据](verification/release-v1.0.0.json) · [安装指南](build-and-install.md)
 
-## v1.0.0 交付与验证 · 2026-11-19（北京时间）
+## 两份计划阶段 1–4 的交付
 
-- 两份计划阶段 1–4 的功能实现已完成，集中可读性与效率检查已完成。主开发仍在 feature/safari-extension；v0.1.0 和 main 未改写。
-- d0938a5 的 [Native iPadOS #18](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44484104854) 全部成功：核心 **21/21**、iPad（第 10 代）/ iOS 26.2 模拟器 **32/32**、Release arm64 设备归档、两端签名权限和 IPA 校验。协议运行 44484104729 **43/43** 成功。
-- 下载实际 IPA 后复核 SHA-256、ZIP CRC、主 App/扩展 1.0.0（build 4）和 iPhoneOS 平台。IPA 8,005,262 字节，SHA-256 `c4de7372a639e8c9da5fa3dfc5ea3f5d8b78d81261163d207cf67ffe69749244`。正式附件命名 KnowledgeStudio-v1.0.0.ipa，保留摘要、package-report 和 release-manifest。
-- CI 使用 PR 合并提交 `f7dae1954dd44b497806e0335962a824998af652`，功能分支提交 `d0938a5462c28e1aa36b4fdd3c071dc4e4b5681f`；后续提交仅为发布文档，不重复完整构建。[验证记录](verification/native-run-44484104854.json) · [发布说明](releases/v1.0.0.md)
-- 命令行附件下载受 productionresultssa0 限制，GitHub 连接器成功下载 IPA 和全部证据；不把此问题当作构建失败。未修改运行环境白名单。
-- 已记录生成包 device family 为 [1,2] 的配置边界；iPad 验证通过，iPhone 未验收。新增真机流程、真实旧备份和站点变体仍待复验；用户此前里程碑 1 双向共享成功单独保留。
+| 范围 | 已实现 | 验证边界 |
+| --- | --- | --- |
+| 产品阶段 1 | GRDB 事务快照、稳定 ID、非破坏迁移、Data Manager、回收站、ZIP 备份恢复 | 迁移、引用保护、恢复及恶意 ZIP 自动测试通过；真实资料恢复待验 |
+| 产品阶段 2 | 四类卡片、Quick Capture、双 Inbox、JSON 文件/粘贴、匹配/去重/预览/确认导入 | 协议与事务测试通过；完整触控流程待验 |
+| 产品阶段 3 | Library、Project、PDF 阅读、高亮、Mark 建卡与回跳 | 原生编译通过；真实 PDF 闭环待验 |
+| 产品阶段 4 | Readium EPUB、本地视频、位置恢复、词典外链 | 原生编译通过；真实书籍/视频待验 |
+| Safari 里程碑 1 | 扩展随 App 分发、双向共享诊断 | 用户报告真机编号自动传输对应成功；未提供型号/包摘要，不补造 |
+| Safari 里程碑 2 | QuickMark、持久待发、同 ID 重试、My Inbox | 存储与模拟消息测试通过；冷启动/真实 Safari 交接待验 |
+| Safari 里程碑 3 | 回溯、±1/2/3 秒、A–B、历史、备注/删除/备份、个性化 | 自动测试通过；真实旧备份与页面触控待验 |
+| Safari 里程碑 4 | 逐站授权、文章段落/选文与页面音频定位适配 | 模型/适配测试通过；Safari 权限与 DOM 变体待验 |
 
-## v1.0.0 发布准备与集中代码检查 · 2026-11-19（北京时间）
+已完成可读性与效率整理：新增 Swift 模块统一格式，交接/导入建立临时索引，无变化不写库，1 MiB 分块复制和摘要、ZIP 工作后台执行。不将本地合成测试宣称为真机性能提升。阶段 5–6 的图谱和复习调度仍属后续计划。
 
-用户新增要求：功能完成后检查可读性和运行效率，提供 IPA 的同时发布 GitHub v1.0.0，更新开发日志及构建问题日志。已明确授权发布；当前只准备候选，原生构建未通过前不发布。
+## 下一步验收与优先级
 
-第二轮 648a631 的运行 44482131742：依赖/锁文件和核心测试通过，App 编译阻塞为 Readium 的 JSONValue 与 Link.href 类型适配，已按锁定版本源码修正。归档和 IPA 未执行。已为不可精确恢复的 EPUB 定位提供可见提示，并补上归档后移回待整理的入口。
+1. 发布附件永久归档、默认分支管理：处理 NET-02 / ADMIN-01，权限变化前不重复尝试。
+2. 真机记录型号、系统、包 SHA、AltStore 版本及结果：保留扩展安装 → Safari 识别 → 双向共享；继承用户已确认的里程碑 1 结果，不要求无理由重测。
+3. 新增闭环：App 关闭时 QuickMark → 冷启动 Inbox → 建卡 → 回跳；重复/中断重送仅一条 UUID。12.8 秒回溯 2 秒落在 10 秒，播放继续。
+4. 四类 JSON 导入与重复导入、PDF/EPUB/视频标记回跳、备份恢复、删除恢复；失败时保留原件与错误，不清库。
+5. Safari 横竖屏/分屏、桌面/移动 watch 页、同标签换视频、广告/直播/Shorts、A–B 与历史跳转、网站授权撤回、真实旧书签。系统全屏/PiP、无 audio 元素等边界按实测记录。
 
-集中检查完成的改动：批量交接/导入预览索引化、无变化不重写数据库、大文件复制/摘要/ZIP 工作后台执行、1 MiB 分块读写、资料类型匹配校验、统一 Swift 格式。针对性 LibraryTests 8/8 通过，包含 1,000 条交接；Node 43/43 沿用未变更逻辑的通过结果。版本号与 Safari manifest 统一为 1.0.0，构建号 4。待下一次原生运行通过后下载真实 IPA、核对摘要并发布，最终结果另记。
+## 精简历史
 
-## 0.3 首轮原生稳定化 · 2026-11-19
+| 时间/基线 | 结果与追溯 |
+| --- | --- |
+| v0.1.0 / 7df6ef1 | 旧 YouTube 播放、时间 Mark、回跳、本地原型与导入协议；无 Safari 扩展。原生运行 44227526926 成功，旧原型保留在标签 |
+| Safari 分发 / ea8ca26 | 44432216488 成功，核心 8、模拟器 14；随后用户确认里程碑 1 双向共享。见 verification 同名记录 |
+| QuickMark / 94841ea | 44437247550 成功，打通最小 Inbox；不能作为后续新增功能的验证证据 |
+| 阶段 1–4 / 0c70210、648a631 | 44475088781 因 SwiftUI 声明失败；44482131742 因 Readium 类型桥接失败；均保留 JSON，修复见 BUILD-05/06 |
+| v1.0.0 / d0938a5 | 44484104854 全部成功，以上当前基线取代历史“待构建”状态 |
+| 2026-11-19 日志整合 | 合并状态、更新、验收与旧发布清单；网络历史并入工程问题。保留三份维护日志与原始 JSON，文档改动只查链接和差异，不跑业务测试 |
 
-[运行 44475088781](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44475088781) 对应 0c70210：依赖/锁文件及核心测试成功；App 编译因 @State 多变量声明失败，模拟器测试未执行，归档/IPA 跳过。已按具体错误拆开声明；同时提交备份实际解压字节限制与恶意大小测试、恢复前快照保护、导入预览后的资料状态复核，以及旧 Mark 小数秒迁移断言。本地 LibraryTests 7/7 复验通过；原生修复结果待后续运行。
+## 后续记录格式
 
-## 0.3 功能优先开发 · 2026-11-19（北京时间）
-
-- 用户确认里程碑 1 IPA 真机 Safari／App 编号自动传输和对应成功；记录为用户报告通过，不追补未提供的设备型号、包摘要或安装细节。
-- 用户确认本轮覆盖**产品阶段 1–4 与 Safari 路线图 1–4**，新增功能优先规范，见 AGENTS.md 与 release-0.3-plan.md。主开发分支保持 feature/safari-extension；默认分支修改请求被 GitHub 管理 API 403 拒绝，需有仓库管理权限的账号修改。
-- 已实现开发代码：GRDB SQLite 事务存储、旧原型迁移、四类卡片编辑和全局 Quick Capture、My Inbox 整理、AI Inbox JSON 文件／粘贴／资料匹配／选择确认导入、项目资料关联、Data Manager 回收站与引用限制、版本化 ZIP 备份／摘要校验／恢复前快照／事务恢复。原生 JSONSchema 直接使用仓库 1.0 协议，重复字段和语义引用另行严格校验。
-- PDFKit、Readium EPUB、AVKit 本地视频接入导入、阅读／播放、选文或时间 Mark、回到出处与保存位置。EPUB 保存 Readium locator，PDF 高亮保存在 Mark，不修改原始文件。扫描 PDF 不声称提供 OCR，DRM 不在范围。
-- Safari 新增精听 ±1/2/3 秒、A–B 循环、历史检索／当前视频排序／分批显示、备注／复制链接／删除、旧书签 JSON 导入导出、个性化与逐站授权设置、文章选文及页面 audio 定位适配器。原生注解同步保留 ID，永久清理的接收 ID 保留 tombstone 防止被重复交接复活。
-- 实际验证：本地 Swift 6.2.1 首轮核心 18/18 通过；后续新增共享注解及通用采集后，LibraryTests **7/7** 通过。Node.js 协议与 Safari **43/43** 通过。SwiftUI 语法解析通过，但不等于原生类型检查。备份路径穿越、恢复和删除引用测试已加入 iOS 测试，待本轮 macOS 稳定化执行。
-- 所选依赖版本及完整许可证已锁定。Readium 与归档共用 ReadiumZIPFoundation 3.0.1，避免同名包冲突。工作区新建 Swift 工具链和 SQLite 头文件验证环境；没有修改系统软件目录。
-- 尚待验证：本轮原生编译／模拟器／IPA、真实 PDF/EPUB/视频资料、Safari 的实际 DOM／授权／后台恢复、真实旧脚本备份。仓库只有旧脚本摘要和行为对照，没有原脚本或真实备份样例；兼容解析器目前用合成 v1 样例验证，不能声称已与用户旧备份完全互通。
-
-## Safari Mark 到 My Inbox 开发 · 2026-11-19
-
-- 从远端 `feature/safari-extension` 的 `438dc23` 接续。复核 #14 全部成功；免费重签、Safari 识别和共享权限仍待真机验证。依据产品需求“不因单个功能受阻而停止全部开发”，推进里程碑 2 的可独立实现部分，不宣称里程碑 1 真机验收完成。
-- 增加 YouTube 普通 watch 页 QuickMark、0–3 秒回溯（默认 2 秒）、本地待发记录、Native Messaging 保存与匹配 ID 回执。失败/超时重试同一 ID，后台重启重送尚未确认的记录；不暂停视频、不自动建卡或加入复习。
-- 主 App 新增 My Inbox，启动与回到前台时重新读取同一共享目录；保留扩展诊断页。每条不可变 Mark 使用独立文件、跨进程文件锁和原子替换，重复送达幂等，冲突或损坏报错并保留文件。保留原始秒数、回溯值、最终定位、标题、videoID、UUID 和创建时间。旧 prototype-v1.json 不改动。
-- 本地 Node.js 24.22.1：协议与 Safari 测试 **37/37 通过**。新增 5 项 Swift 存储测试覆盖重开、重复/冲突、损坏保留、非法字段、写入失败、并发交接，等待 macOS CI 执行；当前 Linux 没有 Swift，执行核心测试明确报 `swift: command not found`。Shell 语法和 diff 空白检查通过。
-- 待验证：本次原生编译/模拟器/IPA；实际 Safari 页面注入、广告/直播识别和同标签页切换；免费重签共享、关闭主 App 后保存、重启恢复。完整精听、历史编辑和旧备份导入仍属里程碑 3，未实现。
-
-## 文档归档与环境白名单核验 · 2026-11-19
-
-- **目标与范围：**汇总本轮代码审查、Safari 扩展打包、runner 调度和 IPA 交付的经验，便于新模型接续。代码与成功构建基线仍为 `ea8ca26` / Native iPadOS #14，本轮未修改业务代码或构建脚本。
-- **文档交付：**新建 `engineering-issues.md`，为面板异常恢复、共享组配置、导入排序、扩展资源层级、runner 排队、模拟器无输出、codesign 回归、下载网络和真机验证分别记录证据、处理与边界。更新 AGENTS.md 的必读入口、项目状态和 README 索引。
-- **环境结果：**读取当前配置草稿与运行实例，逐项对照约定的 41 条自定义规则；草稿 revision 5 为 41/41，缺失 0；运行实例为 8/41，缺失 33，`observations_current=true`、`policy_state=enforced`。`package_managers` 预设保留且另计。本轮没有再次改写草稿、发布环境或声称完成 41 个站点的连通测试。[核验记录](verification/network-allowlist-audit-2026-11-19.json)
-- **验证范围：**检查本轮文档的相对链接、JSON 结构、白名单集合差异和 Git 空白错误。文档更新不重复运行已通过的 Node / 原生测试，不重新生成 IPA。
-- **未决与下一步：**应用已保存的网络配置并连接到相应版本，再验证真实附件下载；在 iPad 上完成免费重签、Safari 识别和双向共享验收。通过后按计划推进 Mark → My Inbox。保留当前数据格式、四类卡片、双 Inbox、ChatGPT JSON 导入和用户自选复习要求。
-
-## IPA 构建恢复 · 2026-11-19
-
-修复后的 [Native iPadOS #14](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44432216488) 已全部通过，代码提交为 `ea8ca267db640c6d9996367ea6aebcb72f96aa3c`。核心 8/8、iPad 模拟器 14/14 通过，设备归档、两端签名与 App Groups 声明检查、IPA ZIP 校验及上传成功。[机器验证记录](verification/native-run-44432216488.json)
-
-[下载 Safari 共享验证版 IPA 产物](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44432216488/artifacts/14488745224)：`KnowledgeStudio-resignable-ipa-14`，保留至 2026-11-26。解压外层 ZIP 后，用 AltStore Classic 重签其中的 `KnowledgeStudio-resignable.ipa`。这是里程碑 1 诊断包，完整 QuickMark / My Inbox 尚未实现；免费重签、Safari 识别和双向共享仍待真机验证。
-
-本次模拟器步骤总耗时 12 分 09 秒；完整日志显示编译后、测试启动前存在 8 分 42 秒的日志空档，随后测试套件约 1.738 秒完成。没有证据把空档认定为业务测试死锁，日志也不足以进一步确定模拟器启动慢的内部原因。未签名模拟器出现 App Group `NOT_CODESIGNED`，不能用临时目录的单元测试代替真实跨进程共享验收。
-
-完整日志 ZIP 已取回并通过 CRC；IPA 和 xcresult 附件的下载被当前云端代理拒绝，重定向主机为 `productionresultssa31.blob.core.windows.net`。当前只完成了 CI 内的 IPA 校验，未声称已在本地重新验包。用户浏览器可从上述 GitHub 入口下载。
-
-已经区分两类故障并在 `feature/safari-extension` 修复构建配置：
-
-- 运行 `44292208343` 的首次尝试没有取得 ARM64 runner，GitHub 注解为 `The job was not acquired by Runner of type hosted even after multiple attempts`，并提示 ARM64 容量不足。没有任何测试步骤执行。重试也未取得机器，后被同分支的新运行取消。
-- Intel 运行 `44309054436` 正常取得 runner；Swift 核心 8/8、iPad 模拟器 14/14 通过，设备归档成功。模拟器步骤总耗时约 6 分 52 秒。失败发生在打包阶段：将 `codesign --entitlements :-` 改为 `--entitlements -` 后，输出无法由 `plistlib` 解析，产生 `InvalidFileException`。这不是调度或网络失败。[日志与测试证据](verification/native-run-44309054436.json)
-
-修复提交 `ea8ca267db640c6d9996367ea6aebcb72f96aa3c` 恢复 XML-only 导出方式，保留签名、设备架构和 App Groups 声明检查；冒号弃用提示暂作为非致命警告保留。工作流默认使用标准 `macos-15-intel`，手动仍可选择 `macos-26`，两者固定 Xcode 26.2 / iOS 26.2 和同样的测试门槛。没有使用付费 larger runner，也没有修改业务功能。
-
-已取回旧失败与成功运行的完整日志，并更新网络诊断和手动排障说明。日志与附件的可访问性要分别验证；云实例仍报告原来的 8 条名单，草稿 41 条不等于运行实例已应用。[网络记录](network.md) · [安装与排障](build-and-install.md)
-
-## 代码审查与维护整理 · 2026-11-18
-
-代码提交 `831c391caacfef61221448b90c9b53d3e83ab8cc`，位于 `feature/safari-extension`。采用局部修复，保留现有持久化格式、导入协议和依赖版本；当前小规模共享诊断无需额外引入数据库或并发框架。
-
-- Safari 面板的 Native Messaging 增加 10 秒超时和请求重入保护，异常或无效响应后恢复按钮。迟到响应不能覆盖后续读取结果。超时不会取消原生写入，因此提示先读取确认，再决定是否重试。
-- 共享组配置采用明确的错误类型。AltStore 元数据存在却格式错误、为空或包含多个组时报告错误，不再默默使用旧组。读取直接处理文件缺失，减少一次文件系统查询；损坏数据、来源不符及其他读取错误继续上报并保留原文件。
-- 导入去重排序为每个元素只生成一次规范化排序键，避免每次比较反复序列化。固定已有样例的指纹作为回归基线，确认结果兼容。10,000 条合成关系、5 次运行的本地中位数为优化前约 46 ms、优化后约 23 ms；这是局部微基准，不代表整个 App 的性能提升。
-
-本地 Node 测试 31/31 通过，包含 27 项协议测试和 4 项 Safari 面板恢复测试；[GitHub 协议及面板 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44292215642) 同样通过。修改的 Swift 文件通过语法解析；新增两项原生测试，覆盖组配置和读取异常，模拟器通过门槛由至少 12 项提高至至少 14 项。
-
-[首次原生 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44292208343) 后续确认因托管 runner 无法分配而未执行；上述 Swift 改动已在 Intel 运行 `44309054436` 通过原生编译与 14 项模拟器测试，但该运行的打包阶段失败。修复和后续结果见本文件顶部。免费重签、Safari 识别和实际 App Groups 共享仍须在 iPad 上分别验证。本轮未推进 QuickMark / My Inbox 功能或修改 main 与 v0.1.0。
-
-## Safari 里程碑 1 · 2026-11-18
-
-`feature/safari-extension` 的提交 `547eaf4020001c0a4462263a36a03dfe2a277905` 已通过原生 CI。核心测试、iPad 模拟器测试、设备归档和含 Safari 扩展的 IPA 校验均成功。模拟器门槛提升为至少 12 个测试且失败数为 0，包含新增的独立写入重开和损坏记录保留测试。Linux 核心测试另行复跑 8 项通过。[原生运行](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44245690553) · [验证元数据](verification/safari-m1-run-44245690553.json)
-
-主 App 入口为 Safari 共享验证页，Safari 扩展弹出面板通过 Native Messaging 写入或读取两端诊断编号。修正了扩展资源的打包层级，manifest 位于包根目录。归档以 ad-hoc 签名保留 App Groups 声明，产物名为 KnowledgeStudio-resignable-ipa-11。
-
-真机免费重签、Safari 识别和双向共享仍待执行。当前运行环境缺少 GitHub 日志与产物的新存储域名，新增 sa30、sa18 的配置草稿已保存，待发布应用。API 可核实构建步骤成功，完整产物尚未本地复验。[安装和双向验证步骤](build-and-install.md)
-
-## 第一版交接与网页采集架构更新
-
-`v0.1.0` 的提交为 `7df6ef182b73131878a07e568cf6799fc543cf0c`。本地 Swift 核心测试 8 项通过，导入协议测试 26 项通过。该提交的 GitHub 原生构建、模拟器测试、设备归档及 IPA 校验成功，协议 CI 成功。原始 CI 产物包括 `KnowledgeStudio-build-evidence-6`、`KnowledgeStudio-unsigned-ipa-6` 和 `protocol-evidence-3`。[原生 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44227526926) · [协议 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44227553771)
-
-上述运行只覆盖旧主 App。现行开发从含 Safari 扩展的构建和免费签名可行性开始。新计划与真机证据分别维护；以下日期条目保留为旧原型历史记录，其中的“下一步”和待办仅反映当时状态。[当前路线图](web-capture-roadmap.md) · [验证记录](device-validation.md)
-
-## 2026-11-18 · 阶段 0 草稿复核
-
-- 当前草稿基于 `7322edd`。另一个提交 `a37dce8` 的原生 CI 已通过 iPad 模拟器测试、设备归档、IPA 校验并上传 `KnowledgeStudio-unsigned-ipa-4`。该产物早于本轮代码修改。[GitHub Actions 运行](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44203023658)
-- 根据 YouTubePlayerKit 2.0.5 源码修正了 SwiftUI 播放器的视图标识，切换视频与重连都会替换显示用的 WKWebView。打开新视频只提交一次，恢复或重连当前视频可复用已保存的选择。视频 ID 改为全文匹配，拒绝尾随换行。
-- 修正导入校验器返回的字段出处错误路径，可定位到具体无效引用。新增缺少必填 `source_refs` 的样例。
-- 本轮验证使用 Linux Swift 6.2.1，核心 8 项通过，覆盖重启恢复、重复选择的文件修改时间、错误链接、零秒及过期会话。协议 26 项通过，四类联合样例经 CLI 校验为 4 张候选卡、0 条警告。
-- 本轮 SwiftUI 文件通过语法解析，仍需 macOS 编译及 iPad 安装后用实际学习视频检验播放、切换、Mark 和回跳。下一阶段为原型 Source 与 Mark 的事务迁移。
-
-## 2026-11-17 · 阶段 0
-
-起点：仓库 `a4c48fc26db834045e8bd9a681ff7aa95de96255` 只有 README，无工程、AGENTS.md 或现有依赖。选择 SwiftUI，最低 iPadOS 17，Swift 6 语言模式；当前用户设备 iPadOS 26.2。用户只有 Windows 和 iPad，使用免费 Apple 账户及 AltStore Classic。
-
-完成内容：
-
-- 保存原始需求、独立状态/对象模型、版本和事务约定、依赖评估、ChatGPT 提示词。
-- Draft 2020-12 Schema 与共享校验入口；四类内容、字段 provenance、Source/Relation 引用、具体错误、重复批次和内容预览；未实现正式导入事务或 AI Inbox UI。
-- SwiftUI YouTube 最小工程，固定 SPM 版本；原生 Mark/时间回跳/最近视频/原子原型存储/失败提示/超时/会话隔离。未扩展 PDF、EPUB、图谱等复杂界面。
-- 标准 macOS 26 ARM64 + Xcode 26.2 Actions，核心测试、iPad 模拟器测试、真实 iphoneos archive、未签名 IPA 结构校验、日志/xcresult/产物上传与独立结果记录。
-- 网络诊断：四个目标域名 HTTPS 200/TLS 校验通过；平台提供的当前白名单已含 API 和 Google 开发文档。没有关闭验证或改写代理。
-
-## 阶段 0 当时的验证证据（历史）
-
-| 检查 | 结果 | 范围 |
-|---|---|---|
-| Swift 核心 | 8/8 通过 | Linux Swift 6.2.1，真实文件读写和异步竞态；非 iOS 运行验证 |
-| 导入协议 | 25/25 通过 | Node.js 24.22.1，Schema/语义/重复/错误/边界；没有写正式数据库 |
-| swift-fsrs v6.0.0 上游 | 105/105 通过，24 suites | Linux Swift Testing；App 尚未接入复习 |
-| 工作流静态检查 | actionlint 1.7.12 通过 | 不等于 GitHub Runner 已执行 |
-| Shell 语法 | bash -n 通过 | 不等于 macOS 打包成功 |
-| GitHub 协议 CI | 成功 | [run 44077240571](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44077240571)，commit `e9b42987189de313ec85f026c6b6b6acd4bf8b9c`，日志 Artifact 已上传 |
-| 原生 CI 的 SPM / 核心测试 | 成功 | [run 44203023658](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44203023658)，commit `a37dce8cf1ca47e8a70befa36808eb8f9f82632e`；标准 macos-26 ARM64 / Xcode 26.2 |
-| 原生 App 编译与模拟器测试 | 成功 | 同次 CI 的 simulator 步骤通过，强制断言至少 10 个测试、0 失败；工程包含 8 个核心和 2 个 App 测试。完整 xcresult 尚未下载到本云环境 |
-| device archive | 成功 | generic/platform=iOS Release archive 通过；后续确认 arm64 / iPhoneOS / iPad 设备族及未签名状态 |
-| unsigned IPA 打包校验 | **成功，已上传候选 IPA** | `KnowledgeStudio-unsigned-ipa-4`；Payload 结构、ZIP CRC 和 SHA-256 生成步骤通过；不等于 AltStore 安装成功 |
-| 日志与测试证据上传 | 成功 | `KnowledgeStudio-build-evidence-4`；本云环境下载仍被网络策略拒绝，当前记录依据 Actions API 的逐步结果与产物元数据 |
-| AltStore 重签安装 | 未执行 | 必须用用户实际设备验证 |
-| iPad 真实播放/Mark/回跳/恢复 | 未执行 | 见 device-validation.md |
-
-工具链来源：官方 Swift 6.2.1 Ubuntu 24.04 tarball，在 Debian 13 可运行；GPG 验证通过，签名指纹 `52BB7E3DE28A71BE22EC05FFEF80A866B47A981F`，密钥从 swiftlang 官方仓库通过 TLS 获取。缓存通过脚本指定到可写 `.build`，未改 HOME 或系统 CA。
-
-## 阶段 0 当时的限制与下步（历史）
-
-1. IPA 打包修复已通过实际 CI：旧脚本把输入文件放在 `lipo -verify_arch arm64` 之后；Apple cctools 参数解析源码确认这会把文件路径当作架构名称。已改为 `lipo <binary> -verify_arch arm64`，保留全部架构/平台/签名/ZIP 检查，并为失败增加 GitHub 原生错误注解。完整旧日志仍受网络限制，因此不追认这是旧运行的唯一失败原因。
-2. 当前生效白名单仍是原来的三个域名，草稿另有 `productionresultssa4.blob.core.windows.net`、`productionresultssa5.blob.core.windows.net` 和 `results-receiver.actions.githubusercontent.com`，**草稿未应用到运行实例**。新的 IPA 实际下载跳转到了 `productionresultssa5`，再次返回 Forbidden。待环境设置保存并发布后重试；用户 Windows 浏览器不受本云环境白名单影响。
-3. 阶段 0 只有 YouTube 纵向原型；没有虚构 Today/Library/Dictionary 等已实现页面。严格导入工具可执行，但原生 JSONSchema 适配层、Source 匹配 UI 与数据库事务仍属阶段 2。
-4. CI 已通过，请用户下载未签名 IPA 在 AltStore Classic 重签，并按真机清单记录实际结果；CI 不需要 Apple 密码、证书或签名密钥。当前只能确认未签名设备 App 的构建与打包，不宣称已验证 AltStore / iPadOS 26.2 安装兼容性。
-5. 原生构建流程确认后进入阶段 1：数据库迁移、原型 Mark 迁入、回收站、备份恢复与失败回滚。继续保留所有稳定 ID 与原始秒数，不清空原型文件。
-6. 待产品体验后决定复习正反面；提案在 data-model.md，可调整。FSRS 日界与用户时区差异在依赖评估中记录。
-
-仓库实际为 Public，用户已明确授权推送和运行；未改变可见性。当前工作流不需要 Actions 管理接口的写权限，管理接口 403 不应被误判成网络不可达。
-
-首次 native run 44075633839 在 `macos-15` 队列中等待，后由并发策略取消。发现该标签目前对应 ARM64、先前核对的镜像清单对应 Intel，因此固定为官方标准 `macos-15-intel` 后实际运行成功进入编译。没有使用付费 larger runner；不把标签差异直接断言为排队根因。
-
-打包修复依据：[Apple cctools lipo.c](https://github.com/apple-oss-distributions/cctools/blob/e0d56624eca2a76c2ace4c21850df9e666de4ca5/misc/lipo.c#L444) 的 `verify_arch` 分支消费后续所有参数；[lipo 手册](https://github.com/apple-oss-distributions/cctools/blob/e0d56624eca2a76c2ace4c21850df9e666de4ca5/man/lipo.1) 明确 `lipo input_file command [option ...]`。
-
-## 2026-11-18 · 构建调度与网络复查
-
-修复提交 `7322edda9371f017acd5c76d0187e7937ed67783` 对应 [run 44081549150](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44081549150) 未执行任何步骤。GitHub 注解明确为 `The job was not acquired by Runner of type hosted even after multiple attempts`，是托管 Runner 调度失败，不能记为新代码编译失败或测试失败。改用经官方 ARM64 镜像清单核实的标准 `macos-26`，继续固定 Xcode 26.2 / iOS 26.2 模拟器；新 run `44203023658` 已全部成功，详见 [机器记录](verification/native-run-44203023658.json)。没有切换到付费 larger runner。
-
-云实例已恢复为 running。当前生效白名单仍为原来三项；本次绑定的新草稿 revision 1 没有自定义域名，旧草稿的两项追加没有出现在新草稿中。已经保留原有三项、重新加入两项旧下载域名，再根据本次实际跳转追加 `productionresultssa5.blob.core.windows.net`；当前草稿 revision 3 共六项。保存不等于发布，完整日志和 IPA 下载仍受限。见 [网络记录](verification/network-2026-11-18.json)。
-
-最新运行的 IPA Artifact 大小为 331,594 字节，证据 Artifact 为 152,314 字节；这是外层 Artifact ZIP 大小，API 返回的 digest 也仅属于外层 ZIP。IPA 本身的 SHA-256 在产物内的 `.ipa.sha256` 文件中，本云环境尚未取到文件，未伪造其摘要。两个 Artifact 均保留 7 天，下载入口见 [构建与安装](build-and-install.md)。
-
-运行另有两个非失败注解：固定的 checkout / upload-artifact 版本声明 Node 20，GitHub 已用 Node 24 执行且步骤成功；标准 macOS ARM64 容量紧张可能导致排队。它们没有导致本次构建失败，不为消除提示重复触发 macOS 构建。
+每个交付追加一条：日期 / 对应计划 / 功能与关键模块 / 实际检查及 SHA、运行链接 / 未验证项 / 下一步。失败尝试仅引用工程问题 ID，不复制整段日志；阶段结束更新顶部基线。旧全文可从整合前提交 362a3b5 的 Git 历史追溯。

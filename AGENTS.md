@@ -1,6 +1,6 @@
 # Knowledge Studio 开发约定
 
-每个新 Codex 模型或新会话开始开发前，必须先读本文件、[PROJECT_STATUS.md](PROJECT_STATUS.md)、[开发计划与验收标准](docs/product-spec.md) 和[Safari 网页采集路线图及脚本迁移对照](docs/web-capture-roadmap.md)，再阅读 README.md、[开发日志](docs/progress.md)、[开发与构建问题日志](docs/engineering-issues.md) 以及本次任务涉及的协议或模型文档。先核对当前分支、未提交改动和用户本轮目标。Safari 相关开发使用 `feature/safari-extension` 分支，提交前核对分支。
+开始任务先核对分支、未提交改动及用户目标，读本文件和 [开发进度](docs/progress.md) 的当前基线。按任务定位 [产品计划](docs/product-spec.md)、[Safari 路线图](docs/web-capture-roadmap.md) 的相关章节，以及涉及模块和问题 ID；不每轮通读全部历史。详细执行规则见 [工作流](docs/workflow.md)，排障查 [工程问题](docs/engineering-issues.md)。主开发分支为 feature/safari-extension。
 
 ## 架构与技术栈
 
@@ -34,6 +34,6 @@
 
 ## 用户更新的功能优先规范（2026-11-19）
 
-本轮按 docs/release-0.3-plan.md 完成两份计划阶段 1–4。优先端到端功能，仅阅读相关代码和运行针对性测试，不重复全量审计、无关重构或重复验证已通过部分。普通非阻塞优化写入待办。数据删除/迁移/备份恢复、对象关联与持久化、共享传输及权限安全必须保留关键验证。同一错误连续两次修复无进展则记录阻塞和尝试，继续独立功能。阶段稳定化时集中完整构建回归；未经验证不得宣称通过或发布稳定版。用户已报告里程碑 1 真机双向共享成功。
+本轮按 docs/progress.md 完成两份计划阶段 1–4。优先端到端功能，仅阅读相关代码和运行针对性测试，不重复全量审计、无关重构或重复验证已通过部分。普通非阻塞优化写入待办。数据删除/迁移/备份恢复、对象关联与持久化、共享传输及权限安全必须保留关键验证。同一错误连续两次修复无进展则记录阻塞和尝试，继续独立功能。阶段稳定化时集中完整构建回归；未经验证不得宣称通过或发布稳定版。用户已报告里程碑 1 真机双向共享成功。
 
 v1.0.0 模块：LibraryRepository/LibraryState 负责事务与引用校验，ImportService 使用核心资源副本的 1.0 Schema；修改 schemas/import-package-1.0.schema.json 时同步 Sources/KnowledgeCore/Resources 中同名文件。StudioModel/StudioView、ManagementViews、SourceReaders、BackupService 分别承担应用协调、主界面、管理/导入、阅读和备份。新测试仅按修改风险运行，版本稳定化才做完整原生回归。

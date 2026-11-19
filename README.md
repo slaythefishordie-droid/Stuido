@@ -4,7 +4,7 @@ iPad 优先、本地优先的个人知识整理工具，采用 SwiftUI。网页�
 
 使用说明见 [阶段 1–4 操作指南](docs/0.3-user-guide.md)，版本详情见 [v1.0.0 发布说明](docs/releases/v1.0.0.md)。
 
-新模型开始前先读 [AGENTS.md](AGENTS.md)、[项目状态](PROJECT_STATUS.md)、[产品需求](docs/product-spec.md) 和[四个里程碑](docs/web-capture-roadmap.md)。
+接续开发先看 [三份日志入口](PROJECT_STATUS.md) 和 [开发约定](AGENTS.md)，再按任务读取计划及模块。
 
 ## 构建与开发
 
@@ -18,6 +18,6 @@ macOS 上运行 `bash scripts/bootstrap-xcodegen.sh` 生成 `ios/KnowledgeStudio
 
 第一版标签 `v0.1.0` 已通过 [Native iPadOS #6](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44227526926)：依赖检查、核心与 iPad 模拟器测试、设备归档、未签名 IPA 打包和产物上传。AltStore 重签安装及真机交互仍待用户设备验证。
 
-参见 [构建与 AltStore 安装](docs/build-and-install.md)、[网络诊断](docs/network.md)。编译成功、模拟器测试成功、重签安装成功和真机功能验证是不同状态。当前验证记录会随实际运行更新；不能用未签名 IPA 推断安装成功。
+参见 [构建与 AltStore 安装](docs/build-and-install.md)、[网络诊断](docs/engineering-issues.md)。编译成功、模拟器测试成功、重签安装成功和真机功能验证是不同状态。当前验证记录会随实际运行更新；不能用未签名 IPA 推断安装成功。
 
-需求与接续文档：[现行产品需求](docs/product-spec.md)、[数据模型](docs/data-model.md)、[导入协议](docs/protocol.md)、[ChatGPT 提示词](docs/chatgpt-prompt.zh.md)、[依赖评估](docs/dependencies.md)、[开发日志](docs/progress.md)、[开发与构建问题日志](docs/engineering-issues.md)、[真机验收](docs/device-validation.md)。
+需求与接续文档：[现行产品需求](docs/product-spec.md)、[数据模型](docs/data-model.md)、[导入协议](docs/protocol.md)、[ChatGPT 提示词](docs/chatgpt-prompt.zh.md)、[依赖评估](docs/dependencies.md)、[开发日志](docs/progress.md)、[开发与构建问题日志](docs/engineering-issues.md)、[真机验收](docs/progress.md)。
