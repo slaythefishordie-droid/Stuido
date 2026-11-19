@@ -13,7 +13,7 @@ struct AIInboxView: View {
                 Section("JSON 导入") {
                     TextEditor(text: $text).frame(minHeight: 150).font(.system(.body, design: .monospaced))
                     Button("选择 JSON 文件") { importing = true }
-                    Button("校验并放入 AI Inbox") { model.stageImport(text) }.disabled(text.isEmpty)
+                    Button("校验并放入导入箱") { model.stageImport(text) }.disabled(text.isEmpty)
                     Text("这里只创建待确认候选。预览、匹配资料并确认后才会加入卡片库。").font(.caption)
                 }
                 Section("待确认批次") {
@@ -429,7 +429,7 @@ struct DataManagerView: View {
                 busy = false
             }
         }.confirmationDialog(
-            "校验通过。替换为备份中的 \(validated?.state.cards.count ?? 0) 张卡片、\(validated?.state.marks.count ?? 0) 条 Mark？",
+            "校验通过。替换为备份中的 \(validated?.state.cards.count ?? 0) 张卡片、\(validated?.state.marks.count ?? 0) 条标记？",
             isPresented: $confirmRestore, titleVisibility: .visible
         ) {
             Button("确认恢复并替换当前知识库", role: .destructive) {

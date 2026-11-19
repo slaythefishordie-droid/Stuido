@@ -198,6 +198,12 @@ struct LocalVideoStudyView: View {
 
 @MainActor
 final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
+    func navigator(_ navigator: Navigator, presentError error: NavigatorError) {
+        locationWarning = "此书籍限制复制，无法完成所选操作。"
+    }
+    func navigator(_ navigator: Navigator, didFailToLoadResourceAt href: RelativeURL, withError error: ReadError) {
+        locationWarning = "部分书页资源无法读取，请检查原始书籍文件。原有标记仍保留。"
+    }
     var savePosition: ((ReadingLocator) -> Void)?
     var saveSelection: ((ReadingLocator, String, CardKind) -> Void)?
     var selectMark: ((UUID) -> Void)?
