@@ -54,3 +54,11 @@ SwiftUI View → 应用服务（capture/import/review/backup）→ 领域对象�
 主 App 激活时和 Safari 扩展面板请求时读取共享目录。当前只保存双向诊断记录，各端写自己的 JSON 文件并原子替换，用 UUID 核对来源与重启恢复。此诊断格式独立于未来 Mark 交接协议。Safari 的 UI 页面调用 native messaging，原生 SafariServices 处理器执行读写。
 
 分发时以 ad-hoc 签名保存请求的 App Groups 权限，AltStore 重签后优先解析其 ALTAppGroups 元数据。需要用真机确认该版本 AltStore 的实际行为。
+
+## 里程碑 2 交接实现
+
+`WebMark` v1 是不可变交接记录，独立于 ChatGPT Schema、旧原型和未来数据库。共享组中 `WebMarks-v1/<UUID>.json` 同时供扩展写入、My Inbox 读取；以 `videoID` 推导规范 HTTPS 出处，正式 Source 表尚未迁入。`capturedSeconds` 是原始秒数，`seconds = max(0, floor(capturedSeconds - preRoll))` 是新 QuickMark 回溯定位；`createdAt` 使用 Unix 毫秒。现有原型不重新套用回溯。
+
+扩展先将完整记录写入 `browser.storage.local` 的 `pendingMark:<UUID>`，再通过 Native Messaging 发出 `saveMark`。只有原生原子落盘并回传匹配 UUID 才清除待发。重复 ID 内容必须相同；不同内容或损坏文件拒绝覆盖。原生使用共享目录内 `.lock` 的跨进程 flock 序列化访问。后台每次启动重试待发，网页超时后保留同一条记录供用户重试。主 App 不消费删除队列，启动/前台直接读同一份记录，因此不会出现“已确认但未入 Inbox”的交接窗口。
+
+此格式是最小采集底座，不提供数据库事务迁移、删除/编辑或备份功能。共享权限异常不回退到私有目录，读取异常展示错误并保留原数据。网页 DOM 识别仍需真机回归。

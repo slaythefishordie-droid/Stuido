@@ -96,7 +96,7 @@ jobs:
           python3 - <<'PY'
           import json
           result = json.load(open('artifacts/simulator-summary.json'))
-          assert result['totalTestCount'] >= 14, 'Expected core and App tests to actually run'
+          assert result['totalTestCount'] >= 19, 'Expected core and App tests to actually run'
           assert result['failedTests'] == 0, 'Simulator tests failed'
           PY
       - name: Surface simulator build errors

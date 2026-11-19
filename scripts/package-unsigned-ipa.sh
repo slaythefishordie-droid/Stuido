@@ -15,7 +15,7 @@ test -f "$ks_binary" || fail 'The App executable declared by Info.plist is missi
 xcrun lipo "$ks_binary" -verify_arch arm64 || fail 'The device App does not contain the required arm64 architecture.'
 xcrun vtool -show-build "$ks_binary" > .build/device-platform.txt || fail 'Unable to inspect the device Mach-O build platform.'
 python3 - "$ks_app" <<'PY'
-import pathlib, plistlib, re, sys
+import json, pathlib, plistlib, re, sys
 def require(condition, message):
     if not condition:
         escaped = message.replace('%', '%25').replace('\r', '%0D').replace('\n', '%0A')
@@ -37,13 +37,16 @@ ks_extension_binary="$ks_extension/$(/usr/libexec/PlistBuddy -c 'Print CFBundleE
 xcrun lipo "$ks_extension_binary" -verify_arch arm64
 xcrun vtool -show-build "$ks_extension_binary" > .build/extension-platform.txt
 python3 - "$ks_extension" <<'CHECK'
-import pathlib, plistlib, re, sys
+import json, pathlib, plistlib, re, sys
 extension = pathlib.Path(sys.argv[1])
 info = plistlib.loads((extension / 'Info.plist').read_bytes())
 assert info['NSExtension']['NSExtensionPointIdentifier'] == 'com.apple.Safari.web-extension'
 assert info['CFBundleSupportedPlatforms'] == ['iPhoneOS']
 assert re.search(r'platform\s+IOS\s*$', pathlib.Path('.build/extension-platform.txt').read_text(), re.M)
 assert (extension / 'manifest.json').is_file()
+manifest = json.loads((extension / 'manifest.json').read_text())
+for resource in manifest['background']['scripts'] + [name for script in manifest['content_scripts'] for name in script['js']]:
+    assert (extension / resource).is_file(), f'Missing Safari script: {resource}'
 CHECK
 # Ad-hoc signatures carry requested entitlements for the user's re-signing tool.
 # They do not provide an Apple provisioning profile or grant device permissions.

@@ -65,6 +65,8 @@ targets:
         APPLICATION_EXTENSION_API_ONLY: YES
         SKIP_INSTALL: YES
     dependencies:
+      - package: KnowledgeStudio
+        product: KnowledgeCore
       - sdk: SafariServices.framework
   KnowledgeStudioTests:
     type: bundle.unit-test

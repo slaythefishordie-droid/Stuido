@@ -2,10 +2,38 @@
   "manifest_version": 3,
   "name": "Knowledge Studio",
   "version": "0.2.0",
-  "description": "验证 Safari 扩展与 Knowledge Studio 的本地共享。",
-  "permissions": ["nativeMessaging"],
+  "description": "在 Safari YouTube 页面保存 QuickMark 到本机 My Inbox。",
+  "permissions": [
+    "nativeMessaging",
+    "storage"
+  ],
   "action": {
     "default_title": "Knowledge Studio",
     "default_popup": "popup.html"
-  }
+  },
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://m.youtube.com/*",
+    "https://youtube.com/*"
+  ],
+  "background": {
+    "scripts": [
+      "background.js"
+    ],
+    "persistent": false
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*",
+        "https://youtube.com/*"
+      ],
+      "js": [
+        "capture.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ]
 }
