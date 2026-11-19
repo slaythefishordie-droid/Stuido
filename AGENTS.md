@@ -1,6 +1,6 @@
 # Knowledge Studio 开发约定
 
-每个新 Codex 模型或新会话开始开发前，必须先读本文件、[PROJECT_STATUS.md](PROJECT_STATUS.md)、[开发计划与验收标准](docs/product-spec.md) 和[Safari 网页采集路线图及脚本迁移对照](docs/web-capture-roadmap.md)，再阅读 README.md、docs/progress.md 以及本次任务涉及的协议或模型文档。先核对当前分支、未提交改动和用户本轮目标。Safari 相关开发使用 `feature/safari-extension` 分支，提交前核对分支。
+每个新 Codex 模型或新会话开始开发前，必须先读本文件、[PROJECT_STATUS.md](PROJECT_STATUS.md)、[开发计划与验收标准](docs/product-spec.md) 和[Safari 网页采集路线图及脚本迁移对照](docs/web-capture-roadmap.md)，再阅读 README.md、[开发日志](docs/progress.md)、[开发与构建问题日志](docs/engineering-issues.md) 以及本次任务涉及的协议或模型文档。先核对当前分支、未提交改动和用户本轮目标。Safari 相关开发使用 `feature/safari-extension` 分支，提交前核对分支。
 
 ## 架构与技术栈
 
@@ -30,4 +30,4 @@
 - 只运行与本次更改相称的检查。文档修改无需重复 macOS 构建。
 - 分开记录核心测试、原生编译、模拟器测试、IPA 结构、AltStore 免费签名安装、Safari 识别扩展、App Groups 实际共享及真机交互。Mock 测试不是 YouTube 播放成功；Linux 不能验证 SwiftUI 或签名安装。
 
-当前范围与交接事项见 PROJECT_STATUS.md，历次验证和限制见 docs/progress.md。每阶段更新进度、实际结果与阻塞，不把下一阶段计划写成已实现功能。
+当前范围与交接事项见 PROJECT_STATUS.md，历次验证和限制见 docs/progress.md。复发问题先按 docs/engineering-issues.md 定位，新的问题记录现象、证据、处理与验证边界。每阶段更新进度、实际结果与阻塞，不把下一阶段计划写成已实现功能。

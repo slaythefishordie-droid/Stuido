@@ -18,4 +18,4 @@ macOS 上运行 `bash scripts/bootstrap-xcodegen.sh` 生成 `ios/KnowledgeStudio
 
 参见 [构建与 AltStore 安装](docs/build-and-install.md)、[网络诊断](docs/network.md)。编译成功、模拟器测试成功、重签安装成功和真机功能验证是不同状态。当前验证记录会随实际运行更新；不能用未签名 IPA 推断安装成功。
 
-需求与接续文档：[现行产品需求](docs/product-spec.md)、[数据模型](docs/data-model.md)、[导入协议](docs/protocol.md)、[ChatGPT 提示词](docs/chatgpt-prompt.zh.md)、[依赖评估](docs/dependencies.md)、[进度与阻塞](docs/progress.md)、[真机验收](docs/device-validation.md)。
+需求与接续文档：[现行产品需求](docs/product-spec.md)、[数据模型](docs/data-model.md)、[导入协议](docs/protocol.md)、[ChatGPT 提示词](docs/chatgpt-prompt.zh.md)、[依赖评估](docs/dependencies.md)、[开发日志](docs/progress.md)、[开发与构建问题日志](docs/engineering-issues.md)、[真机验收](docs/device-validation.md)。

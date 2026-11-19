@@ -4,7 +4,7 @@
 
 ## 当前生效状态
 
-11 月 18 日实例报告 `running`、`observations_current=true`、网络 `restricted/enforced`。11 月 19 日接口仍报告相同的 **8 条**自定义名单，但网络状态为 `unknown`，不能仅凭配置断言所有规则已生效；以具体请求结果为准：
+本次文档归档时重新读取接口，实例报告 `running`、`observations_current=true`、网络 `restricted/enforced`，生效的自定义名单仍为 **8 条**。此前 11 月 19 日早些时候曾返回 `unknown`，该历史观察保留在原记录中，以本次核验为最新配置结论：
 
 ```text
 api.github.com
@@ -17,7 +17,7 @@ productionresultssa5.blob.core.windows.net
 results-receiver.actions.githubusercontent.com
 ```
 
-`package_managers` 预设保留，包含 GitHub 源码、发行资产及常用包管理器域名。配置草稿第 5 版有 **41 条**自定义规则，包含 `*.blob.core.windows.net`、`*.actions.githubusercontent.com`、`*.githubusercontent.com` 及项目文档 / YouTube 相关域名；草稿已保存不代表当前实例已应用。完整两份名单与实测记录见 [本轮网络证据](verification/network-recheck-2026-11-18.json)。
+`package_managers` 预设保留，包含 GitHub 源码、发行资产及常用包管理器域名。配置草稿第 5 版有 **41 条**自定义规则，包含 `*.blob.core.windows.net`、`*.actions.githubusercontent.com`、`*.githubusercontent.com` 及项目文档 / YouTube 相关域名；草稿已保存不代表当前实例已应用。本次逐项对照约定名单：草稿 **41/41，缺失 0**；运行实例 **8/41，缺失 33**。完整 41 条、当前 8 条及缺少的 33 条见 [白名单核验记录](verification/network-allowlist-audit-2026-11-19.json)。这次只核对配置，没有重复执行全部连通请求；含通配符的 41 条规则也不等于 41 个站点。
 
 11 月 19 日已下载运行 `44309054436` 的完整日志；其测试附件仍被 `productionresultssa17.blob.core.windows.net` 拒绝。最新成功运行 `44432216488` 的完整日志同样下载成功，但 IPA 与测试附件被 `productionresultssa31.blob.core.windows.net` 拒绝。已有草稿的 `*.blob.core.windows.net` 包含这两个目标，但不能据此宣称当前连接已放行。见 [最新状态](verification/network-recheck-2026-11-19.json)和[成功运行下载证据](verification/native-run-44432216488.json)。
 
@@ -45,7 +45,7 @@ results-receiver.actions.githubusercontent.com
 ## 区分其他失败
 
 - GitHub API 返回 `Resource not accessible by integration`：对应接口权限不足，不等于网络不可达。源码读取、工作流触发和管理接口权限要分别验证。
-- GitHub 注解 `The job was not acquired by Runner of type hosted even after multiple attempts`：托管 runner 调度失败，与本云环境白名单无关；尚未执行的测试不能算失败或通过。工作流现在提供标准 Intel runner 手动备选。
+- GitHub 注解 `The job was not acquired by Runner of type hosted even after multiple attempts`：托管 runner 调度失败，与本云环境白名单无关；尚未执行的测试不能算失败或通过。工作流默认选择标准 Intel runner，并保留 ARM64 手动备选。
 - 本机 DNS 查询失败不等于代理请求失败，保持平台提供的代理和 CA 配置。
 - iPad 播放 YouTube、AltStore 免费重签、Safari 识别和 App Groups 共享均需用户设备单独验证，云端 HTTPS 成功不能替代这些结果。
 

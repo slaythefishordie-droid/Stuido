@@ -1,6 +1,19 @@
-# Knowledge Studio 第一版交接
+# Knowledge Studio 项目状态与交接
 
 新模型须先读 [AGENTS.md](AGENTS.md)、本文件、[现行产品需求](docs/product-spec.md)和[四个里程碑](docs/web-capture-roadmap.md)。第一版标签保存的是旧原型。主分支现行的网页采集架构为随 App 分发的 Safari Web Extension，扩展分发与双向共享验证代码已在 `feature/safari-extension` 通过构建，等待免费签名后的 iPad 验证。My Inbox 交接尚待实现。
+
+## 当前状态 · 2026-11-19
+
+| 项目 | 已确认状态 |
+| --- | --- |
+| 版本保护 | 第一版 `v0.1.0` 对应 `7df6ef182b73131878a07e568cf6799fc543cf0c`；本轮没有改动标签或 main。后续开发继续使用 `feature/safari-extension`。 |
+| 最新原生验证基线 | `ea8ca267db640c6d9996367ea6aebcb72f96aa3c`，Native iPadOS #14 全部成功：核心 8/8、模拟器 14/14、设备归档、签名权限和 IPA 校验通过。后续文档提交不代表产生了新 IPA。 |
+| 里程碑 1 | 已有主 App 与 Safari 扩展诊断包；AltStore 免费重签、Safari 识别、双方实际共享仍待真机验证，不能标记整个里程碑完成。 |
+| 里程碑 2–4 | Safari Mark → My Inbox、完整 QuickMark、通用站点适配器尚未实现。按原四阶段顺序推进。 |
+| 工程修复 | 面板超时恢复、共享组严格校验、导入排序优化已完成；默认 Intel runner 和权限 XML 导出修复已通过完整 CI。已知 codesign 弃用警告暂保留。 |
+| 环境网络 | 本次回读确认草稿 revision 5 包含约定的全部 41 条；当前实例 `restricted/enforced` 只含其中 8 条，缺 33 条。配置应用与附件下载仍未完成验收。 |
+
+[开发日志](docs/progress.md)记录时间线；[问题日志](docs/engineering-issues.md)记录处理方法和复发预防；[本次白名单核验](docs/verification/network-allowlist-audit-2026-11-19.json)保留完整名单及差异。上述测试结果沿用已执行的 CI，本轮只整理文档和核对环境配置，没有重跑构建或改变产品需求。
 
 ## v0.1.0 已有实现
 

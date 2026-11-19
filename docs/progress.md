@@ -1,4 +1,14 @@
-# 开发进度与验证记录
+# 开发日志与验证记录
+
+本文件按时间记录开发工作与验证结果；重复问题的查找入口是[开发与构建问题日志](engineering-issues.md)。历史条目中的“当前”“下一步”只反映该条目的时间点，接续开发以 [PROJECT_STATUS.md](../PROJECT_STATUS.md)和现行路线图为准。
+
+## 文档归档与环境白名单核验 · 2026-11-19
+
+- **目标与范围：**汇总本轮代码审查、Safari 扩展打包、runner 调度和 IPA 交付的经验，便于新模型接续。代码与成功构建基线仍为 `ea8ca26` / Native iPadOS #14，本轮未修改业务代码或构建脚本。
+- **文档交付：**新建 `engineering-issues.md`，为面板异常恢复、共享组配置、导入排序、扩展资源层级、runner 排队、模拟器无输出、codesign 回归、下载网络和真机验证分别记录证据、处理与边界。更新 AGENTS.md 的必读入口、项目状态和 README 索引。
+- **环境结果：**读取当前配置草稿与运行实例，逐项对照约定的 41 条自定义规则；草稿 revision 5 为 41/41，缺失 0；运行实例为 8/41，缺失 33，`observations_current=true`、`policy_state=enforced`。`package_managers` 预设保留且另计。本轮没有再次改写草稿、发布环境或声称完成 41 个站点的连通测试。[核验记录](verification/network-allowlist-audit-2026-11-19.json)
+- **验证范围：**检查本轮文档的相对链接、JSON 结构、白名单集合差异和 Git 空白错误。文档更新不重复运行已通过的 Node / 原生测试，不重新生成 IPA。
+- **未决与下一步：**应用已保存的网络配置并连接到相应版本，再验证真实附件下载；在 iPad 上完成免费重签、Safari 识别和双向共享验收。通过后按计划推进 Mark → My Inbox。保留当前数据格式、四类卡片、双 Inbox、ChatGPT JSON 导入和用户自选复习要求。
 
 ## IPA 构建恢复 · 2026-11-19
 
@@ -65,7 +75,7 @@
 - 标准 macOS 26 ARM64 + Xcode 26.2 Actions，核心测试、iPad 模拟器测试、真实 iphoneos archive、未签名 IPA 结构校验、日志/xcresult/产物上传与独立结果记录。
 - 网络诊断：四个目标域名 HTTPS 200/TLS 校验通过；平台提供的当前白名单已含 API 和 Google 开发文档。没有关闭验证或改写代理。
 
-## 当前验证证据
+## 阶段 0 当时的验证证据（历史）
 
 | 检查 | 结果 | 范围 |
 |---|---|---|
@@ -85,7 +95,7 @@
 
 工具链来源：官方 Swift 6.2.1 Ubuntu 24.04 tarball，在 Debian 13 可运行；GPG 验证通过，签名指纹 `52BB7E3DE28A71BE22EC05FFEF80A866B47A981F`，密钥从 swiftlang 官方仓库通过 TLS 获取。缓存通过脚本指定到可写 `.build`，未改 HOME 或系统 CA。
 
-## 当前限制与下步
+## 阶段 0 当时的限制与下步（历史）
 
 1. IPA 打包修复已通过实际 CI：旧脚本把输入文件放在 `lipo -verify_arch arm64` 之后；Apple cctools 参数解析源码确认这会把文件路径当作架构名称。已改为 `lipo <binary> -verify_arch arm64`，保留全部架构/平台/签名/ZIP 检查，并为失败增加 GitHub 原生错误注解。完整旧日志仍受网络限制，因此不追认这是旧运行的唯一失败原因。
 2. 当前生效白名单仍是原来的三个域名，草稿另有 `productionresultssa4.blob.core.windows.net`、`productionresultssa5.blob.core.windows.net` 和 `results-receiver.actions.githubusercontent.com`，**草稿未应用到运行实例**。新的 IPA 实际下载跳转到了 `productionresultssa5`，再次返回 Forbidden。待环境设置保存并发布后重试；用户 Windows 浏览器不受本云环境白名单影响。
