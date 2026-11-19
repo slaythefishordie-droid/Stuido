@@ -28,7 +28,7 @@ struct AIInboxView: View {
                         }
                     }
                 }
-            }.navigationTitle("AI Inbox")
+            }.navigationTitle("导入箱")
         }.fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
             do {
                 let url = try result.get()
@@ -97,7 +97,7 @@ struct ImportReviewView: View {
                             ) {
                                 VStack(alignment: .leading) {
                                     Text(card.title)
-                                    Text(card.type.rawValue).font(.caption)
+                                    Text(card.type.title).font(.caption)
                                     ForEach(card.content.keys.sorted(), id: \.self) { field in
                                         Text("\(field)：\(card.content[field]!)").font(.caption)
                                     }
@@ -186,12 +186,12 @@ struct LibraryView: View {
                         } label: {
                             VStack(alignment: .leading) {
                                 Text(source.title)
-                                Text(source.kind.rawValue).font(.caption).foregroundStyle(.secondary)
+                                Text(studioLabel(source.kind.rawValue)).font(.caption).foregroundStyle(.secondary)
                             }
                         }
                     }
                 }
-            }.navigationTitle("Library").searchable(text: $search)
+            }.navigationTitle("资料库").searchable(text: $search)
         }.fileImporter(
             isPresented: $importing,
             allowedContentTypes: [.pdf, UTType(filenameExtension: "epub") ?? .data, .movie]
@@ -292,7 +292,7 @@ struct DataManagerView: View {
         }
         all += model.state.marks.map {
             Row(
-                id: $0.id, title: $0.excerpt.isEmpty ? locationLabel($0.locator) : $0.excerpt, kind: "Mark",
+                id: $0.id, title: $0.excerpt.isEmpty ? locationLabel($0.locator) : $0.excerpt, kind: "标记",
                 deleted: $0.deletedAt != nil)
         }
         all += model.state.cards.map {
@@ -334,7 +334,7 @@ struct DataManagerView: View {
                 }
                 Toggle("回收站", isOn: $trash).onChange(of: trash) { _, _ in selected = [] }
                 Picker("类型", selection: $kind) {
-                    ForEach(["全部", "资料", "Mark", "卡片", "项目", "关系", "复习记录"], id: \.self) { Text($0) }
+                    ForEach(["全部", "资料", "标记", "卡片", "项目", "关系", "复习记录"], id: \.self) { Text($0) }
                 }
                 Section("对象") {
                     ForEach(rows) { row in
@@ -392,7 +392,7 @@ struct DataManagerView: View {
                         }
                     }
                 }
-            }.navigationTitle("Data Manager").searchable(text: $search)
+            }.navigationTitle("数据管理").searchable(text: $search)
         }.confirmationDialog(
             permanent ? "永久清理不可撤销，确认已备份？" : "将所选对象移入回收站？", isPresented: $confirming, titleVisibility: .visible
         ) {

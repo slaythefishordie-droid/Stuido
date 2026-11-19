@@ -15,9 +15,9 @@ struct SourceReaderView: View {
         Group {
             if let url = model.assetURL(source), FileManager.default.fileExists(atPath: url.path) {
                 switch source.kind {
-                case .pdf: PDFStudyView(source: source, url: url, location: location)
-                case .epub: EPUBStudyView(source: source, url: url, location: location)
-                case .local_video: LocalVideoStudyView(source: source, url: url, location: location)
+                case .pdf: PDFStudyView(source: source, url: url, location: location ?? source.lastLocation)
+                case .epub: EPUBStudyView(source: source, url: url, location: location ?? source.lastLocation)
+                case .local_video: LocalVideoStudyView(source: source, url: url, location: location ?? source.lastLocation)
                 default: Text("不支持的本地资料类型")
                 }
             } else if let value = source.url, let url = URL(string: value), url.scheme == "https" {
@@ -84,10 +84,11 @@ final class PDFSession: ObservableObject {
 struct PDFStudyView: View {
     @EnvironmentObject private var model: StudioModel
     let source: LibrarySource
+    @State private var kind: CardKind = .expression
     @StateObject private var session: PDFSession
     init(source: LibrarySource, url: URL, location: ReadingLocator?) {
         self.source = source
-        _session = StateObject(wrappedValue: PDFSession(url: url, location: location))
+        _session = StateObject(wrappedValue: PDFSession(url: url, location: location ?? source.lastLocation))
     }
     var body: some View {
         VStack(spacing: 0) {
@@ -96,7 +97,8 @@ struct PDFStudyView: View {
                 view: session.view,
                 marks: model.state.marks.filter { $0.sourceID == source.id && $0.deletedAt == nil })
             HStack {
-                Button("Mark／保存选文") {
+                Picker("标记类型", selection: $kind) { ForEach(CardKind.allCases, id: \.self) { Text($0.title).tag($0) } }
+                Button("保存选文或页码") {
                     guard let page = session.pageNumber, let document = session.view.document else { return }
                     let selection = session.view.currentSelection
                     var locator = ReadingLocator(
@@ -110,7 +112,7 @@ struct PDFStudyView: View {
                                     y: bounds.origin.y, width: bounds.width, height: bounds.height))
                         }
                     }
-                    model.saveMark(source: source, locator: locator, excerpt: selection?.string ?? "")
+                    model.saveMark(source: source, locator: locator, excerpt: selection?.string ?? "", kind: kind)
                 }.buttonStyle(.borderedProminent)
                 Text("长按选择文字可保存摘录与高亮；扫描 PDF 无文字层时仅记录页码。").font(.caption)
             }.padding()
@@ -127,7 +129,7 @@ struct PDFHost: UIViewRepresentable {
     func makeUIView(context: Context) -> PDFView { view }
     func updateUIView(_ view: PDFView, context: Context) {
         guard let document = view.document else { return }
-        let ids = Set(marks.map(\.id))
+        let ids = marks
         guard ids != context.coordinator.ids else { return }
         context.coordinator.ids = ids
         for i in 0..<document.pageCount {
@@ -143,14 +145,14 @@ struct PDFHost: UIViewRepresentable {
                 let annotation = PDFAnnotation(
                     bounds: CGRect(x: rect.x, y: rect.y, width: rect.width, height: rect.height),
                     forType: .highlight, withProperties: nil)
-                annotation.color = .yellow.withAlphaComponent(0.4)
+                annotation.color = mark.highlightKind.highlightColor.withAlphaComponent(0.4)
                 annotation.contents = "KnowledgeStudio:" + mark.id.uuidString
                 page.addAnnotation(annotation)
             }
         }
     }
     func makeCoordinator() -> Coordinator { Coordinator() }
-    final class Coordinator { var ids: Set<UUID> = [] }
+    final class Coordinator { var ids: [LibraryMark] = [] }
 }
 
 @MainActor
@@ -169,12 +171,12 @@ struct LocalVideoStudyView: View {
     @StateObject private var session: VideoSession
     init(source: LibrarySource, url: URL, location: ReadingLocator?) {
         self.source = source
-        _session = StateObject(wrappedValue: VideoSession(url: url, location: location))
+        _session = StateObject(wrappedValue: VideoSession(url: url, location: location ?? source.lastLocation))
     }
     var body: some View {
         VStack {
             VideoPlayer(player: session.player)
-            Button("Mark") {
+            Button("保存时间标记") {
                 let seconds = session.player.currentTime().seconds
                 guard session.player.currentItem?.status == .readyToPlay, seconds.isFinite, seconds >= 0
                 else {
@@ -195,11 +197,20 @@ struct LocalVideoStudyView: View {
 }
 
 @MainActor
-final class EPUBSession: ObservableObject {
+final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
+    var savePosition: ((ReadingLocator) -> Void)?
+    var saveSelection: ((ReadingLocator, String, CardKind) -> Void)?
+    func navigator(_ navigator: Navigator, locationDidChange locator: Locator) {
+        if let value = try? Self.readingLocator(locator) { savePosition?(value) }
+    }
+    static func readingLocator(_ locator: Locator) throws -> ReadingLocator {
+        ReadingLocator(kind: "epub", href: locator.href.string, progression: locator.locations.progression, nativeJSON: try locator.jsonString())
+    }
     @Published var navigator: EPUBNavigatorViewController?
     @Published var error: String?
     @Published var locationWarning: String?
     func open(url: URL, location: ReadingLocator?) async {
+        guard navigator == nil else { return }
         do {
             guard let file = FileURL(url: url) else { throw LibraryError.invalid("EPUB 文件路径无效") }
             let retriever = AssetRetriever(httpClient: DefaultHTTPClient())
@@ -219,13 +230,27 @@ final class EPUBSession: ObservableObject {
                 initial = await publication.locate(link)
             }
             if location != nil && initial == nil { locationWarning = "此定位无法精确还原，已打开资料。可在阅读器中重新标记。" }
-            navigator = try EPUBNavigatorViewController(publication: publication, initialLocation: initial)
+            let reader = try StudyEPUBNavigator(publication: publication, initialLocation: initial,
+                config: .init(editingActions: [
+                    EditingAction(title: "单词高亮", action: #selector(StudyEPUBNavigator.markWord)),
+                    EditingAction(title: "语料高亮", action: #selector(StudyEPUBNavigator.markExpression)),
+                    EditingAction(title: "关键词高亮", action: #selector(StudyEPUBNavigator.markKeyword)),
+                    EditingAction(title: "关键句高亮", action: #selector(StudyEPUBNavigator.markSentence)),
+                    .copy, .lookup
+                ]))
+            reader.capture = { [weak self, weak reader] kind in
+                guard let locator = reader?.currentSelection?.locator, let text = locator.text.highlight, !text.isEmpty else { return }
+                do { self?.saveSelection?(try Self.readingLocator(locator), text, kind) }
+                catch { self?.error = "选文定位未保存：\(error.localizedDescription)" }
+            }
+            reader.delegate = self
+            navigator = reader
         } catch { self.error = "EPUB 无法打开（不支持 DRM）：\(error.localizedDescription)" }
     }
     func location(selection: Bool) throws -> (ReadingLocator, String)? {
         guard let navigator,
             let locator = selection
-                ? (navigator.currentSelection?.locator ?? navigator.currentLocation)
+                ? navigator.currentSelection?.locator
                 : navigator.currentLocation
         else { return nil }
         return (
@@ -236,11 +261,23 @@ final class EPUBSession: ObservableObject {
         )
     }
 }
+final class StudyEPUBNavigator: EPUBNavigatorViewController {
+    var capture: ((CardKind) -> Void)?
+    @objc func markWord() { capture?(.word) }
+    @objc func markExpression() { capture?(.expression) }
+    @objc func markKeyword() { capture?(.keyword) }
+    @objc func markSentence() { capture?(.key_sentence) }
+}
 struct EPUBStudyView: View {
     @EnvironmentObject private var model: StudioModel
     let source: LibrarySource, url: URL
     let location: ReadingLocator?
     @StateObject private var session = EPUBSession()
+    @AppStorage("readerFontSize") private var fontSize = 110.0
+    @AppStorage("readerLineHeight") private var lineHeight = 1.6
+    @AppStorage("readerTheme") private var theme = "sepia"
+    @AppStorage("readerColumns") private var columns = true
+    @State private var settings = false
     var body: some View {
         VStack {
             if let warning = session.locationWarning { Text(warning).font(.caption).foregroundStyle(.orange) }
@@ -253,21 +290,47 @@ struct EPUBStudyView: View {
             } else {
                 ProgressView("正在打开 EPUB…")
             }
-            Button("Mark／保存选文") {
-                do {
-                    guard let (locator, text) = try session.location(selection: true) else {
-                        throw LibraryError.invalid("阅读器尚未提供定位")
-                    }
-                    model.saveMark(source: source, locator: locator, excerpt: text)
-                } catch { model.message = error.localizedDescription }
-            }.buttonStyle(.borderedProminent).padding()
-        }.task { await session.open(url: url, location: location) }
+            HStack {
+                Text("选中文字后，点选对应颜色高亮；备注可在收集箱中编辑。").font(.caption).foregroundStyle(.secondary)
+                Button("保存当前位置") {
+                    do {
+                        guard let (locator, _) = try session.location(selection: false) else { throw LibraryError.invalid("尚未取得阅读位置") }
+                        model.saveMark(source: source, locator: locator)
+                    } catch { model.message = error.localizedDescription }
+                }
+                Button("阅读设置") { settings = true }
+            }.padding()
+        }.task {
+            session.savePosition = { model.saveLocation(sourceID: source.id, locator: $0) }
+            session.saveSelection = { model.saveMark(source: source, locator: $0, excerpt: $1, kind: $2) }
+            await session.open(url: url, location: location)
+            applyPreferences()
+        }
+        .onChange(of: fontSize) { _, _ in applyPreferences() }
+        .onChange(of: lineHeight) { _, _ in applyPreferences() }
+        .onChange(of: theme) { _, _ in applyPreferences() }
+        .onChange(of: columns) { _, _ in applyPreferences() }
+        .sheet(isPresented: $settings) {
+            NavigationStack {
+                Form {
+                    Section("字号") { Slider(value: $fontSize, in: 80...180, step: 10); Text("\(Int(fontSize))%") }
+                    Section("行距") { Slider(value: $lineHeight, in: 1.2...2.2, step: 0.1) }
+                    Picker("书页", selection: $theme) { Text("纸白").tag("light"); Text("暖纸").tag("sepia"); Text("夜读").tag("dark") }
+                    Toggle("宽屏自动双页", isOn: $columns)
+                    Text("双页按可用宽度与书籍排版自动调整；固定版式书籍可能不支持字号和行距调整。").font(.caption)
+                }.navigationTitle("阅读设置").toolbar { Button("完成") { settings = false } }
+            }.presentationDetents([.medium])
+        }
             .onDisappear {
                 if let value = try? session.location(selection: false) {
                     model.saveLocation(sourceID: source.id, locator: value.0)
                 }
             }
     }
+    private func applyPreferences() {
+        session.navigator?.submitPreferences(EPUBPreferences(columnCount: columns ? .auto : .one, fontFamily: .serif, fontSize: fontSize, lineHeight: lineHeight, theme: theme == "dark" ? .dark : theme == "light" ? .light : .sepia))
+    }
+
 }
 struct EPUBHost: UIViewControllerRepresentable {
     let navigator: EPUBNavigatorViewController
@@ -279,7 +342,7 @@ struct EPUBHost: UIViewControllerRepresentable {
                 let object = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
                 let locator = try? Locator(json: ReadiumShared.JSONValue(object), warnings: nil)
             else { return nil }
-            return Decoration(id: mark.id.uuidString, locator: locator, style: .highlight(tint: .yellow))
+            return Decoration(id: mark.id.uuidString, locator: locator, style: .highlight(tint: mark.highlightKind.highlightColor))
         }
         controller.apply(decorations: decorations, in: "knowledge-marks")
     }

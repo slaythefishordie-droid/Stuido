@@ -9,10 +9,10 @@ struct StudioView: View {
     @AppStorage("appAppearance") private var appearance = "system"
     var body: some View {
         TabView {
-            InboxView().tabItem { Label("My Inbox", systemImage: "tray") }
+            InboxView().tabItem { Label("收集箱", systemImage: "tray") }
             CardsView().tabItem { Label("卡片", systemImage: "rectangle.stack") }
-            LibraryView().tabItem { Label("Library", systemImage: "books.vertical") }
-            AIInboxView().tabItem { Label("AI Inbox", systemImage: "tray.and.arrow.down") }
+            LibraryView().tabItem { Label("资料库", systemImage: "books.vertical") }
+            AIInboxView().tabItem { Label("导入箱", systemImage: "tray.and.arrow.down") }
             DataManagerView().tabItem { Label("数据管理", systemImage: "externaldrive") }
             ExtensionSetupView().tabItem { Label("设置", systemImage: "gearshape") }
         }
@@ -65,6 +65,7 @@ struct InboxView: View {
                 }
                 ForEach(marks) { mark in
                     VStack(alignment: .leading, spacing: 10) {
+                        Label(mark.highlightKind.title, systemImage: "circle.fill").font(.caption).foregroundStyle(mark.highlightKind.color)
                         Text(sourceTitle(mark)).font(.headline)
                         if !mark.excerpt.isEmpty { Text(mark.excerpt).lineLimit(5) }
                         if !mark.note.isEmpty { Text(mark.note).foregroundStyle(.secondary) }
@@ -72,7 +73,7 @@ struct InboxView: View {
                         HStack {
                             Menu("整理为卡片") {
                                 ForEach(CardKind.allCases, id: \.self) { kind in
-                                    Button(kind.rawValue) { editor = model.card(from: mark, type: kind) }
+                                    Button(kind.title) { editor = model.card(from: mark, type: kind) }
                                 }
                             }
                             if let source = model.state.sources.first(where: {
@@ -93,7 +94,7 @@ struct InboxView: View {
                         NavigationLink("备注与详情") { MarkDetailView(markID: mark.id) }
                     }.padding(.vertical, 4)
                 }
-            }.navigationTitle("My Inbox").searchable(text: $search).refreshable { model.refresh() }
+            }.navigationTitle("收集箱").searchable(text: $search).refreshable { model.refresh() }
                 .toolbar { Button("接收 Safari 标记") { model.refresh() } }
         }.sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
     }
@@ -110,13 +111,14 @@ struct MarkDetailView: View {
     var body: some View {
         Form {
             if let mark = model.state.marks.first(where: { $0.id == markID }) {
+                Label(mark.highlightKind.title, systemImage: "circle.fill").foregroundStyle(mark.highlightKind.color)
                 Text(mark.excerpt)
                 Text(locationLabel(mark.locator))
                 TextField("个人备注", text: $note, axis: .vertical)
                 Button("保存备注") { model.setMarkNote(id: markID, note: note) }
                 Text(mark.id.uuidString).font(.caption).textSelection(.enabled)
             }
-        }.navigationTitle("Mark 详情").onAppear {
+        }.navigationTitle("标记详情").onAppear {
             note = model.state.marks.first { $0.id == markID }?.note ?? ""
         }
     }
@@ -131,7 +133,7 @@ struct CardsView: View {
         model.state.cards.filter { card in
             card.deletedAt == nil
                 && (category == "全部"
-                    || (category == "Dictionary"
+                    || (category == "词汇"
                         ? [.word, .keyword].contains(card.type)
                         : [.expression, .key_sentence].contains(card.type)))
                 && (search.isEmpty
@@ -143,7 +145,7 @@ struct CardsView: View {
         NavigationStack {
             List {
                 Picker("视图", selection: $category) {
-                    ForEach(["全部", "Dictionary", "Corpus"], id: \.self) { Text($0) }
+                    ForEach(["全部", "词汇", "语料"], id: \.self) { Text($0) }
                 }.pickerStyle(.segmented)
                 ForEach(cards) { card in
                     NavigationLink {
@@ -156,7 +158,7 @@ struct CardsView: View {
                                 Text(card.content["definition_en"] ?? "").foregroundStyle(.secondary)
                             }
                             Text(
-                                "\(card.type.rawValue) · \(card.organization.rawValue) · \(card.review.rawValue)"
+                                "\(card.type.title) · \(studioLabel(card.organization.rawValue)) · \(studioLabel(card.review.rawValue))"
                             ).font(.caption)
                         }
                     }
@@ -177,11 +179,11 @@ struct CardEditor: View {
         NavigationStack {
             Form {
                 Picker("类型", selection: $card.type) {
-                    ForEach(CardKind.allCases, id: \.self) { Text($0.rawValue) }
+                    ForEach(CardKind.allCases, id: \.self) { Text(studioLabel($0.rawValue)) }
                 }
                 ForEach(LibraryCard.fields(for: card.type), id: \.self) { field in
                     TextField(
-                        field,
+                        studioLabel(field),
                         text: Binding(
                             get: { card.content[field] ?? "" },
                             set: { value in
@@ -193,10 +195,10 @@ struct CardEditor: View {
                 TextField("标签（逗号分隔）", text: $tags)
                 TextField("个人笔记", text: $card.note, axis: .vertical)
                 Picker("整理状态", selection: $card.organization) {
-                    ForEach(Organization.allCases, id: \.self) { Text($0.rawValue) }
+                    ForEach(Organization.allCases, id: \.self) { Text(studioLabel($0.rawValue)) }
                 }
                 Picker("复习状态（由你选择）", selection: $card.review) {
-                    ForEach(ReviewStatus.allCases, id: \.self) { Text($0.rawValue) }
+                    ForEach(ReviewStatus.allCases, id: \.self) { Text(studioLabel($0.rawValue)) }
                 }
                 Text("复习调度与每日任务将在产品阶段 6 接入。").font(.caption)
                 Picker("关联项目", selection: $project) {
@@ -247,7 +249,7 @@ struct CardDetailView: View {
             if let card = model.state.cards.first(where: { $0.id == cardID }) {
                 ForEach(LibraryCard.fields(for: card.type), id: \.self) { field in
                     if let value = card.content[field] {
-                        Section(field) {
+                        Section(studioLabel(field)) {
                             Text(value).textSelection(.enabled)
                             Text(card.provenance[field]?.kind ?? "user_input").font(.caption).foregroundStyle(
                                 .secondary)
@@ -271,20 +273,20 @@ struct CardDetailView: View {
                         }
                     }
                 }
-                Section("关联 Mark") {
+                Section("关联标记") {
                     ForEach(card.markIDs, id: \.self) { id in
                         NavigationLink(id.uuidString) { MarkDetailView(markID: id) }
                     }
                 }
                 Section("词典外链") {
                     Link(
-                        "Wiktionary",
+                        "维基词典",
                         destination: URL(
                             string: "https://en.wiktionary.org/wiki/" + card.title.addingPercentEncoding(
                                 withAllowedCharacters: .urlPathAllowed)!)!)
                 }
                 Button("编辑") { editor = card }
             }
-        }.navigationTitle("卡片详情").sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
+        }.tint(model.state.cards.first { $0.id == cardID }?.type.color ?? .accentColor).navigationTitle("卡片详情").sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
     }
 }

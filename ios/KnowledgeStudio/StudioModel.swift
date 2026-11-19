@@ -65,9 +65,11 @@ final class StudioModel: ObservableObject {
         }
         return card
     }
-    func saveMark(source: LibrarySource, locator: ReadingLocator, excerpt: String = "") {
+    func saveMark(source: LibrarySource, locator: ReadingLocator, excerpt: String = "", kind: CardKind? = nil) {
         change { state in
-            state.marks.append(LibraryMark(sourceID: source.id, locator: locator, excerpt: excerpt))
+            var mark = LibraryMark(sourceID: source.id, locator: locator, excerpt: excerpt)
+            mark.cardKind = kind
+            state.marks.append(mark)
             if let index = state.sources.firstIndex(where: { $0.id == source.id }) {
                 state.sources[index].lastLocation = locator
             }

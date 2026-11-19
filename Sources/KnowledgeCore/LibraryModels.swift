@@ -82,6 +82,7 @@ public struct LibraryMark: Codable, Identifiable, Equatable, Sendable {
     public var note: String = ""
     public var createdAt: Date = Date()
     public var externalUpdatedAt: Double?
+    public var cardKind: CardKind?
     public var organization: Organization = .inbox
     public var deletedAt: Date?
     public init(
