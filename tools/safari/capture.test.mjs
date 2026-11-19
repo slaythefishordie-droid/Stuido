@@ -34,7 +34,7 @@ test('ads, live, unavailable time and non-watch URLs cannot produce marks', () =
 async function background(native, initial = {}) {
   const data = structuredClone(initial);
   let listener;
-  const context = vm.createContext({ URL, browser: {
+  const context = vm.createContext({ URL, setTimeout, clearTimeout, browser: {
     runtime: { onMessage: { addListener(fn) { listener = fn; } }, sendNativeMessage: native },
     storage: { local: {
       async get(key) { return key === null ? { ...data } : { [key]: data[key] }; },
@@ -80,4 +80,62 @@ test('wrong acknowledgements, conflicting IDs and untrusted pages do not clear p
   const worker = await background(async () => ++calls === 1 ? { ok: false } : { ok: true, id });
   await worker.send();
   assert.equal((await worker.send(mark, 'https://www.youtube.com/watch?v=abcdefghijk')).ok, true);
+});
+
+function contentHarness(send) {
+  const handlers = {};
+  const elements = Object.fromEntries(['button', 'p', 'select'].map(name => [name, {
+    value: '2', textContent: '', disabled: false,
+    addEventListener(event, fn) { handlers[name + ':' + event] = fn; }
+  }]));
+  const video = { currentTime: 12.8, duration: 100, readyState: 4,
+    pause() { throw new Error('Capture must not pause playback'); } };
+  const root = { innerHTML: '', querySelector: name => elements[name] };
+  const context = vm.createContext({ URL, TextEncoder, setTimeout, clearTimeout,
+    HTMLVideoElement: class {}, crypto: { randomUUID: () => id }, location: { href: input.url },
+    browser: { runtime: { sendMessage: send }, storage: { local: { async get() { return {}; }, async set() {} } } },
+    document: {
+      title: 'Lesson - YouTube', getElementById() { return null; },
+      createElement() { return { attachShadow: () => root }; },
+      documentElement: { append() {} },
+      addEventListener(event, fn) { handlers[event] = fn; },
+      querySelector(selector) { return selector === 'video' ? video : null; }
+    }
+  });
+  vm.runInContext(readFileSync(new URL('capture.js', resources), 'utf8'), context);
+  vm.runInContext(readFileSync(new URL('content.js', resources), 'utf8'), context);
+  return { click: () => handlers['button:click'](), elements, video, handlers };
+}
+
+test('page button saves without pausing playback and acknowledges the captured position', async () => {
+  let sent;
+  const page = contentHarness(async message => { sent = message.mark; return { ok: true, id }; });
+  await page.click();
+  assert.equal(sent.seconds, 10);
+  assert.equal(page.elements.button.disabled, false);
+  assert.equal(page.elements.button.textContent, 'QuickMark');
+  assert.match(page.elements.p.textContent, /已保存 10 秒/);
+});
+
+test('failed page delivery retries its original position even after playback advances', async () => {
+  const sent = [];
+  const page = contentHarness(async message => {
+    sent.push(structuredClone(message.mark));
+    return sent.length === 1 ? { ok: false, error: 'offline' } : { ok: true, id };
+  });
+  await page.click();
+  assert.equal(page.elements.button.textContent, '重试上一条 Mark');
+  page.video.currentTime = 50;
+  await page.click();
+  assert.deepEqual(sent[0], sent[1]);
+  assert.equal(page.elements.button.textContent, 'QuickMark');
+});
+
+test('navigation blocks capture before replacement video metadata is ready', async () => {
+  let sent = false;
+  const page = contentHarness(async () => { sent = true; });
+  page.handlers['yt-navigate-start']();
+  await page.click();
+  assert.equal(sent, false);
+  assert.match(page.elements.p.textContent, /页面正在切换/);
 });

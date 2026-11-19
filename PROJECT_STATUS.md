@@ -4,16 +4,12 @@
 
 ## 当前状态 · 2026-11-19
 
-| 项目 | 已确认状态 |
-| --- | --- |
-| 版本保护 | 第一版 `v0.1.0` 对应 `7df6ef182b73131878a07e568cf6799fc543cf0c`；本轮没有改动标签或 main。后续开发继续使用 `feature/safari-extension`。 |
-| 最新原生验证基线 | `ea8ca267db640c6d9996367ea6aebcb72f96aa3c`，Native iPadOS #14 全部成功：核心 8/8、模拟器 14/14、设备归档、签名权限和 IPA 校验通过。后续文档提交不代表产生了新 IPA。 |
-| 里程碑 1 | 已有主 App 与 Safari 扩展诊断包；AltStore 免费重签、Safari 识别、双方实际共享仍待真机验证，不能标记整个里程碑完成。 |
-| 里程碑 2–4 | 里程碑 2 已有网页按钮、持久待发、幂等共享保存和 My Inbox；脚本测试 37/37，通过范围不含真机。原生 CI 待验证。完整 QuickMark 和通用适配器仍待实现。 |
-| 工程修复 | 面板超时恢复、共享组严格校验、导入排序优化已完成；默认 Intel runner 和权限 XML 导出修复已通过完整 CI。已知 codesign 弃用警告暂保留。 |
-| 环境网络 | 本次回读确认草稿 revision 5 包含约定的全部 41 条；当前实例 `restricted/enforced` 只含其中 8 条，缺 33 条。配置应用与附件下载仍未完成验收。 |
-
-[开发日志](docs/progress.md)记录时间线；[问题日志](docs/engineering-issues.md)记录处理方法和复发预防；[本次白名单核验](docs/verification/network-allowlist-audit-2026-11-19.json)保留完整名单及差异。上述测试结果沿用已执行的 CI，本轮只整理文档和核对环境配置，没有重跑构建或改变产品需求。
+- **开发方向：**`feature/safari-extension`，目标为 [0.3 两份计划阶段 1–4](docs/release-0.3-plan.md)，以功能优先、必要数据安全验证、阶段稳定化推进。
+- **真机基线：**用户本轮确认里程碑 1 Safari 与 App 双向数据编号传输对应成功。
+- **已通过原生构建的代码：**94841ea，运行 [44437247550](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44437247550) 全部成功，包含 QuickMark → My Inbox。此结果不覆盖本轮 0.3 新增代码。
+- **0.3 开发代码：**数据底座、卡片和双 Inbox、确认 JSON 导入、Data Manager 与备份恢复、Library/PDF/EPUB/本地视频、Safari 精听/历史/设置/通用采集已接入，等待本轮原生稳定化与真机验证。验证和已知边界见 [开发日志](docs/progress.md)。
+- **已执行检查：**核心首轮 18 项通过；最新数据/导入/共享针对性 7 项通过；Node 协议/Safari 43 项通过。备份与删除 App 测试待 macOS 执行。
+- **默认分支阻塞：**用户已授权修改默认分支，但 GitHub 管理 API 返回 integration 403；尚未改变远端默认分支。开发继续在 Safari 分支，不因此阻塞功能工作。
 
 ## v0.1.0 已有实现
 
@@ -37,7 +33,7 @@
 - 只有 word、expression、keyword、key_sentence 四类卡片。发现来源、字段作者身份、整理状态、复习状态分别保存。标记、收藏和加入复习各由独立操作触发。[数据模型](docs/data-model.md)
 - ChatGPT 在 App 外使用。导入需要用户预览、确认、引用重映射和原子写入。项目归属、个人笔记和复习状态由用户控制。[导入协议](docs/protocol.md)
 
-## 下一阶段
+## 历史后续计划（以 0.3 清单为当前范围）
 
 依次验证含扩展的构建、免费签名安装、Safari 识别和共享读写；打通 Safari Mark 到 My Inbox；迁移完整 QuickMark；完善文章及播客可复用的适配器接口。[实施顺序与验收](docs/web-capture-roadmap.md)
 

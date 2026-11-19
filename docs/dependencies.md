@@ -65,3 +65,27 @@ PDF 使用官方 PDFKit，本地视频使用 AVKit，SwiftUI 通过薄适配层�
 使用 Apple SafariServices 的原生扩展处理器，扩展页面通过 native messaging 请求原生扩展读写共享目录。Apple 文档允许扩展 UI 页面发出原生消息，iOS 主 App 无法直接向 JavaScript 推送消息，所以本轮在主 App 激活时、Safari 面板打开或点击读取时刷新。[Apple 消息与 App Groups 文档](https://developer.apple.com/documentation/safariservices/messaging-between-the-app-and-javascript-in-a-safari-web-extension)
 
 核对 AltStore 的 ResignAppOperation 和 Bundle 扩展后，使用重签时写入的 ALTAppGroups 解析组标识。这里只使用其声明的数据键，未引入新的第三方运行库。[AltStore 重签实现](https://github.com/altstoreio/AltStore/blob/marketplace/AltStore/Operations/ResignAppOperation.swift) · [Info 字段定义](https://github.com/altstoreio/AltStore/blob/marketplace/Shared/Extensions/Bundle%2BAltStore.swift)
+
+## 0.3 实际接入（2026-11-19）
+
+GRDB 7.12.0 用于显式 SQLite 迁移和事务；JSONSchema 0.15.0 只链接 runtime，不链接 builder/macro。先用严格扫描拒绝重复键，再执行现有 1.0 Schema 和引用语义校验。Readium 3.11.1 只链接 Shared/Streamer/Navigator，不接 DRM/OPDS。为避免同名包身份冲突，归档使用 Readium 同仓库依赖的 ZIPFoundation fork 3.0.1（MIT，异步 Archive API），不再额外引入 weichsel 0.9.20。PDFKit/AVKit/CryptoKit 使用系统 SDK。已读取所选源码 API 和完整 LICENSE，许可证随 App 打包。
+
+SwiftPM 解析生成 ios/Package.resolved，根 Package.resolved 锁核心依赖；以下是本轮实际解析版本（未列为全部上游测试通过）：
+
+| 包 | 版本 | revision |
+|---|---|---|
+| cryptoswift | 1.10.0 | `f2a627b84c1ff96f21ac2fcb623ab36142dd5512` |
+| csqlite | 3.53.4 | `3fecd9f88f50c3a9baf3456e7d4af1b16e71dc23` |
+| differencekit | 1.3.0 | `073b9671ce2b9b5b96398611427a1f929927e428` |
+| fuzi | 4.0.1 | `173ec944ca6f2e8024ceb7324bcb8a3cc95a0661` |
+| gcdwebserver | 4.0.1 | `584db89a4c3c3be27206cce6afde037b2b6e38d8` |
+| grdb.swift | 7.12.0 | `92a554cd0d5e8d67cb18993c6054e73fe42c066c` |
+| sqlite.swift | 0.17.0 | `4114679379eeb4538638f49ec14e1854dd9cf73c` |
+| swift-collections | 1.7.6 | `88754449ab766a739610b660e117762115fabc9c` |
+| swift-json-schema | 0.15.0 | `a00dde585b7f55b343214cece9afcfeb613e7899` |
+| swift-syntax | 604.0.0 | `050f1a346fbbac0ca2cfb15a95274f7bd1cf0ccf` |
+| swift-toolkit | 3.11.1 | `9a8c094b72245fd27043c9d298005e5c78b32a01` |
+| swiftsoup | 2.14.4 | `8397a860c6955924b584c50c5265c6aac0970015` |
+| youtubeplayerkit | 2.0.5 | `1ae827573024ab13dd6adea33b25d3eef6ff667c` |
+| zip | 2.1.2 | `67fa55813b9e7b3b9acee9c0ae501def28746d76` |
+| zipfoundation | 3.0.1 | `adb49c8bfe060cc187370b12fa081012a6440b86` |

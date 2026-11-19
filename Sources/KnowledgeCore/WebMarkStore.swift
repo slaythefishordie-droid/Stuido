@@ -15,10 +15,14 @@ public struct WebMark: Codable, Equatable, Identifiable, Sendable {
     public let preRoll: Int
     public let seconds: Double
     public let createdAt: Double // Unix milliseconds, shared with JavaScript.
+    public var note: String? = nil
+    public var deletedAt: Double? = nil
+    public var updatedAt: Double? = nil
 
     public func validate() throws {
         guard version == 1 else { throw VideoError.unsupportedVersion }
-        guard !title.isEmpty, title.utf8.count <= 4096,
+        guard (note?.utf8.count ?? 0) <= 20_000, deletedAt == nil || (deletedAt!.isFinite && deletedAt! >= 0), updatedAt == nil || (updatedAt!.isFinite && updatedAt! >= 0),
+              !title.isEmpty, title.utf8.count <= 4096,
               capturedSeconds.isFinite, capturedSeconds >= 0, capturedSeconds <= 3_155_760_000,
               (0...3).contains(preRoll), seconds.isFinite,
               seconds == max(0, floor(capturedSeconds - Double(preRoll))),
@@ -41,9 +45,23 @@ public struct WebMarkStore: Sendable {
             do {
                 let existing = try JSONDecoder().decode(WebMark.self, from: Data(contentsOf: url))
                 try existing.validate()
-                guard existing == mark else { throw VideoError.corruptStore }
+                var original = existing
+                original.note = mark.note; original.deletedAt = mark.deletedAt; original.updatedAt = mark.updatedAt
+                guard original == mark else { throw VideoError.corruptStore }
                 return
             } catch CocoaError.fileReadNoSuchFile { }
+            try JSONEncoder().encode(mark).write(to: url, options: .atomic)
+        }
+    }
+
+    public func annotate(id: UUID, note: String? = nil, deleted: Bool? = nil) throws {
+        try locked {
+            let url = directory.appendingPathComponent(id.uuidString + ".json")
+            var mark = try JSONDecoder().decode(WebMark.self, from: Data(contentsOf: url))
+            if let note { mark.note = note }
+            if let deleted { mark.deletedAt = deleted ? Date().timeIntervalSince1970 * 1000 : nil }
+            mark.updatedAt = Date().timeIntervalSince1970 * 1000
+            try mark.validate()
             try JSONEncoder().encode(mark).write(to: url, options: .atomic)
         }
     }

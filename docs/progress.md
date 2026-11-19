@@ -2,6 +2,17 @@
 
 本文件按时间记录开发工作与验证结果；重复问题的查找入口是[开发与构建问题日志](engineering-issues.md)。历史条目中的“当前”“下一步”只反映该条目的时间点，接续开发以 [PROJECT_STATUS.md](../PROJECT_STATUS.md)和现行路线图为准。
 
+## 0.3 功能优先开发 · 2026-11-19（北京时间）
+
+- 用户确认里程碑 1 IPA 真机 Safari／App 编号自动传输和对应成功；记录为用户报告通过，不追补未提供的设备型号、包摘要或安装细节。
+- 用户确认本轮覆盖**产品阶段 1–4 与 Safari 路线图 1–4**，新增功能优先规范，见 AGENTS.md 与 release-0.3-plan.md。主开发分支保持 feature/safari-extension；默认分支修改请求被 GitHub 管理 API 403 拒绝，需有仓库管理权限的账号修改。
+- 已实现开发代码：GRDB SQLite 事务存储、旧原型迁移、四类卡片编辑和全局 Quick Capture、My Inbox 整理、AI Inbox JSON 文件／粘贴／资料匹配／选择确认导入、项目资料关联、Data Manager 回收站与引用限制、版本化 ZIP 备份／摘要校验／恢复前快照／事务恢复。原生 JSONSchema 直接使用仓库 1.0 协议，重复字段和语义引用另行严格校验。
+- PDFKit、Readium EPUB、AVKit 本地视频接入导入、阅读／播放、选文或时间 Mark、回到出处与保存位置。EPUB 保存 Readium locator，PDF 高亮保存在 Mark，不修改原始文件。扫描 PDF 不声称提供 OCR，DRM 不在范围。
+- Safari 新增精听 ±1/2/3 秒、A–B 循环、历史检索／当前视频排序／分批显示、备注／复制链接／删除、旧书签 JSON 导入导出、个性化与逐站授权设置、文章选文及页面 audio 定位适配器。原生注解同步保留 ID，永久清理的接收 ID 保留 tombstone 防止被重复交接复活。
+- 实际验证：本地 Swift 6.2.1 首轮核心 18/18 通过；后续新增共享注解及通用采集后，LibraryTests **7/7** 通过。Node.js 协议与 Safari **43/43** 通过。SwiftUI 语法解析通过，但不等于原生类型检查。备份路径穿越、恢复和删除引用测试已加入 iOS 测试，待本轮 macOS 稳定化执行。
+- 所选依赖版本及完整许可证已锁定。Readium 与归档共用 ReadiumZIPFoundation 3.0.1，避免同名包冲突。工作区新建 Swift 工具链和 SQLite 头文件验证环境；没有修改系统软件目录。
+- 尚待验证：本轮原生编译／模拟器／IPA、真实 PDF/EPUB/视频资料、Safari 的实际 DOM／授权／后台恢复、真实旧脚本备份。仓库只有旧脚本摘要和行为对照，没有原脚本或真实备份样例；兼容解析器目前用合成 v1 样例验证，不能声称已与用户旧备份完全互通。
+
 ## Safari Mark 到 My Inbox 开发 · 2026-11-19
 
 - 从远端 `feature/safari-extension` 的 `438dc23` 接续。复核 #14 全部成功；免费重签、Safari 识别和共享权限仍待真机验证。依据产品需求“不因单个功能受阻而停止全部开发”，推进里程碑 2 的可独立实现部分，不宣称里程碑 1 真机验收完成。

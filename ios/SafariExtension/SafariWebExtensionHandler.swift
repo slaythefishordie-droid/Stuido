@@ -8,12 +8,26 @@ final class SafariWebExtensionHandler: NSObject, NSExtensionRequestHandling {
             guard let item = context.inputItems.first as? NSExtensionItem,
                   let message = item.userInfo?[SFExtensionMessageKey] as? [String: Any],
                   let action = message["action"] as? String,
-                  ["readProbe", "writeProbe", "saveMark"].contains(action) else {
+                  ["readProbe", "writeProbe", "saveMark", "listMarks", "annotateMark", "savePageMark"].contains(action) else {
                 throw NSError(domain: "SharedProbe", code: 3, userInfo: [
                     NSLocalizedDescriptionKey: "不支持的扩展请求。"
                 ])
             }
-            if action == "saveMark" {
+            if action == "savePageMark" {
+                guard let payload = message["mark"], JSONSerialization.isValidJSONObject(payload) else { throw VideoError.corruptStore }
+                let data = try JSONSerialization.data(withJSONObject: payload)
+                guard data.count <= 65_536 else { throw VideoError.corruptStore }
+                let capture = try JSONDecoder().decode(PageCapture.self, from: data)
+                try PageCaptureStore.configured().save(capture)
+                response = ["ok": true, "id": capture.id.uuidString.lowercased()]
+            } else if action == "listMarks" {
+                let marks = try WebMarkStore.configured().readAll()
+                response = ["ok": true, "marks": try JSONSerialization.jsonObject(with: JSONEncoder().encode(marks))]
+            } else if action == "annotateMark" {
+                guard let value = message["id"] as? String, let id = UUID(uuidString: value) else { throw VideoError.corruptStore }
+                try WebMarkStore.configured().annotate(id: id, note: message["note"] as? String, deleted: message["deleted"] as? Bool)
+                response = ["ok": true, "id": id.uuidString.lowercased()]
+            } else if action == "saveMark" {
                 guard let payload = message["mark"], JSONSerialization.isValidJSONObject(payload) else {
                     throw VideoError.corruptStore
                 }

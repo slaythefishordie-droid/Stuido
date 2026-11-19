@@ -6,6 +6,12 @@ options:
 packages:
   KnowledgeStudio:
     path: ..
+  Readium:
+    url: https://github.com/readium/swift-toolkit.git
+    exactVersion: 3.11.1
+  ReadiumZIPFoundation:
+    url: https://github.com/readium/ZIPFoundation.git
+    exactVersion: 3.0.1
   YouTubePlayerKit:
     url: https://github.com/SvenTiigi/YouTubePlayerKit.git
     exactVersion: 2.0.5
@@ -15,8 +21,8 @@ settings:
     TARGETED_DEVICE_FAMILY: '2'
     CODE_SIGN_STYLE: Automatic
     GENERATE_INFOPLIST_FILE: YES
-    CURRENT_PROJECT_VERSION: '2'
-    MARKETING_VERSION: '0.2.0'
+    CURRENT_PROJECT_VERSION: '3'
+    MARKETING_VERSION: '0.3.0'
     ENABLE_USER_SCRIPT_SANDBOXING: YES
 targets:
   KnowledgeStudio:
@@ -31,6 +37,14 @@ targets:
       - package: KnowledgeStudio
         product: KnowledgeCore
       - package: YouTubePlayerKit
+      - package: Readium
+        product: ReadiumShared
+      - package: Readium
+        product: ReadiumStreamer
+      - package: Readium
+        product: ReadiumNavigator
+      - package: ReadiumZIPFoundation
+        product: ReadiumZIPFoundation
       - target: SafariExtension
         embed: true
     settings:
@@ -74,6 +88,9 @@ targets:
     sources:
       - ../Tests/KnowledgeCoreTests
       - Tests
+      - path: ../examples/import
+        type: folder
+        buildPhase: resources
     dependencies:
       - target: KnowledgeStudio
       - package: KnowledgeStudio

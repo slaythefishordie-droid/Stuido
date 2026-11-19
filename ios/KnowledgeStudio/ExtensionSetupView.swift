@@ -2,6 +2,7 @@ import SwiftUI
 
 struct ExtensionSetupView: View {
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage("appAppearance") private var appearance = "system"
     @State private var appRecord = "尚无记录"
     @State private var safariRecord = "尚无记录"
     @State private var status = "在 Safari 扩展菜单打开 Knowledge Studio，写入验证记录。"
@@ -9,6 +10,12 @@ struct ExtensionSetupView: View {
     var body: some View {
         NavigationStack {
             Form {
+                Section("个性化") {
+                    Picker("外观", selection: $appearance) {
+                        Text("跟随系统").tag("system"); Text("浅色").tag("light"); Text("深色").tag("dark")
+                    }
+                    Text("Safari 面板可设置回溯、字号、控件位置和网站适配器。文章与播客按网站主动授权；停用后刷新网页生效。")
+                }
                 Section("Safari 扩展验证") {
                     Text("在 iPad 设置的 Safari 扩展列表启用 Knowledge Studio。然后在 Safari 页面菜单打开扩展。")
                     Text("先在 Safari 写入记录，再返回此页核对编号。随后在此写入记录，回到 Safari 读取并核对。")

@@ -1,11 +1,13 @@
 {
   "manifest_version": 3,
   "name": "Knowledge Studio",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "在 Safari YouTube 页面保存 QuickMark 到本机 My Inbox。",
   "permissions": [
     "nativeMessaging",
-    "storage"
+    "storage",
+    "scripting",
+    "activeTab"
   ],
   "action": {
     "default_title": "Knowledge Studio",
@@ -18,6 +20,7 @@
   ],
   "background": {
     "scripts": [
+      "legacy.js",
       "background.js"
     ],
     "persistent": false
@@ -31,9 +34,14 @@
       ],
       "js": [
         "capture.js",
-        "content.js"
+        "legacy.js",
+        "content.js",
+        "quickmark-tools.js"
       ],
       "run_at": "document_idle"
     }
+  ],
+  "optional_host_permissions": [
+    "https://*/*"
   ]
 }

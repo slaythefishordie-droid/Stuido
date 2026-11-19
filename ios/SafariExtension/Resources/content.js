@@ -10,6 +10,7 @@
     p { margin:6px 2px; } button { padding:8px 16px; }
   </style><section aria-label="Knowledge Studio"><button>QuickMark</button><label>回溯 <select aria-label="标记回溯秒数"><option value="0">0 秒</option><option value="1">1 秒</option><option value="2" selected>2 秒</option><option value="3">3 秒</option></select></label><p role="status" aria-live="polite">标记后可在 My Inbox 整理</p></section>`;
   document.documentElement.append(host);
+  globalThis.KnowledgeQuickMarkUI = { root };
   const button = root.querySelector('button'), status = root.querySelector('p'), select = root.querySelector('select');
   let pending = null, busy = false, navigating = false;
   browser.storage.local.get('preRoll').then(value => {
