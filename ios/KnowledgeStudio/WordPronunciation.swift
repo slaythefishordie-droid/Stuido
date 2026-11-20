@@ -4,13 +4,31 @@ import SwiftUI
 
 /// One playback owner for reader and vocabulary cards. Never labels synthesized audio as recorded speech.
 @MainActor
-final class WordPronunciation: ObservableObject {
+final class WordPronunciation: NSObject, ObservableObject, AVAudioPlayerDelegate, AVSpeechSynthesizerDelegate
+{
     static let shared = WordPronunciation()
     private let synthesizer = AVSpeechSynthesizer()
     private var player: AVAudioPlayer?
     private var task: Task<Void, Never>?
     @Published private(set) var status = "真人录音优先，缺少时使用设备合成语音"
     @Published private(set) var recording: PronunciationRecording?
+
+    private override init() {
+        super.init()
+        synthesizer.delegate = self
+    }
+    nonisolated func audioPlayerDidFinishPlaying(_ player: AVAudioPlayer, successfully flag: Bool) {
+        Task { @MainActor [weak self] in self?.releaseAudioIfIdle() }
+    }
+    nonisolated func speechSynthesizer(
+        _ synthesizer: AVSpeechSynthesizer, didFinish utterance: AVSpeechUtterance
+    ) {
+        Task { @MainActor [weak self] in self?.releaseAudioIfIdle() }
+    }
+    private func releaseAudioIfIdle() {
+        guard player?.isPlaying != true, !synthesizer.isSpeaking else { return }
+        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+    }
 
     func speak(_ text: String) {
         let word = text.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -30,6 +48,7 @@ final class WordPronunciation: ObservableObject {
                     .playback, mode: .spokenAudio, options: [.duckOthers])
                 try? AVAudioSession.sharedInstance().setActive(true)
                 player = audio
+                audio.delegate = self
                 if audio.play() {
                     recording = cached.recording
                     status = "真人录音 · \(cached.recording.accent == "en-US" ? "美式英语" : "英式英语")"
@@ -49,6 +68,9 @@ final class WordPronunciation: ObservableObject {
             return
         }
         synthesizer.stopSpeaking(at: .immediate)
+        try? AVAudioSession.sharedInstance().setCategory(
+            .playback, mode: .spokenAudio, options: [.duckOthers])
+        try? AVAudioSession.sharedInstance().setActive(true)
         let utterance = AVSpeechUtterance(string: word)
         utterance.voice = voice
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.85

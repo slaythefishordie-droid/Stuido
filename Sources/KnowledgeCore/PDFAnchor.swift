@@ -21,6 +21,6 @@ extension ReadingLocator {
 }
 extension HighlightRect {
     public var isValid: Bool {
-        [x, y, width, height].allSatisfy(\.isFinite) && width > 0 && height > 0
+        page > 0 && [x, y, width, height].allSatisfy(\.isFinite) && width > 0 && height > 0
     }
 }

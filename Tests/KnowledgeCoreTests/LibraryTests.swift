@@ -45,6 +45,9 @@ final class LibraryTests: XCTestCase {
             locator.pdfAccuracy(currentFingerprint: "same", pageCount: 3, textVerified: true), .exactText)
         let restored = try JSONDecoder().decode(ReadingLocator.self, from: JSONEncoder().encode(locator))
         XCTAssertEqual(restored, locator)
+        locator.rectangles[0].page = 0
+        XCTAssertEqual(locator.pdfAccuracy(currentFingerprint: "same", pageCount: 3), .pageOnly)
+        locator.rectangles[0].page = 2
         locator.rectangles[0].width = .nan
         XCTAssertEqual(locator.pdfAccuracy(currentFingerprint: "same", pageCount: 3), .pageOnly)
     }

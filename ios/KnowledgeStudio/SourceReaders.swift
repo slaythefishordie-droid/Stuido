@@ -71,7 +71,7 @@ struct SourceReaderView: View {
 @MainActor
 final class PDFSession: ObservableObject {
     let view = StudyPDFView()
-    @Published var anchorStatus = ""
+    @Published var anchorStatus = "正在核对原始资料…"
     @Published var verifiedFingerprint: String?
     private var restored = false
     init(url: URL, location: ReadingLocator?) {
@@ -104,7 +104,9 @@ final class PDFSession: ObservableObject {
             let verified =
                 !anchors.isEmpty
                 && anchors.allSatisfy { anchor in
-                    guard let text = document.page(at: anchor.page - 1)?.string else { return false }
+                    guard anchor.page > 0, anchor.page <= document.pageCount,
+                        let text = document.page(at: anchor.page - 1)?.string
+                    else { return false }
                     return anchor.matches(text)
                 }
             anchorStatus = verified ? "精确文字定位：文件、文字范围与上下文一致" : "精确区域定位（未确认文字匹配）"
@@ -220,6 +222,8 @@ struct PDFStudyView: View {
                     return
                 }
                 session.verifiedFingerprint = fingerprint
+                session.view.captureReady = true
+                session.anchorStatus = ""
                 session.restore(initialLocation, fingerprint: fingerprint)
             } catch { session.anchorStatus = "无法核对文件指纹，未执行精确回跳" }
         }.onDisappear {
@@ -286,7 +290,9 @@ struct PDFHost: UIViewRepresentable {
         }
         for mark in ids {
             for rect in mark.locator.rectangles {
-                guard rect.isValid, let page = document.page(at: rect.page - 1) else { continue }
+                guard rect.isValid, rect.page <= document.pageCount,
+                    let page = document.page(at: rect.page - 1)
+                else { continue }
                 let annotation = PDFAnnotation(
                     bounds: CGRect(x: rect.x, y: rect.y, width: rect.width, height: rect.height),
                     forType: .highlight, withProperties: nil)

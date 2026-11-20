@@ -88,8 +88,8 @@ struct ImportReviewView: View {
                 if let preview {
                     Section("候选卡片（\(selected.count)/\(preview.cards.count)）") {
                         ForEach(preview.cards) { card in
-                            Toggle(
-                                isOn: Binding(
+                            ObjectSelectionRow(
+                                isSelected: Binding(
                                     get: { selected.contains(card.id) },
                                     set: {
                                         if $0 { selected.insert(card.id) } else { selected.remove(card.id) }
@@ -99,7 +99,8 @@ struct ImportReviewView: View {
                                     Text(card.title)
                                     Text(card.type.title).font(.caption)
                                     ForEach(card.content.keys.sorted(), id: \.self) { field in
-                                        Text("\(field)：\(card.content[field]!)").font(.caption)
+                                        Text("\(studioFieldLabel(field))：\(card.content[field]!)").font(
+                                            .caption)
                                     }
                                     if preview.duplicateCardIDs.contains(card.id) {
                                         Text("已有相同内容，默认跳过；勾选将新增副本。").foregroundStyle(.orange)
@@ -337,9 +338,9 @@ struct ProjectView: View {
                 } else {
                     Section("关联资料") {
                         ForEach(model.state.sources.filter { $0.deletedAt == nil }) { source in
-                            Toggle(
+                            ObjectSelectionRow(
                                 source.title,
-                                isOn: Binding(
+                                isSelected: Binding(
                                     get: { project.sourceIDs.contains(source.id) },
                                     set: { enabled in
                                         model.change { state in
@@ -354,9 +355,9 @@ struct ProjectView: View {
                     }
                     Section("关联卡片") {
                         ForEach(model.state.cards.filter { $0.deletedAt == nil }) { card in
-                            Toggle(
+                            ObjectSelectionRow(
                                 card.title,
-                                isOn: Binding(
+                                isSelected: Binding(
                                     get: { project.cardIDs.contains(card.id) },
                                     set: { enabled in
                                         model.change { state in

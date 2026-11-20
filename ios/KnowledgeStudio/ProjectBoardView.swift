@@ -5,6 +5,8 @@ struct ProjectBoardView: View {
     @EnvironmentObject private var model: StudioModel
     let projectID: UUID
     @State private var text = ""
+    @State private var dragged: UUID?
+    @GestureState private var dragOffset = CGSize.zero
     @State private var start: UUID?
     @State private var opened: BoardNode?
     @State private var edited: BoardNode?
@@ -43,6 +45,19 @@ struct ProjectBoardView: View {
         if model.message == nil {
             undoBoards.removeLast()
             expectedBoard = board
+        }
+    }
+    private func position(_ node: BoardNode) -> CGPoint {
+        let offset = dragged == node.id ? dragOffset : .zero
+        return CGPoint(
+            x: min(1480, max(120, node.x + offset.width)), y: min(1100, max(100, node.y + offset.height)))
+    }
+    private func move(_ id: UUID, x: Double, y: Double) {
+        change { value in
+            if let i = value.nodes.firstIndex(where: { $0.id == id }) {
+                value.nodes[i].x = min(1480, max(120, value.nodes[i].x + x))
+                value.nodes[i].y = min(1100, max(100, value.nodes[i].y + y))
+            }
         }
     }
     private func add(_ node: BoardNode) {
@@ -90,13 +105,12 @@ struct ProjectBoardView: View {
             ScrollView([.horizontal, .vertical]) {
                 ZStack(alignment: .topLeading) {
                     Canvas { context, _ in
+                        let nodes = Dictionary(uniqueKeysWithValues: board.nodes.map { ($0.id, $0) })
                         for edge in board.edges {
-                            if let a = board.nodes.first(where: { $0.id == edge.from }),
-                                let b = board.nodes.first(where: { $0.id == edge.to })
-                            {
+                            if let a = nodes[edge.from], let b = nodes[edge.to] {
                                 var path = Path()
-                                path.move(to: CGPoint(x: a.x, y: a.y))
-                                path.addLine(to: CGPoint(x: b.x, y: b.y))
+                                path.move(to: position(a))
+                                path.addLine(to: position(b))
                                 context.stroke(path, with: .color(.secondary.opacity(0.4)), lineWidth: 2)
                             }
                         }
@@ -122,19 +136,20 @@ struct ProjectBoardView: View {
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 14).stroke(
                                         start == node.id ? StudyTheme.ink : .secondary.opacity(0.2)))
-                        }.buttonStyle(.plain).position(x: node.x, y: node.y)
+                        }.buttonStyle(.plain).position(position(node))
                             .gesture(
-                                DragGesture(minimumDistance: 10).onEnded { value in
-                                    change { board in
-                                        if let i = board.nodes.firstIndex(where: { $0.id == node.id }) {
-                                            board.nodes[i].x = min(
-                                                1480, max(120, node.x + value.translation.width))
-                                            board.nodes[i].y = min(
-                                                1100, max(100, node.y + value.translation.height))
-                                        }
+                                DragGesture(minimumDistance: 10)
+                                    .updating($dragOffset) { value, state, _ in state = value.translation }
+                                    .onChanged { _ in dragged = node.id }
+                                    .onEnded { value in
+                                        move(node.id, x: value.translation.width, y: value.translation.height)
+                                        dragged = nil
                                     }
-                                }
                             )
+                            .accessibilityAction(named: "向左移动") { move(node.id, x: -40, y: 0) }
+                            .accessibilityAction(named: "向右移动") { move(node.id, x: 40, y: 0) }
+                            .accessibilityAction(named: "向上移动") { move(node.id, x: 0, y: -40) }
+                            .accessibilityAction(named: "向下移动") { move(node.id, x: 0, y: 40) }
                             .contextMenu {
                                 Button("编辑文字") {
                                     draft = node.text

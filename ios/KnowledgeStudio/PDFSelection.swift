@@ -4,6 +4,7 @@ import PDFKit
 @MainActor
 final class StudyPDFView: PDFView {
     var capture: ((CardKind, Bool) -> Void)?
+    var captureReady = false
     var dictionary: ((String) -> Void)?
     override func buildMenu(with builder: any UIMenuBuilder) {
         super.buildMenu(with: builder)
@@ -25,7 +26,8 @@ final class StudyPDFView: PDFView {
             #selector(markWord), #selector(markExpression), #selector(markKeyword), #selector(markSentence),
             #selector(annotate), #selector(lookupWord), #selector(pronounce),
         ].contains(action) {
-            return currentSelection?.string?.isEmpty == false
+            let readingAction = [#selector(lookupWord), #selector(pronounce)].contains(action)
+            return (readingAction || captureReady) && currentSelection?.string?.isEmpty == false
         }
         return super.canPerformAction(action, withSender: sender)
     }

@@ -2,15 +2,17 @@
 
 iPad 优先、本地优先的个人知识整理工具，采用 SwiftUI。网页学习采用随 App 提供的 Safari Web Extension，首个适配器为 YouTube。用户已确认里程碑 1 真机双向共享成功。v1.0.0 实现了数据管理、卡片与导入、本地阅读和完整 Safari QuickMark；新功能验证状态见项目状态与开发日志。只保留四类卡片，不接入 AI 聊天或云同步。
 
-使用说明见 [阶段 1–4 操作指南](docs/0.3-user-guide.md)，版本详情见 [v1.0.0 发布说明](docs/releases/v1.0.0.md)。
+使用说明见 [当前使用指南](docs/0.3-user-guide.md)，版本详情见 [v1.0.0 发布说明](docs/releases/v1.0.0.md)。
 
 接续开发先看 [三份日志入口](PROJECT_STATUS.md) 和 [开发约定](AGENTS.md)，再按任务读取计划及模块。
+
+当前开发目标为 V2：阅读器锚点/OCR/单双页、开放录音与设备发音、项目白板/分组/独立笔记、FSRS-6 与今日复习。仍为开发候选，验证以日志为准；本轮完成后也不构建 IPA。
 
 ## 构建与开发
 
 - `Sources/KnowledgeCore`：GRDB 事务存储、对象与引用校验、迁移、严格 JSON 导入和共享采集存储。
 - `ios/`：SwiftUI 卡片与双 Inbox、管理与备份、PDFKit / Readium / AVKit 阅读播放，以及随 App 分发的 Safari 扩展。
-- `.github/workflows/ipados.yml`：标准 macos-15-intel / Xcode 26.2（可选 macos-26 ARM64），SPM 检查、核心测试、iPad 模拟器测试、未签名设备归档和 IPA 结构校验。
+- `.github/workflows/ipados.yml`：标准 macos-15-intel / Xcode 26.2（可选 macos-26 ARM64），SPM 检查、核心测试和 iPad 模拟器测试；设备归档/IPA 仅显式手动启用，本轮关闭。
 - 本地核心测试：Swift 6.1+ 下运行 `bash scripts/test-core.sh`。
 - 协议验证：Node.js 22+ 下运行 `npm ci --ignore-scripts && npm test`；`npm run validate -- examples/import/valid-four-types.json`。
 

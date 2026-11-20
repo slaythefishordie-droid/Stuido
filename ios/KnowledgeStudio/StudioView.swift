@@ -285,7 +285,7 @@ struct CardEditor: View {
                     }
                 }
                 if !card.sourceRefs.isEmpty {
-                    Text("已保留 \(card.sourceRefs.count) 个出处和 \(card.markIDs.count) 个 Mark 关联。")
+                    Text("已保留 \(card.sourceRefs.count) 个出处和 \(card.markIDs.count) 个标记关联。")
                 }
             }.navigationTitle("编辑卡片")
                 .toolbar {

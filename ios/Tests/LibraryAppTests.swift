@@ -10,6 +10,34 @@ import XCTest
 
 @MainActor
 final class LibraryAppTests: XCTestCase {
+    func testReadingResumeRecordsActualRecencyWithoutDuplicateWrites() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let model = StudioModel(root: root)
+        let source = LibrarySource(kind: .pdf, title: "Reading")
+        model.change { $0.sources.append(source) }
+        let locator = ReadingLocator(kind: "pdf", page: 3)
+        model.saveLocation(sourceID: source.id, locator: locator)
+        let saved = model.state.sources[0]
+        XCTAssertNotNil(saved.lastReadAt)
+        model.saveLocation(sourceID: source.id, locator: locator)
+        XCTAssertEqual(model.state.sources[0], saved)
+        XCTAssertEqual(try model.repository?.read().sources[0], saved)
+    }
+    func testStaleCardEditorCannotOverwriteCompletedReview() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let model = StudioModel(root: root)
+        var card = LibraryCard(type: .keyword, content: ["term": "Recall", "explanation": "Meaning"])
+        card.review = .active
+        model.saveCard(card)
+        try model.repository?.recordReview(cardID: card.id, rating: 3, expectedRevision: nil, eventID: UUID())
+        card.note = "Edited before review completed"
+        model.saveCard(card)
+        XCTAssertEqual(model.state.cards[0].schedule?.revision, 1)
+        XCTAssertEqual(model.state.reviewRecords.count, 1)
+        XCTAssertEqual(model.state.cards[0].note, card.note)
+    }
     func testPDFSelectedRangeAndRegionSurviveSerialization() throws {
         let data = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 400, height: 600)).pdfData {
             context in
@@ -160,18 +188,6 @@ final class LibraryAppTests: XCTestCase {
         let model = StudioModel(root: root)
         model.saveCard(
             LibraryCard(type: .expression, content: ["text": String(repeating: "A", count: 10000)]))
-        model.change { state in
-            state.cards[0].review = .active
-            var project = LibraryProject(title: "Study")
-            project.sourceIDs = [source.id]
-            project.sourceNotes = [source.id.uuidString: "Project context"]
-            var group = ProjectGroup(title: "Reading")
-            group.cardIDs = [card.id]
-            project.groups = [group]
-            state.projects.append(project)
-        }
-        try model.repository?.recordReview(cardID: card.id, rating: 3, expectedRevision: nil, eventID: UUID())
-        model.perform {}
         let original = model.state
         let zip = try await BackupService.export(model: model)
         defer { try? FileManager.default.removeItem(at: zip) }

@@ -75,13 +75,20 @@ final class StudioModel: ObservableObject {
             state.marks.append(mark)
             if let index = state.sources.firstIndex(where: { $0.id == source.id }) {
                 state.sources[index].lastLocation = locator
+                state.sources[index].lastReadAt = Date()
             }
         }
     }
     func saveLocation(sourceID: UUID, locator: ReadingLocator) {
+        if let source = state.sources.first(where: { $0.id == sourceID }), source.lastLocation == locator,
+            let read = source.lastReadAt, Date().timeIntervalSince(read) < 60
+        {
+            return
+        }
         change { state in
             if let index = state.sources.firstIndex(where: { $0.id == sourceID }) {
                 state.sources[index].lastLocation = locator
+                state.sources[index].lastReadAt = Date()
             }
         }
     }
@@ -179,7 +186,7 @@ final class StudioModel: ObservableObject {
             let preview = try ImportService.preview(text, existing: state)
             try repository!.update { state in
                 guard !state.pending.contains(where: { $0.packageID == preview.packageID }) else {
-                    throw LibraryError.invalid("该批次已在 AI Inbox")
+                    throw LibraryError.invalid("该批次已在导入箱")
                 }
                 state.pending.append(
                     PendingImport(packageID: preview.packageID, title: preview.title, json: text))

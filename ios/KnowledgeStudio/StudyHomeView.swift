@@ -6,7 +6,7 @@ struct StudyHomeView: View {
     @EnvironmentObject private var model: StudioModel
     private var reading: [LibrarySource] {
         model.state.sources.filter { $0.deletedAt == nil && $0.lastLocation != nil }
-            .sorted { $0.updatedAt > $1.updatedAt }
+            .sorted { ($0.lastReadAt ?? $0.updatedAt) > ($1.lastReadAt ?? $1.updatedAt) }
     }
     var body: some View {
         NavigationStack {

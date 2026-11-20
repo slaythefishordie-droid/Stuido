@@ -46,7 +46,7 @@ SwiftUI View → 应用服务（capture/import/review/backup）→ 领域对象�
 - keyword：正面 term，背面已有 explanation 和出处。
 - key_sentence：正面原句，背面已有 explanation 和出处。
 
-展示策略独立于内容数据，待用户实际体验后调整。进入 Review 必须用户主动选择，收藏不会自动入队。FSRS 适配层持有算法版本、参数与时区决定，调度状态和 ReviewRecord 分开事务保存。未实现正反面或每日任务，不把提案当作验收结果。
+展示策略独立于内容数据，待用户实际体验后调整。进入 Review 必须用户主动选择，收藏不会自动入队。FSRS 适配层持有算法版本、参数与时区决定，调度状态和 ReviewRecord 在同一事务保存。当前 Today 打开原卡并记录自评，不实现本节题型提案；用户明确暂不新增或重设计题型。
 
 
 ### 里程碑 1 验证实现
@@ -73,10 +73,19 @@ My Inbox 和卡片/Dictionary/Corpus 都查询该库。Safari 原始交接文件
 
 ## 设计章程的待实施模型约束 · 2026-11-19
 
-同一 Source 跨 Project 默认共享原文件、高亮与 Mark；项目研究笔记、解释和工作语境独立，未来可选独立副本。此为用户已确定的产品语义，不表示现有聚合快照已实现项目语境字段。具体结构及迁移需单独设计，重大调整按工作流取得同意，覆盖备份恢复与删除关联验证。自由白板允许混合对象，但不扩展四类 Card，也不将移除节点当作删除内容。实施待办统一见工程问题 UX-01。
+同一 Source 跨 Project 默认共享原文件、高亮与 Mark；项目研究笔记、解释和工作语境独立，未来可选独立副本。这是用户已确定的产品语义，现已通过下方 V2 可选字段增量实现；备份恢复与删除关联纳入验证。自由白板允许混合对象，但不扩展四类 Card，也不将移除节点当作删除内容。实施待办统一见工程问题 UX-01。
 
 ## V2 增量候选 · 2026-11-20
 
-ReadingLocator 新增可选 fileFingerprint / anchorText，保留旧 page/rectangles/nativeJSON。PDF 精度依赖当前文件指纹、合法页序/区域及实际文字核验；缺失信息降级，不猜测匹配。旧快照缺字段可解码。
+ReadingLocator 新增可选 fileFingerprint / anchorText / pdfTextAnchors / pdfTextQuads，保留旧 page/rectangles/nativeJSON。PDF 精度依赖当前文件指纹、合法页序/区域及实际文字核验；缺失信息降级，不猜测匹配。旧快照缺字段可解码。
 
 LibraryProject 新增可选 ProjectBoard（节点与连线）；节点类型为 source/card/concept/note，自由概念与笔记不是新增一级 Card。source/card 指向既有 UUID，连线仅引用白板节点；聚合状态校验拒绝缺失引用、重复 ID、无效坐标/端点。移除节点仅清理布局及其连线；删除原对象若仍被引用则事务失败。备份自动包含聚合数据；旧项目 board=nil，无清库迁移。
+
+
+LibraryProject 的 `groups` 是项目内命名的 Source/Card 引用集合；`sourceNotes` 以 Source UUID 字符串为键保存独立研究笔记。移除分组不删对象；分组/笔记/白板仍参与永久删除保护。Project.sourceIDs 与 groups 可以分别关联来源，避免移除主列表关联导致分组数据丢失。
+
+LibraryCard 可选 `schedule` 保存 FSRS-6 调度版本、修订号、due、原生状态和参数 JSON。LibraryReviewRecord 可选 before/after/log/parameters 保留完整轨迹。同一个 eventID 幂等，expectedRevision 拒绝并发旧评分；卡片编辑保存沿用库中最新 schedule。改变保持率不直接重写 due。旧卡 schedule=nil 可首次初始化；有历史但无状态时拒绝猜测迁移。所有新字段可选，旧库直接读取，不清库、不改稳定 UUID。
+
+当前聚合快照仍为版本 1 的可选字段增量；**不可将 V2 数据交给旧 App 写回**，旧二进制不认识新字段。只保证从旧库升级到当前代码，不宣称安全降级。未来确需降级应另行制定导出/迁移方案。
+
+LibrarySource 可选 `lastReadAt` 用于书桌真实阅读排序，与资料编辑时间独立。相同位置 60 秒内的重复回调不写库；位置变化立即保存。

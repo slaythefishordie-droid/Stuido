@@ -65,6 +65,7 @@ public struct LibrarySource: Codable, Identifiable, Equatable, Sendable {
     public var createdAt: Date = Date()
     public var updatedAt: Date = Date()
     public var lastLocation: ReadingLocator?
+    public var lastReadAt: Date?
     public var deletedAt: Date?
     public init(
         id: UUID = UUID(), kind: SourceKind, title: String, url: String? = nil, assetHash: String? = nil,
