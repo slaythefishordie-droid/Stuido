@@ -74,89 +74,98 @@ struct InboxView: View {
     @State private var search = ""
     @State private var editor: LibraryCard?
     @State private var selected: Set<UUID> = []
-    var marks: [LibraryMark] {
-        model.state.marks.filter {
-            $0.deletedAt == nil && $0.organization == .inbox
-                && (search.isEmpty
-                    || ($0.excerpt + $0.note + sourceTitle($0)).localizedCaseInsensitiveContains(search))
-        }.sorted { $0.createdAt > $1.createdAt }
+    private struct SourceGroup: Identifiable {
+        let id: UUID
+        let source: LibrarySource?
+        let marks: [LibraryMark]
+        var title: String { source?.title ?? "资料不可用" }
     }
-    func sourceTitle(_ mark: LibraryMark) -> String {
-        model.state.sources.first { $0.id == mark.sourceID }?.title ?? "资料不可用"
+    private var groups: [SourceGroup] {
+        let sources = Dictionary(uniqueKeysWithValues: model.state.sources.map { ($0.id, $0) })
+        let marks = model.state.marks.filter { mark in
+            guard mark.deletedAt == nil, mark.organization == .inbox else { return false }
+            let content = mark.excerpt + mark.note + (sources[mark.sourceID]?.title ?? "")
+            return search.isEmpty || content.localizedCaseInsensitiveContains(search)
+        }.sorted { $0.createdAt > $1.createdAt }
+        return Dictionary(grouping: marks, by: \.sourceID).map { id, marks in
+            SourceGroup(id: id, source: sources[id], marks: marks)
+        }.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending }
     }
     var body: some View {
         NavigationStack {
-            List(selection: $selected) {
-                if let warning = model.sharedWarning { Text(warning).foregroundStyle(.orange) }
-                if marks.isEmpty {
-                    ContentUnavailableView(
-                        "没有待整理标记", systemImage: "tray", description: Text("在 Safari、PDF、EPUB 或本地视频中保存标记。"))
-                }
-                ForEach(
-                    Array(Set(marks.map(\.sourceID))).sorted { $0.uuidString < $1.uuidString }, id: \.self
-                ) { sourceID in
-                    Section(model.state.sources.first { $0.id == sourceID }?.title ?? "资料不可用") {
-                        ForEach(marks.filter { $0.sourceID == sourceID }) { mark in
-                            VStack(alignment: .leading, spacing: 10) {
-                                Label(mark.highlightKind.title, systemImage: "circle.fill").font(.caption)
-                                    .foregroundStyle(mark.highlightKind.color)
-                                Text(sourceTitle(mark)).font(.headline)
-                                if !mark.excerpt.isEmpty { Text(mark.excerpt).lineLimit(5) }
-                                if !mark.note.isEmpty { Text(mark.note).foregroundStyle(.secondary) }
-                                Text(locationLabel(mark.locator)).font(.caption)
-                                HStack {
-                                    Button("整理为\(mark.highlightKind.title)") {
-                                        editor = model.card(from: mark, type: mark.highlightKind)
-                                    }
-                                    Menu("其他类型") {
-                                        ForEach(CardKind.allCases, id: \.self) { kind in
-                                            Button(kind.title) { editor = model.card(from: mark, type: kind) }
-                                        }
-                                    }
-                                    if let source = model.state.sources.first(where: {
-                                        $0.id == mark.sourceID && $0.deletedAt == nil
-                                    }) {
-                                        NavigationLink("回到出处") {
-                                            SourceReaderView(source: source, location: mark.locator)
-                                        }
-                                    }
-                                    Button("归档") {
-                                        model.change { state in
-                                            if let i = state.marks.firstIndex(where: { $0.id == mark.id }) {
-                                                state.marks[i].organization = .archived
-                                            }
-                                        }
-                                    }
-                                }.buttonStyle(.borderless)
-                                NavigationLink("备注与详情") { MarkDetailView(markID: mark.id) }
-                            }.padding(.vertical, 4).tag(mark.id).contextMenu {
-                                Button("移入回收站", role: .destructive) { model.delete([mark.id]) }
-                            }
-                        }
-                    }
-                }
-            }.navigationTitle("收集箱").searchable(text: $search).refreshable { model.refresh() }
-                .toolbar {
-                    EditButton()
-                    Button("接收标记") { model.refresh() }
-                    if !selected.isEmpty {
-                        Button("归档所选") {
-                            model.change { state in
-                                for i in state.marks.indices where selected.contains(state.marks[i].id) {
-                                    state.marks[i].organization = .archived
-                                }
-                            }
-                            selected.removeAll()
-                        }
-                        Button("移入回收站", role: .destructive) {
-                            model.delete(selected)
-                            selected.removeAll()
-                        }
-                    }
-                }
+            inboxList.navigationTitle("收集箱").searchable(text: $search)
+                .refreshable { model.refresh() }.toolbar { inboxToolbar }
         }.sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
     }
+    private var inboxList: some View {
+        let groups = groups
+        return List(selection: $selected) {
+            if let warning = model.sharedWarning { Text(warning).foregroundStyle(.orange) }
+            if groups.isEmpty {
+                ContentUnavailableView(
+                    "没有待整理标记", systemImage: "tray", description: Text("在 Safari、PDF、EPUB 或本地视频中保存标记。"))
+            }
+            ForEach(groups) { group in
+                Section(group.title) {
+                    ForEach(group.marks) { mark in
+                        markRow(mark, source: group.source).tag(mark.id)
+                    }
+                }
+            }
+        }
+    }
+    private func markRow(_ mark: LibraryMark, source: LibrarySource?) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Label(mark.highlightKind.title, systemImage: "circle.fill").font(.caption).foregroundStyle(
+                mark.highlightKind.color)
+            if !mark.excerpt.isEmpty { Text(mark.excerpt).lineLimit(5) }
+            if !mark.note.isEmpty { Text(mark.note).foregroundStyle(.secondary) }
+            Text(locationLabel(mark.locator)).font(.caption)
+            ScrollView(.horizontal, showsIndicators: false) { markActions(mark, source: source) }
+            NavigationLink("备注与详情") { MarkDetailView(markID: mark.id) }
+        }.padding(.vertical, 4).contextMenu {
+            Button("移入回收站", role: .destructive) { model.delete([mark.id]) }
+        }
+    }
+    private func markActions(_ mark: LibraryMark, source: LibrarySource?) -> some View {
+        HStack {
+            Button("整理为\(mark.highlightKind.title)") {
+                editor = model.card(from: mark, type: mark.highlightKind)
+            }
+            Menu("其他类型") {
+                ForEach(CardKind.allCases, id: \.self) { kind in
+                    Button(kind.title) { editor = model.card(from: mark, type: kind) }
+                }
+            }
+            if let source, source.deletedAt == nil {
+                NavigationLink("回到出处") { SourceReaderView(source: source, location: mark.locator) }
+            }
+            Button("归档") { archive([mark.id]) }
+        }.buttonStyle(.borderless)
+    }
+    private func archive(_ ids: Set<UUID>) {
+        model.change { state in
+            for i in state.marks.indices where ids.contains(state.marks[i].id) {
+                state.marks[i].organization = .archived
+            }
+        }
+        if model.message == nil { selected.subtract(ids) }
+    }
+    @ToolbarContentBuilder private var inboxToolbar: some ToolbarContent {
+        ToolbarItemGroup {
+            EditButton()
+            Button("接收标记") { model.refresh() }
+            if !selected.isEmpty {
+                Button("归档所选") { archive(selected) }
+                Button("移入回收站", role: .destructive) {
+                    model.delete(selected)
+                    if model.message == nil { selected.removeAll() }
+                }
+            }
+        }
+    }
 }
+
 func locationLabel(_ locator: ReadingLocator) -> String {
     if let page = locator.page { return "文件第 \(page) 页" }
     if let seconds = locator.seconds { return String(format: "%.1f 秒", seconds) }
