@@ -21,6 +21,11 @@
 | Data Manager / Trash / Backup | 独立维护入口、筛选、确认和保护原数据的恢复流程。自定义封面、PDF Ink 及 EPUB 手写作为可选数据进入同一份备份；派生缩略图留在缓存 | 旧快照缺少新字段可解码。恢复前验证、失败回滚、项目和复习关系以及原始 PDF 字节须保持 |
 | Safari / QuickMark / 词典／发音 | SwiftUI 设置分离常用选项与共享诊断，扩展沿用原 JS 的精听、回溯、标记、重送和旧备份。扩展弹层使用共享配色。词典、许可真人录音与 TTS 服务路径保持 | 自动用例与真实 Safari 权限分别记录。真机验证网页适配器、A–B、资料交接、词典弹窗、离线及实际音源 |
 
+### 集成分支验证
+
+- 首次 Xcode 检查 `15e3213` 的原生依赖与核心 31/31 通过。App 模块编译时，PDFKit 的 overlay delegate 协议缺少主线程标注，Swift 6 拒绝主 actor 的实现。后续提交将兼容边界限定在该旧协议，所有 UIKit 与笔迹状态仍由主 actor 管理。归档与 IPA 均由无打包配置跳过。[首次原生运行](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44708867255)
+- 本地协议与 Safari 用例 43/43。对实际扩展设置弹出面板进行了浅色、深色与诊断展开渲染检查。iPad 屏幕和真实 Pencil 输入仍以实机验收为准。
+
 ### 图标
 
 [图标提案与小尺寸对比](../design-lab/app-icon/icon-concepts.png)。A「页边书签」将暖纸拱页与古铜页签叠在深梅底推荐为主图标。B「打开的书」突出跨页阅读，C「一页批注」突出阅读转为自己的笔记。可分别查看 [A](../design-lab/app-icon/icon-a.png)、[B](../design-lab/app-icon/icon-b.png)、[C](../design-lab/app-icon/icon-c.png) 的 1024 × 1024 sRGB 不透明方形母版。操作系统应用主屏遮罩。选定后再接 AppIcon asset catalog 并检查 iPad 主屏及系统外观。[Apple App Icon 资产规范](https://developer.apple.com/documentation/xcode/configuring-your-app-icon)

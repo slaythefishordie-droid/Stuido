@@ -64,8 +64,9 @@ final class StudyInkPage: UIView {
     }
 }
 
+// PDFKit calls its legacy overlay protocol as part of the PDFView layout lifecycle.
 @MainActor
-final class PDFStudyInk: NSObject, ObservableObject, PDFPageOverlayViewProvider, PKCanvasViewDelegate,
+final class PDFStudyInk: NSObject, ObservableObject, @preconcurrency PDFPageOverlayViewProvider, PKCanvasViewDelegate,
     UIPencilInteractionDelegate
 {
     @Published private(set) var tool: PDFInkTool = .select
