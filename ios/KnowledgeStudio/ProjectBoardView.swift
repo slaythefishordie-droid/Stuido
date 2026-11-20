@@ -87,7 +87,7 @@ struct ProjectBoardView: View {
             Text("拖动节点布局，点击打开内容；长按节点连线或移除。移除节点不会删除原资料和卡片。")
                 .font(.caption).foregroundStyle(.secondary).padding(.horizontal)
             ScrollView([.horizontal, .vertical]) { canvas }
-        }.navigationTitle("研究白板").background(StudyTheme.paper)
+        }.studySurface().navigationTitle("研究白板").background(StudyTheme.paper)
             .sheet(item: $edited) { editSheet($0) }
             .sheet(isPresented: $connections) { connectionSheet }
             .sheet(item: $opened) { contentSheet($0) }
@@ -153,12 +153,23 @@ struct ProjectBoardView: View {
         Button {
             connect(to: node)
         } label: {
-            Text(node.text).lineLimit(5).frame(width: 190).frame(minHeight: 70).padding(12)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+            VStack(alignment: .leading, spacing: 7) {
+                Text(nodeTitle(node.kind)).font(.caption.weight(.semibold)).foregroundStyle(StudyTheme.ink)
+                Text(node.text).font(.system(.body, design: .serif)).lineLimit(5)
+            }.frame(width: 190, alignment: .leading).frame(minHeight: 56).padding(12)
+                .background(StudyTheme.leaf, in: RoundedRectangle(cornerRadius: 8))
                 .overlay(
                     RoundedRectangle(cornerRadius: 14).stroke(
                         start == node.id ? StudyTheme.ink : Color.secondary.opacity(0.2)))
         }.buttonStyle(.plain)
+    }
+    private func nodeTitle(_ kind: BoardNode.Kind) -> String {
+        switch kind {
+        case .source: "资料"
+        case .card: "知识卡片"
+        case .concept: "概念"
+        case .note: "研究笔记"
+        }
     }
     private func nodeDrag(_ id: UUID) -> some Gesture {
         DragGesture(minimumDistance: 10)

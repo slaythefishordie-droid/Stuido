@@ -1,5 +1,42 @@
-:root { font: 16px/1.5 system-ui, sans-serif; color-scheme: light dark; }
-body { width: 300px; max-width: 100%; margin: 0; padding: 16px; box-sizing: border-box; }
-h1 { font-size: 20px; }
-button { width: 100%; min-height: 44px; margin-bottom: 8px; font: inherit; }
+:root {
+  font: 16px/1.5 system-ui, sans-serif;
+  color-scheme: light dark;
+  --paper: #f6f1e8;
+  --leaf: #fffbf4;
+  --ink: #2e262a;
+  --rule: #d9cabc;
+  --accent: #7d463b;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #241c24;
+    --leaf: #382a36;
+    --ink: #f6ebdf;
+    --rule: #644e5b;
+    --accent: #ebbda1;
+  }
+}
+body {
+  width: 300px;
+  max-width: 100%;
+  margin: 0;
+  padding: 16px;
+  box-sizing: border-box;
+  color: var(--ink);
+  background: var(--paper);
+}
+h1 { font: 600 23px/1.2 Georgia, "Songti SC", serif; }
+button {
+  width: 100%;
+  min-height: 44px;
+  margin-bottom: 8px;
+  padding: 6px 10px;
+  border: 1px solid var(--rule);
+  border-radius: 5px;
+  background: var(--leaf);
+  color: var(--accent);
+  font: inherit;
+}
+button:disabled { color: var(--ink); opacity: .65; }
+button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 output { display: block; overflow-wrap: anywhere; font: 13px/1.5 monospace; user-select: all; }

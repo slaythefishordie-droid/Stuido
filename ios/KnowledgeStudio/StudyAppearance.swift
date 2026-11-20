@@ -43,18 +43,29 @@ func studioFieldLabel(_ key: String) -> String {
 
 /// Shared native surfaces, with dynamic dark-mode contrast and system type scaling.
 enum StudyTheme {
-    static let paper = Color(
-        uiColor: UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor(red: 0.10, green: 0.11, blue: 0.11, alpha: 1)
-                : UIColor(red: 0.97, green: 0.95, blue: 0.91, alpha: 1)
+    static let paper = adaptive(0xF6F1E8, dark: 0x211C21)
+    static let leaf = adaptive(0xFFFBF4, dark: 0x2C242C)
+    static let mat = adaptive(0xEEE5D7, dark: 0x372C37)
+    static let text = adaptive(0x2E262A, dark: 0xF6EBDF)
+    static let ink = adaptive(0x7D463B, dark: 0xE2AD99)
+    static let rule = adaptive(0xD9CABC, dark: 0x594955)
+    static let plum = Color(uiColor: rgb(0x3C2637))
+    static let railText = Color(uiColor: rgb(0xF8E9DA))
+    static let copper = Color(uiColor: rgb(0xD3A06E))
+
+    static func rgb(_ hex: UInt32) -> UIColor {
+        UIColor(
+            red: CGFloat((hex >> 16) & 255) / 255,
+            green: CGFloat((hex >> 8) & 255) / 255,
+            blue: CGFloat(hex & 255) / 255, alpha: 1)
+    }
+
+    static func adaptive(_ light: UInt32, dark: UInt32) -> Color {
+        Color(uiColor: UIColor { traits in
+            rgb(traits.userInterfaceStyle == .dark ? dark : light)
         })
-    static let ink = Color(
-        uiColor: UIColor { traits in
-            traits.userInterfaceStyle == .dark
-                ? UIColor(red: 0.83, green: 0.73, blue: 0.59, alpha: 1)
-                : UIColor(red: 0.43, green: 0.31, blue: 0.22, alpha: 1)
-        })
+    }
+
 }
 
 enum StudySection: String, CaseIterable, Identifiable {
@@ -108,5 +119,120 @@ struct ObjectSelectionRow<Content: View>: View {
 extension ObjectSelectionRow where Content == Text {
     init(_ title: String, isSelected: Binding<Bool>) {
         self.init(isSelected: isSelected) { Text(title) }
+    }
+}
+
+
+extension View {
+    func studySurface() -> some View {
+        scrollContentBackground(.hidden)
+            .background(StudyTheme.paper)
+            .foregroundStyle(StudyTheme.text)
+    }
+
+    func studyPanel() -> some View {
+        padding(16)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(StudyTheme.leaf, in: RoundedRectangle(cornerRadius: 8))
+            .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(StudyTheme.rule, lineWidth: 1) }
+    }
+}
+
+struct StudyHeading: View {
+    let title: String
+    var body: some View {
+        VStack(alignment: .leading, spacing: 9) {
+            Text(title).font(.system(.title2, design: .serif, weight: .semibold))
+                .accessibilityAddTraits(.isHeader)
+            Rectangle().fill(StudyTheme.rule).frame(height: 1)
+        }
+    }
+}
+
+struct StudyCardFace: View {
+    let card: LibraryCard
+    var featured = false
+    private var title: String {
+        if !card.title.isEmpty { return card.title }
+        return card.content["example_en"] ?? "未命名卡片"
+    }
+    private var detail: String? {
+        switch card.type {
+        case .word: card.content["example_en"]
+        case .expression: card.note
+        case .keyword, .key_sentence: card.content["explanation"]
+        }
+    }
+    private var textColor: Color { featured ? Color.white : StudyTheme.text }
+    private var accent: Color {
+        switch card.type {
+        case .word: StudyTheme.adaptive(0x356780, dark: 0xA6CDE0)
+        case .expression: StudyTheme.adaptive(0x775516, dark: 0xEAC581)
+        case .keyword: StudyTheme.adaptive(0x6D4D86, dark: 0xDABDEA)
+        case .key_sentence: StudyTheme.adaptive(0x3D6750, dark: 0xB4D5BB)
+        }
+    }
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(card.type.title).font(.caption.weight(.semibold))
+                .padding(.horizontal, 7).padding(.vertical, 3)
+                .foregroundStyle(featured ? Color.white : accent)
+                .background((featured ? Color.white : accent).opacity(0.14))
+            Text(title)
+                .font(.system(featured ? .largeTitle : .title3, design: .serif, weight: .semibold))
+                .italic(card.type == .expression)
+                .foregroundStyle(textColor).lineLimit(featured ? 7 : 3)
+            if let detail, !detail.isEmpty, detail != title {
+                Text(detail).font(.subheadline).lineLimit(featured ? 4 : 3)
+                    .foregroundStyle(textColor.opacity(0.84))
+            }
+            Spacer(minLength: 4)
+            HStack {
+                Text(studioLabel(card.organization.rawValue)).font(.caption)
+                if card.review != .not_enrolled {
+                    Text(studioLabel(card.review.rawValue)).font(.caption)
+                }
+                Spacer()
+                Image(systemName: "arrow.up.right").font(.caption)
+            }.foregroundStyle(featured ? Color.white.opacity(0.88) : accent)
+        }
+        .padding(featured ? 22 : 14)
+        .frame(maxWidth: .infinity, minHeight: featured ? 215 : 142, alignment: .topLeading)
+        .background(featured ? Color(uiColor: StudyTheme.rgb(0x31493F)) : StudyTheme.leaf)
+        .overlay(alignment: .top) { Rectangle().fill(accent).frame(height: 2) }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .combine)
+    }
+}
+
+struct StudyReaderPresentation: Sendable {
+    let setActive: @MainActor @Sendable (UUID, Bool) -> Void
+    static let neutral = StudyReaderPresentation { _, _ in }
+}
+
+private struct StudyReaderPresentationKey: EnvironmentKey {
+    static let defaultValue = StudyReaderPresentation.neutral
+}
+
+extension EnvironmentValues {
+    var studyReaderPresentation: StudyReaderPresentation {
+        get { self[StudyReaderPresentationKey.self] }
+        set { self[StudyReaderPresentationKey.self] = newValue }
+    }
+}
+
+
+struct StudyNavigation: Sendable {
+    let open: @MainActor @Sendable (StudySection) -> Void
+}
+
+private struct StudyNavigationKey: EnvironmentKey {
+    static let defaultValue = StudyNavigation { _ in }
+}
+
+extension EnvironmentValues {
+    var studyNavigation: StudyNavigation {
+        get { self[StudyNavigationKey.self] }
+        set { self[StudyNavigationKey.self] = newValue }
     }
 }

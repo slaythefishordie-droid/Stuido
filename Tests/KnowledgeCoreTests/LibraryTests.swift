@@ -31,6 +31,38 @@ final class LibraryTests: XCTestCase {
             XCTAssertEqual(old.note, mark.note)
         }
     }
+    func testReadingArtworkAndInkSurviveReopenWithoutChangingAnchors() throws {
+        try withStore { repository, root in
+            let fingerprint = String(repeating: "a", count: 64)
+            var pdf = LibrarySource(kind: .pdf, title: "Scan", assetHash: fingerprint, assetExtension: "pdf")
+            pdf.coverImage = Data([1, 2, 3])
+            pdf.pdfPageInk = [PDFPageInk(fingerprint: fingerprint, page: 2, drawing: Data([4, 5]))]
+            var position = ReadingLocator(kind: "pdf", page: 2)
+            position.fileFingerprint = fingerprint
+            position.pdfViewportPoint = .init(x: 92, y: 155)
+            pdf.lastLocation = position
+            let book = LibrarySource(kind: .epub, title: "Book")
+            let anchor = ReadingLocator(kind: "epub", href: "chapter.xhtml", nativeJSON: "{}")
+            var mark = LibraryMark(sourceID: book.id, locator: anchor, excerpt: "Chosen text")
+            mark.epubNoteInk = Data([6, 7])
+            var project = LibraryProject(title: "Research")
+            project.boardCoverImage = Data([8, 9])
+            try repository.update { state in
+                state.sources = [pdf, book]
+                state.marks = [mark]
+                state.projects = [project]
+            }
+            let reopened = try LibraryRepository(url: root.appendingPathComponent("library.sqlite")).read()
+            XCTAssertEqual(reopened.sources.first, pdf)
+            XCTAssertEqual(reopened.projects.first?.boardCoverImage, project.boardCoverImage)
+            XCTAssertEqual(reopened.marks.first, mark)
+            XCTAssertThrowsError(try repository.update { state in
+                state.sources[0].pdfPageInk = [pdf.pdfPageInk![0], pdf.pdfPageInk![0]]
+            })
+            XCTAssertEqual(try repository.read(), reopened)
+        }
+    }
+
     func testPDFAnchorNeverOverstatesPrecision() throws {
         var locator = ReadingLocator(kind: "pdf", page: 2)
         locator.rectangles = [HighlightRect(page: 2, x: 10, y: 20, width: 50, height: 30)]

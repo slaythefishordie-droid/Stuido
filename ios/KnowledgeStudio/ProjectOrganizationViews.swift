@@ -11,7 +11,7 @@ struct ProjectSourceNoteView: View {
         VStack(alignment: .leading) {
             Text("只属于这个项目的研究笔记。原文件、高亮和标记仍与其他项目共享。").font(.caption).foregroundStyle(.secondary).padding()
             TextEditor(text: $text).padding()
-        }.navigationTitle("项目研究笔记").toolbar {
+        }.studySurface().navigationTitle("项目研究笔记").toolbar {
             Button("保存") {
                 model.change { state in
                     guard

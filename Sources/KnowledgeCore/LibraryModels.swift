@@ -19,6 +19,7 @@ public struct ReadingLocator: Codable, Equatable, Sendable {
     public var anchorText: String?
     public var pdfTextAnchors: [PDFTextAnchor]?
     public var pdfTextQuads: [PDFTextQuad]?
+    public var pdfViewportPoint: PDFTextQuad.Point?
     public var rectangles: [HighlightRect] = []
     public init(
         kind: String, page: Int? = nil, seconds: Double? = nil, href: String? = nil,
@@ -32,6 +33,9 @@ public struct ReadingLocator: Codable, Equatable, Sendable {
         self.nativeJSON = nativeJSON
     }
     public func validate() throws {
+        if let point = pdfViewportPoint, kind != "pdf" || !point.x.isFinite || !point.y.isFinite {
+            throw LibraryError.invalid("PDF 阅读位置无效")
+        }
         if let page, page < 1 { throw LibraryError.invalid("PDF 页序必须从 1 开始") }
         if let seconds, !seconds.isFinite || seconds < 0 || seconds > 3_155_760_000 {
             throw LibraryError.invalid("时间定位无效")
@@ -66,6 +70,8 @@ public struct LibrarySource: Codable, Identifiable, Equatable, Sendable {
     public var updatedAt: Date = Date()
     public var lastLocation: ReadingLocator?
     public var lastReadAt: Date?
+    public var coverImage: Data?
+    public var pdfPageInk: [PDFPageInk]?
     public var deletedAt: Date?
     public init(
         id: UUID = UUID(), kind: SourceKind, title: String, url: String? = nil, assetHash: String? = nil,
@@ -87,6 +93,7 @@ public struct LibraryMark: Codable, Identifiable, Equatable, Sendable {
     public var note: String = ""
     public var createdAt: Date = Date()
     public var externalUpdatedAt: Double?
+    public var epubNoteInk: Data?
     public var cardKind: CardKind?
     public var organization: Organization = .inbox
     public var deletedAt: Date?
@@ -159,6 +166,7 @@ public struct LibraryProject: Codable, Identifiable, Equatable, Sendable {
     public var cardIDs: [UUID] = []
     public var relationIDs: [UUID] = []
     public var board: ProjectBoard?
+    public var boardCoverImage: Data?
     public var groups: [ProjectGroup]?
     public var sourceNotes: [String: String]?
     public var deletedAt: Date?
@@ -215,6 +223,27 @@ public struct LibraryState: Codable, Equatable, Sendable {
         let cardIDs = Set(cards.map(\.id))
         let markIDs = Set(marks.map(\.id))
         let relationIDs = Set(relations.map(\.id))
+        let covers = sources.compactMap(\.coverImage) + projects.compactMap(\.boardCoverImage)
+        guard covers.allSatisfy({ !$0.isEmpty && $0.count <= 196_608 }),
+            covers.reduce(0, { $0 + $1.count }) <= 8_388_608
+        else { throw LibraryError.invalid("自定义封面超出知识库大小限制") }
+        var inkBytes = 0
+        for source in sources {
+            let drawings = source.pdfPageInk ?? []
+            guard drawings.isEmpty || source.kind == .pdf else {
+                throw LibraryError.invalid("资料类型不支持 PDF 笔迹")
+            }
+            var pageKeys: Set<String> = []
+            for item in drawings {
+                guard item.page >= 1, item.page <= 1_000_000,
+                    item.fingerprint.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil,
+                    pageKeys.insert(item.fingerprint + ":" + String(item.page)).inserted,
+                    !item.drawing.isEmpty, item.drawing.count <= 1_048_576
+                else { throw LibraryError.invalid("PDF 笔迹记录无效或超出单页限制") }
+                inkBytes += item.drawing.count
+                guard inkBytes <= 16_777_216 else { throw LibraryError.invalid("PDF 笔迹超出知识库大小限制") }
+            }
+        }
         let sourceKinds = Dictionary(uniqueKeysWithValues: sources.map { ($0.id, $0.kind) })
         for source in sources {
             guard !source.title.isEmpty else { throw LibraryError.invalid("资料名称不能为空") }
@@ -237,6 +266,13 @@ public struct LibraryState: Codable, Equatable, Sendable {
             if let locator = source.lastLocation { try validateLocatorKind(locator, source: source.kind) }
         }
         for mark in marks {
+            if let ink = mark.epubNoteInk {
+                guard mark.locator.kind == "epub", !(mark.excerpt.isEmpty), mark.locator.nativeJSON != nil,
+                    !ink.isEmpty, ink.count <= 524_288
+                else { throw LibraryError.invalid("EPUB 手写批注需要有效的选文锚点") }
+                inkBytes += ink.count
+                guard inkBytes <= 16_777_216 else { throw LibraryError.invalid("笔迹超出知识库大小限制") }
+            }
             guard sourceIDs.contains(mark.sourceID) else { throw LibraryError.invalid("Mark 资料引用缺失") }
             try mark.locator.validate()
             try validateLocatorKind(mark.locator, source: sourceKinds[mark.sourceID]!)

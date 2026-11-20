@@ -54,7 +54,7 @@ struct TodayView: View {
                         Text("仅在首次记录复习时采用；已有卡片保留原参数与到期时间。日期按设备时区展示，算法按固定时间戳计算。").font(.caption)
                     }
                     Text("只显示你主动加入复习的卡片。打开原卡后记录自评，不增加题型。").font(.caption).foregroundStyle(.secondary)
-                }.navigationTitle("今日复习")
+                }.studySurface().navigationTitle("今日复习")
             }
         }
     }

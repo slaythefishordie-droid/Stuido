@@ -5,7 +5,7 @@
   const root = host.attachShadow({ mode: 'closed' });
   root.innerHTML = `<style>
     :host { position:fixed; right:12px; bottom:calc(16px + env(safe-area-inset-bottom)); z-index:2147483647; }
-    section { max-width:260px; padding:10px; border-radius:12px; background:#182529; color:white; font:14px system-ui; box-shadow:0 2px 12px #0006; }
+    section { max-width:260px; padding:10px; border-radius:12px; background:#3c2637; color:#ffedd5; font:14px system-ui; box-shadow:0 2px 12px #0006; }
     button,select { min-height:44px; font:inherit; border-radius:8px; margin:3px; }
     p { margin:6px 2px; } button { padding:8px 16px; }
   </style><section aria-label="Knowledge Studio"><button>标记</button><label>回溯 <select aria-label="标记回溯秒数"><option value="0">0 秒</option><option value="1">1 秒</option><option value="2" selected>2 秒</option><option value="3">3 秒</option></select></label><p role="status" aria-live="polite">标记后可在 收集箱 整理</p></section>`;

@@ -2,54 +2,61 @@ import KnowledgeCore
 import SwiftUI
 import UniformTypeIdentifiers
 
+@MainActor
 struct StudioView: View {
     @StateObject private var model = StudioModel()
     @Environment(\.scenePhase) private var phase
     @State private var quickCard = false
-    @State private var destination: StudySection? = .home
+    @SceneStorage("studyDestination") private var destination = StudySection.home.rawValue
+    @SceneStorage("studyRailRevealed") private var railRevealed = false
+    @AppStorage("studyRailMode") private var railMode = "auto"
     @AppStorage("compactDisplay") private var compactDisplay = false
     @AppStorage("appAppearance") private var appearance = "system"
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var activeReaders: Set<UUID> = []
+    private var selected: StudySection { StudySection(rawValue: destination) ?? .home }
+    private let primary: [StudySection] = [.home, .library, .inbox, .cards, .today]
+    private let secondary: [StudySection] = [.imports, .manager, .settings]
+
     var body: some View {
-        NavigationSplitView {
-            List(selection: $destination) {
-                Section("阅读与思考") {
-                    ForEach([StudySection.home, .library, .inbox, .cards, .today]) { section in
-                        NavigationLink(value: section) { Label(section.title, systemImage: section.symbol) }
+        GeometryReader { geometry in
+            let width = geometry.size.width
+            let immersive = !activeReaders.isEmpty
+            let expanded = width >= 850 && (railMode == "expanded" || (railMode == "auto" && width >= 1040))
+            let sideVisible = !immersive && width >= 620
+            HStack(spacing: 0) {
+                if sideVisible { sidebar(expanded: expanded).frame(width: expanded ? 208 : 64) }
+                VStack(spacing: 0) {
+                    if !sideVisible && (!immersive || railRevealed) {
+                        compactNavigation
                     }
-                }
-                Section("整理与维护") {
-                    ForEach([StudySection.imports, .manager, .settings]) { section in
-                        NavigationLink(value: section) { Label(section.title, systemImage: section.symbol) }
-                    }
-                }
-            }
-            .navigationTitle("我的书房")
-            .navigationSplitViewColumnWidth(min: 200, ideal: 235, max: 290)
-            .safeAreaInset(edge: .bottom) {
-                Button {
-                    quickCard = true
-                } label: {
-                    Label("随手记一张卡片", systemImage: "square.and.pencil")
-                        .frame(maxWidth: .infinity, minHeight: 44)
-                }.buttonStyle(.borderedProminent).padding()
-            }
-        } detail: {
-            Group {
-                switch destination ?? .home {
-                case .home: StudyHomeView()
-                case .today: TodayView()
-                case .library: LibraryView()
-                case .inbox: InboxView()
-                case .cards: CardsView()
-                case .imports: AIInboxView()
-                case .manager: DataManagerView()
-                case .settings: ExtensionSetupView()
+                    detail
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .overlay(alignment: .topTrailing) {
+                            if immersive && !railRevealed {
+                                Button {
+                                    railRevealed = true
+                                } label: {
+                                    Image(systemName: "sidebar.leading")
+                                        .frame(width: 44, height: 44)
+                                        .background(.regularMaterial, in: Circle())
+                                }.accessibilityLabel("显示书房导航")
+                                    .padding(.trailing, 6)
+                                    .padding(.top, 52)
+                            }
+                        }
                 }
             }
-            .background(StudyTheme.paper)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: sideVisible)
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: expanded)
         }
-        .navigationSplitViewStyle(.balanced)
-        .scrollContentBackground(.hidden)
+        .environment(\.studyNavigation, StudyNavigation { select($0) })
+        .environment(\.studyReaderPresentation, StudyReaderPresentation { id, visible in
+            if visible {
+                if activeReaders.isEmpty { railRevealed = false }
+                activeReaders.insert(id)
+            } else { activeReaders.remove(id) }
+        })
         .background(StudyTheme.paper)
         .tint(StudyTheme.ink)
         .environment(\.defaultMinListRowHeight, compactDisplay ? 44 : 60)
@@ -67,6 +74,100 @@ struct StudioView: View {
         }
         .onChange(of: phase) { _, value in if value == .active { model.refresh() } }
     }
+    @ViewBuilder private var detail: some View {
+        switch selected {
+        case .home: StudyHomeView()
+        case .today: TodayView()
+        case .library: LibraryView()
+        case .inbox: InboxView()
+        case .cards: CardsView()
+        case .imports: AIInboxView()
+        case .manager: DataManagerView()
+        case .settings: ExtensionSetupView()
+        }
+    }
+
+    private func select(_ section: StudySection) {
+        if selected != section { activeReaders.removeAll() }
+        destination = section.rawValue
+        railRevealed = false
+    }
+
+    private var compactNavigation: some View {
+        HStack {
+            Menu {
+                ForEach(primary + secondary) { section in
+                    Button { select(section) } label: {
+                        Label(section.title, systemImage: selected == section ? "checkmark" : section.symbol)
+                    }
+                }
+                Divider()
+                Button("随手记一张卡片") { quickCard = true }
+                if !activeReaders.isEmpty {
+                    Button("隐藏导航") { railRevealed = false }
+                }
+            } label: {
+                Label("Knowledge Studio", systemImage: "sidebar.leading")
+                    .font(.system(.subheadline, design: .serif, weight: .semibold))
+                    .frame(minHeight: 44)
+            }
+            Spacer()
+            Text(selected.title).font(.caption)
+        }.padding(.horizontal, 15).foregroundStyle(StudyTheme.railText).background(StudyTheme.plum)
+    }
+
+    private func sidebar(expanded: Bool) -> some View {
+        VStack(spacing: 8) {
+            Group {
+                if expanded {
+                    Text("Knowledge\nStudio")
+                        .font(.system(.title2, design: .serif, weight: .medium))
+                        .frame(maxWidth: .infinity, alignment: .leading).padding(12)
+                } else {
+                    Image(systemName: "book.closed").font(.title2).frame(height: 44)
+                        .accessibilityLabel("Knowledge Studio")
+                }
+            }.padding(.top, 10)
+            ScrollView {
+                VStack(spacing: 4) {
+                    ForEach(primary) { railButton($0, expanded: expanded) }
+                    Rectangle().fill(StudyTheme.railText.opacity(0.24)).frame(height: 1).padding(.vertical, 8)
+                    ForEach(secondary) { railButton($0, expanded: expanded) }
+                }
+            }.scrollIndicators(.hidden)
+            Button { quickCard = true } label: {
+                if expanded { Label("随手记一张卡片", systemImage: "square.and.pencil") }
+                else { Image(systemName: "square.and.pencil") }
+            }.frame(minHeight: 44).accessibilityLabel("随手记一张卡片")
+            Menu {
+                Picker("导航栏布局", selection: $railMode) {
+                    Text("自动调整").tag("auto")
+                    Text("固定展开").tag("expanded")
+                    Text("紧凑图标").tag("compact")
+                }
+            } label: {
+                Image(systemName: "sidebar.leading").frame(width: 44, height: 44)
+            }.accessibilityLabel("导航栏布局")
+        }.padding(8).foregroundStyle(StudyTheme.railText).background(StudyTheme.plum.ignoresSafeArea())
+            .tint(StudyTheme.railText)
+    }
+
+    private func railButton(_ section: StudySection, expanded: Bool) -> some View {
+        Button { select(section) } label: {
+            HStack(spacing: 9) {
+                Image(systemName: section.symbol).frame(width: 24)
+                if expanded { Text(section.title).lineLimit(1); Spacer(minLength: 0) }
+            }.frame(maxWidth: .infinity, minHeight: 44)
+                .padding(.horizontal, expanded ? 8 : 0)
+                .background(selected == section ? Color.white.opacity(0.13) : .clear)
+                .overlay(alignment: .leading) {
+                    if selected == section { Rectangle().fill(StudyTheme.copper).frame(width: 2) }
+                }
+                .contentShape(Rectangle())
+        }.buttonStyle(.plain).accessibilityLabel(section.title)
+            .accessibilityAddTraits(selected == section ? .isSelected : [])
+    }
+
 }
 
 struct InboxView: View {
@@ -93,7 +194,7 @@ struct InboxView: View {
     }
     var body: some View {
         NavigationStack {
-            inboxList.navigationTitle("收集箱").searchable(text: $search)
+            inboxList.studySurface().navigationTitle("收集箱").searchable(text: $search)
                 .refreshable { model.refresh() }.toolbar { inboxToolbar }
         }.sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
     }
@@ -175,6 +276,7 @@ struct MarkDetailView: View {
     @EnvironmentObject private var model: StudioModel
     let markID: UUID
     @State private var note = ""
+    @State private var showingInk = false
     @State private var kind: CardKind = .expression
     var body: some View {
         Form {
@@ -197,9 +299,21 @@ struct MarkDetailView: View {
                         }
                     }
                 }
-                Text(mark.id.uuidString).font(.caption).textSelection(.enabled)
+                if mark.locator.kind == "epub", !mark.excerpt.isEmpty, mark.locator.nativeJSON != nil,
+                    mark.deletedAt == nil
+                {
+                    Button(mark.epubNoteInk == nil ? "添加手写页边注" : "打开手写页边注",
+                        systemImage: "pencil.tip") { showingInk = true }
+                }
+                DisclosureGroup("标记技术信息") {
+                    Text(mark.id.uuidString).font(.caption).textSelection(.enabled)
+                }
             }
-        }.navigationTitle("标记详情").onAppear {
+        }.studySurface().navigationTitle("标记详情").sheet(isPresented: $showingInk) {
+            if let mark = model.state.marks.first(where: { $0.id == markID }) {
+                EPUBInkNote(mark: mark).environmentObject(model)
+            }
+        }.onAppear {
             note = model.state.marks.first { $0.id == markID }?.note ?? ""
             kind = model.state.marks.first { $0.id == markID }?.highlightKind ?? .expression
         }
@@ -233,23 +347,13 @@ struct CardsView: View {
                     NavigationLink {
                         CardDetailView(cardID: card.id)
                     } label: {
-                        VStack(alignment: .leading) {
-                            Text(card.type == .word ? card.content["example_en"] ?? "" : card.title)
-                                .lineLimit(3)
-                            if card.type == .word {
-                                Text(card.content["word"] ?? "").font(.headline)
-                                Text(card.content["definition_en"] ?? "").foregroundStyle(.secondary)
-                            }
-                            Text(
-                                "\(card.type.title) · \(studioLabel(card.organization.rawValue)) · \(studioLabel(card.review.rawValue))"
-                            ).font(.caption).foregroundStyle(card.type.color)
-                        }
-                    }.contextMenu {
+                        StudyCardFace(card: card)
+                    }.listRowBackground(Color.clear).listRowSeparator(.hidden).contextMenu {
                         Button("编辑卡片") { editor = card }
                         Button("移入回收站", role: .destructive) { model.delete([card.id]) }
                     }
                 }
-            }.navigationTitle("知识卡片").searchable(text: $search)
+            }.studySurface().navigationTitle("知识卡片").searchable(text: $search)
                 .toolbar { Button("新建") { editor = LibraryCard(type: .keyword, content: [:]) } }
         }.sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
     }
@@ -296,7 +400,7 @@ struct CardEditor: View {
                 if !card.sourceRefs.isEmpty {
                     Text("已保留 \(card.sourceRefs.count) 个出处和 \(card.markIDs.count) 个标记关联。")
                 }
-            }.navigationTitle("编辑卡片")
+            }.studySurface().navigationTitle("编辑卡片")
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) {
@@ -357,6 +461,8 @@ struct CardDetailView: View {
     private func content(showComparison: Bool) -> some View {
         Form {
             if let card = model.state.cards.first(where: { $0.id == cardID }) {
+                Section { StudyCardFace(card: card, featured: card.type == .key_sentence) }
+                    .listRowBackground(Color.clear)
                 ForEach(LibraryCard.fields(for: card.type), id: \.self) { field in
                     if let value = card.content[field] {
                         Section(studioFieldLabel(field)) {
@@ -378,8 +484,15 @@ struct CardDetailView: View {
                     ForEach(card.sourceRefs) { ref in
                         if let source = model.state.sources.first(where: { $0.id == ref.sourceID }) {
                             if source.deletedAt == nil {
-                                NavigationLink(source.title) {
+                                NavigationLink {
                                     SourceReaderView(source: source, location: ref.locator)
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(source.title)
+                                        if let locator = ref.locator {
+                                            Text(locationLabel(locator)).font(.caption).foregroundStyle(.secondary)
+                                        }
+                                    }
                                 }
                                 if showComparison { Button("与原文并排对照") { comparison = ref } }
                             } else {
@@ -407,6 +520,6 @@ struct CardDetailView: View {
                 CardReviewHistory(card: card)
                 Button("编辑") { editor = card }
             }
-        }.tint(model.state.cards.first { $0.id == cardID }?.type.color ?? .accentColor)
+        }.studySurface().tint(model.state.cards.first { $0.id == cardID }?.type.color ?? .accentColor)
     }
 }

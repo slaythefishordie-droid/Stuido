@@ -12,7 +12,15 @@ struct ExtensionSetupView: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section("个性化") {
+                Section {
+                    VStack(alignment: .leading, spacing: 6) {
+                        Label("从 Safari 收集", systemImage: "safari")
+                            .font(.system(.title2, design: .serif, weight: .semibold))
+                        Text("QuickMark 在原网页保存时间或段落，返回书房后可在收集箱整理。")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }.studyPanel()
+                }.listRowBackground(Color.clear)
+                Section("外观与发音") {
                     Picker("外观", selection: $appearance) {
                         Text("跟随系统").tag("system")
                         Text("浅色").tag("light")
@@ -28,23 +36,22 @@ struct ExtensionSetupView: View {
                     Toggle("紧凑显示", isOn: $compactDisplay)
                     Text("Safari 面板可设置回溯、字号、控件位置和网站适配器。文章与播客按网站主动授权；停用后刷新网页生效。")
                 }
-                Section("Safari 扩展验证") {
-                    Text("在 iPad 设置的 Safari 扩展列表启用 Knowledge Studio。然后在 Safari 页面菜单打开扩展。")
-                    Text("先在 Safari 写入记录，再返回此页核对编号。随后在此写入记录，回到 Safari 读取并核对。")
+                Section("Safari 扩展") {
+                    Text("在 iPad 的 Safari 扩展设置中启用 Knowledge Studio。")
+                    DisclosureGroup("共享诊断") {
+                        Text("先在 Safari 写入记录，再分别核对两端编号。")
+                            .font(.caption).foregroundStyle(.secondary)
+                        LabeledContent("主 App", value: appRecord).font(.footnote.monospaced())
+                            .textSelection(.enabled)
+                        Button("写入主 App 验证记录") { refresh(write: true) }
+                        LabeledContent("Safari", value: safariRecord).font(.footnote.monospaced())
+                            .textSelection(.enabled)
+                        Button("重新读取共享记录") { refresh() }
+                        Text(status).accessibilityIdentifier("extensionSharingStatus")
+                        Text("编号一致后，重开 App 核对记录仍可读取。").font(.caption)
+                    }
                 }
-                Section("主 App 写入的记录") {
-                    Text(appRecord).font(.footnote.monospaced()).textSelection(.enabled)
-                    Button("写入主 App 验证记录") { refresh(write: true) }
-                }
-                Section("Safari 写入的记录") {
-                    Text(safariRecord).font(.footnote.monospaced()).textSelection(.enabled)
-                    Button("重新读取共享记录") { refresh() }
-                }
-                Section("状态") {
-                    Text(status).accessibilityIdentifier("extensionSharingStatus")
-                    Text("两端显示相同编号后，请再关闭并重新打开主 App，确认记录仍可读取。")
-                }
-            }
+            }.studySurface()
             .navigationTitle("设置")
         }
         .onAppear { refresh() }

@@ -28,7 +28,7 @@ struct AIInboxView: View {
                         }
                     }
                 }
-            }.navigationTitle("导入箱")
+            }.studySurface().navigationTitle("导入箱")
         }.fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
             do {
                 let url = try result.get()
@@ -123,7 +123,7 @@ struct ImportReviewView: View {
                     }
                     Button("确认导入所选卡片") { confirm = true }.disabled(selected.isEmpty)
                 }
-            }.navigationTitle(pending.title).toolbar { Button("关闭") { dismiss() } }
+            }.studySurface().navigationTitle(pending.title).toolbar { Button("关闭") { dismiss() } }
         }.onAppear { load() }
             .confirmationDialog("将所选候选写入知识库？", isPresented: $confirm, titleVisibility: .visible) {
                 Button("导入") {
@@ -156,6 +156,8 @@ struct LibraryView: View {
     @State private var search = ""
     @State private var projectTitle = ""
     @State private var selectedProject: UUID?
+    @State private var coverSourceID: UUID?
+    @State private var coverLayout = true
     @State private var selecting = false
     @State private var selected: Set<UUID> = []
     private var sources: [LibrarySource] {
@@ -175,7 +177,7 @@ struct LibraryView: View {
                                 Label("全部资料", systemImage: "books.vertical")
                             }
                             projectTree(wide: true)
-                        }.frame(width: 240)
+                        }.studySurface().frame(width: 212)
                         Divider()
                         if let selectedProject {
                             ProjectView(projectID: selectedProject).id(selectedProject)
@@ -186,11 +188,20 @@ struct LibraryView: View {
                 } else {
                     sourceList(includeProjects: true)
                 }
-            }.navigationTitle("资料库").searchable(text: $search)
+            }.studySurface().navigationTitle("资料库").searchable(text: $search)
                 .toolbar {
-                    Button(model.isImporting ? "导入中…" : "导入资料") { importing = true }.disabled(
+                    Button(model.isImporting ? "导入中…" : "导入资料") {
+                        coverSourceID = nil
+                        importing = true
+                    }.disabled(
                         model.isImporting)
                     if selectedProject == nil {
+                        Button {
+                            coverLayout.toggle()
+                        } label: {
+                            Label(coverLayout ? "列表" : "封面",
+                                systemImage: coverLayout ? "list.bullet" : "square.grid.2x2")
+                        }.disabled(selecting)
                         Button(selecting ? "完成" : "选择") {
                             selecting.toggle()
                             selected.removeAll()
@@ -210,8 +221,14 @@ struct LibraryView: View {
                 }
         }.fileImporter(
             isPresented: $importing,
-            allowedContentTypes: [.pdf, UTType(filenameExtension: "epub") ?? .data, .movie]
+            allowedContentTypes: coverSourceID == nil ? [.pdf, UTType(filenameExtension: "epub") ?? .data, .movie] : [.image]
         ) { result in
+            if let id = coverSourceID {
+                coverSourceID = nil
+                do { saveSourceCover(try StudyCoverImport.read(result.get()), id: id) }
+                catch { model.message = error.localizedDescription }
+                return
+            }
             Task {
                 do { await model.importFile(try result.get()) } catch {
                     model.message = error.localizedDescription
@@ -219,6 +236,34 @@ struct LibraryView: View {
             }
         }
     }
+    private func saveSourceCover(_ data: Data?, id: UUID) {
+        model.change { state in
+            guard let index = state.sources.firstIndex(where: { $0.id == id && $0.deletedAt == nil }) else {
+                throw LibraryError.invalid("资料已不可用")
+            }
+            state.sources[index].coverImage = data
+        }
+    }
+
+    @ViewBuilder private func sourceActionMenu(_ source: LibrarySource) -> some View {
+        Button("更换封面") {
+            coverSourceID = source.id
+            importing = true
+        }
+        if source.coverImage != nil {
+            Button("恢复自动封面") { saveSourceCover(nil, id: source.id) }
+        }
+        Button("移入回收站", role: .destructive) { model.delete([source.id]) }
+    }
+
+    private func sourceLink(_ source: LibrarySource, compact: Bool) -> some View {
+        NavigationLink {
+            SourceReaderView(source: source, location: source.lastLocation)
+        } label: {
+            StudySourceTile(source: source, asset: model.assetURL(source), compact: compact)
+        }.contextMenu { sourceActionMenu(source) }
+    }
+
     @ViewBuilder private func projectTree(wide: Bool) -> some View {
         Section("研究项目") {
             DisclosureGroup("新建项目") {
@@ -247,139 +292,234 @@ struct LibraryView: View {
             }
         }
     }
-    private func sourceList(includeProjects: Bool) -> some View {
-        List {
-            if includeProjects { projectTree(wide: false) }
-            Section("资料") {
-                if sources.isEmpty {
-                    Text(search.isEmpty ? "导入一本书，开始阅读。" : "没有找到资料").foregroundStyle(.secondary)
-                }
-                ForEach(sources) { source in
-                    if selecting {
-                        Button {
-                            if selected.contains(source.id) {
-                                selected.remove(source.id)
-                            } else {
-                                selected.insert(source.id)
+    @ViewBuilder private func sourceList(includeProjects: Bool) -> some View {
+        if coverLayout && !selecting {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 14) {
+                    if includeProjects {
+                        VStack(alignment: .leading, spacing: 10) { projectTree(wide: false) }.studyPanel()
+                    }
+                    StudyHeading(title: "资料")
+                    emptySources
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 138), spacing: 13)], spacing: 17) {
+                        ForEach(sources) { sourceLink($0, compact: false).buttonStyle(.plain) }
+                    }
+                }.padding(18)
+            }.studySurface()
+        } else {
+            List {
+                if includeProjects { projectTree(wide: false) }
+                Section("资料") {
+                    emptySources
+                    ForEach(sources) { source in
+                        if selecting {
+                            ObjectSelectionRow(isSelected: Binding(
+                                get: { selected.contains(source.id) },
+                                set: { enabled in
+                                    if enabled { selected.insert(source.id) }
+                                    else { selected.remove(source.id) }
+                                })) {
+                                StudySourceTile(source: source, asset: model.assetURL(source), compact: true)
                             }
-                        } label: {
-                            Label(
-                                source.title,
-                                systemImage: selected.contains(source.id) ? "checkmark.circle.fill" : "circle"
-                            )
-                        }
-                    } else {
-                        NavigationLink {
-                            SourceReaderView(source: source, location: source.lastLocation)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(source.title)
-                                Text(studioLabel(source.kind.rawValue)).font(.caption).foregroundStyle(
-                                    .secondary)
-                            }
-                        }.contextMenu { Button("移入回收站", role: .destructive) { model.delete([source.id]) } }
+                        } else { sourceLink(source, compact: true) }
                     }
                 }
-            }
+            }.studySurface()
         }
     }
+
+    @ViewBuilder private var emptySources: some View {
+        if sources.isEmpty {
+            Text(search.isEmpty ? "导入一本书，开始阅读。" : "没有找到资料").foregroundStyle(.secondary)
+        }
+    }
+
 }
 
 struct ProjectView: View {
     @EnvironmentObject private var model: StudioModel
     let projectID: UUID
+    private enum SectionKind: String, CaseIterable { case sources = "资料", cards = "卡片", maps = "地图", relations = "关系" }
+    @State private var section = SectionKind.sources
     @State private var managingLinks = false
     @State private var title = ""
     @State private var note = ""
+    @State private var choosingCover = false
+    private var project: LibraryProject? { model.state.projects.first { $0.id == projectID } }
+
     var body: some View {
-        Form {
-            if let project = model.state.projects.first(where: { $0.id == projectID }) {
-                DisclosureGroup("项目说明与编辑") {
-                    TextField("名称", text: $title)
-                    TextField("描述", text: $note, axis: .vertical)
-                    Button("保存") {
-                        model.change { state in
-                            if let i = state.projects.firstIndex(where: { $0.id == projectID }) {
-                                guard !title.isEmpty else { throw LibraryError.invalid("项目名称不能为空") }
-                                state.projects[i].title = title
-                                state.projects[i].note = note
-                            }
-                        }
-                    }
-                }
-                NavigationLink("研究白板") { ProjectBoardView(projectID: projectID) }
-                NavigationLink("自定义分组") { ProjectGroupsView(projectID: projectID) }
-                if !managingLinks {
-                    Section("项目资料") {
-                        ForEach(
-                            model.state.sources.filter {
-                                $0.deletedAt == nil && project.sourceIDs.contains($0.id)
-                            }
-                        ) { source in
-                            VStack(alignment: .leading, spacing: 8) {
-                                NavigationLink(source.title) {
-                                    SourceReaderView(source: source, location: source.lastLocation)
-                                }
-                                NavigationLink("项目研究笔记") {
-                                    ProjectSourceNoteView(projectID: projectID, sourceID: source.id)
-                                }.font(.caption)
-                            }
-                        }
-                    }
-                    Section("项目卡片") {
-                        ForEach(
-                            model.state.cards.filter {
-                                $0.deletedAt == nil && project.cardIDs.contains($0.id)
-                            }
-                        ) { card in
-                            NavigationLink(card.title) { CardDetailView(cardID: card.id) }
-                        }
-                    }
+        List {
+            if let project {
+                header(project)
+                if managingLinks {
+                    membership(project)
                 } else {
-                    Section("关联资料") {
-                        ForEach(model.state.sources.filter { $0.deletedAt == nil }) { source in
-                            ObjectSelectionRow(
-                                source.title,
-                                isSelected: Binding(
-                                    get: { project.sourceIDs.contains(source.id) },
-                                    set: { enabled in
-                                        model.change { state in
-                                            if let i = state.projects.firstIndex(where: { $0.id == projectID }
-                                            ) {
-                                                state.projects[i].sourceIDs.removeAll { $0 == source.id }
-                                                if enabled { state.projects[i].sourceIDs.append(source.id) }
-                                            }
-                                        }
-                                    }))
-                        }
-                    }
-                    Section("关联卡片") {
-                        ForEach(model.state.cards.filter { $0.deletedAt == nil }) { card in
-                            ObjectSelectionRow(
-                                card.title,
-                                isSelected: Binding(
-                                    get: { project.cardIDs.contains(card.id) },
-                                    set: { enabled in
-                                        model.change { state in
-                                            if let i = state.projects.firstIndex(where: { $0.id == projectID }
-                                            ) {
-                                                state.projects[i].cardIDs.removeAll { $0 == card.id }
-                                                if enabled { state.projects[i].cardIDs.append(card.id) }
-                                            }
-                                        }
-                                    }))
+                    Picker("项目内容", selection: $section) {
+                        ForEach(SectionKind.allCases, id: \.self) { Text($0.rawValue).tag($0) }
+                    }.pickerStyle(.segmented)
+                    projectContent(project)
+                }
+            }
+        }.studySurface()
+            .navigationTitle(project?.title ?? "项目").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                Button(managingLinks ? "完成关联" : "管理关联") { managingLinks.toggle() }
+            }
+            .fileImporter(isPresented: $choosingCover, allowedContentTypes: [.image]) { result in
+                do { saveBoardCover(try StudyCoverImport.read(result.get())) }
+                catch { model.message = error.localizedDescription }
+            }.onAppear {
+                if let project { title = project.title; note = project.note }
+            }
+    }
+
+    private func header(_ project: LibraryProject) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(project.title).font(.system(.largeTitle, design: .serif, weight: .semibold))
+                .accessibilityAddTraits(.isHeader)
+            if !project.note.isEmpty { Text(project.note).foregroundStyle(.secondary) }
+            DisclosureGroup("编辑项目说明") {
+                TextField("名称", text: $title)
+                TextField("描述", text: $note, axis: .vertical)
+                Button("保存") {
+                    model.change { state in
+                        if let index = state.projects.firstIndex(where: { $0.id == projectID }) {
+                            guard !title.isEmpty else { throw LibraryError.invalid("项目名称不能为空") }
+                            state.projects[index].title = title
+                            state.projects[index].note = note
                         }
                     }
                 }
-                Text("解除关联只影响项目，不删除卡片或资料。").font(.caption)
             }
-        }.navigationTitle("项目").toolbar { Button(managingLinks ? "完成关联" : "管理关联") { managingLinks.toggle() } }
-            .onAppear {
-                if let p = model.state.projects.first(where: { $0.id == projectID }) {
-                    title = p.title
-                    note = p.note
+        }.studyPanel().listRowBackground(Color.clear)
+    }
+
+    @ViewBuilder private func projectContent(_ project: LibraryProject) -> some View {
+        switch section {
+        case .sources:
+            Section("资料分组") {
+                NavigationLink("管理自定义分组") { ProjectGroupsView(projectID: projectID) }
+                ForEach(project.groups ?? []) { group in
+                    DisclosureGroup(group.title) {
+                        ForEach(projectSources(group.sourceIDs)) { sourceRow($0) }
+                        if group.sourceIDs.isEmpty { Text("此组没有资料。").foregroundStyle(.secondary) }
+                    }
                 }
             }
+            Section("全部项目资料") {
+                ForEach(projectSources(project.sourceIDs)) { sourceRow($0) }
+            }
+        case .cards:
+            Section("项目卡片") {
+                ForEach(model.state.cards.filter { $0.deletedAt == nil && project.cardIDs.contains($0.id) }) { card in
+                    NavigationLink { CardDetailView(cardID: card.id) } label: { StudyCardFace(card: card) }
+                        .listRowBackground(Color.clear).listRowSeparator(.hidden)
+                }
+            }
+        case .maps:
+            NavigationLink { ProjectBoardView(projectID: projectID) } label: {
+                VStack(alignment: .leading, spacing: 9) {
+                    StudyBoardCover(project: project)
+                    Label("研究白板", systemImage: "point.3.connected.trianglepath.dotted")
+                        .font(.system(.headline, design: .serif))
+                    if let board = project.board {
+                        Text("\(board.nodes.count) 个节点 · \(board.edges.count) 条连线").font(.caption)
+                    }
+                }
+            }.contextMenu {
+                Button("更换白板封面") { choosingCover = true }
+                if project.boardCoverImage != nil { Button("恢复白板预览") { saveBoardCover(nil) } }
+            }
+        case .relations:
+            projectRelations(project)
+        }
+    }
+
+    @ViewBuilder private func projectRelations(_ project: LibraryProject) -> some View {
+        let cardIndex = Dictionary(uniqueKeysWithValues: model.state.cards.map { ($0.id, $0) })
+        let relations = model.state.relations.filter { $0.deletedAt == nil && project.relationIDs.contains($0.id) }
+        Section("卡片关系") {
+            if relations.isEmpty { Text("此项目暂无已关联的卡片关系。").foregroundStyle(.secondary) }
+            ForEach(relations) { relation in
+                VStack(alignment: .leading, spacing: 8) {
+                    Text(studioLabel(relation.kind)).font(.caption.weight(.semibold)).foregroundStyle(StudyTheme.ink)
+                    relationEndpoint(cardIndex[relation.from])
+                    relationEndpoint(cardIndex[relation.to])
+                    if !relation.note.isEmpty { Text(relation.note).foregroundStyle(.secondary) }
+                }.studyPanel().listRowBackground(Color.clear)
+            }
+        }
+    }
+
+    @ViewBuilder private func relationEndpoint(_ card: LibraryCard?) -> some View {
+        if let card, card.deletedAt == nil {
+            NavigationLink(card.title) { CardDetailView(cardID: card.id) }
+        } else { Text("卡片当前不可用").foregroundStyle(.secondary) }
+    }
+
+    private func projectSources(_ ids: [UUID]) -> [LibrarySource] {
+        let ids = Set(ids)
+        return model.state.sources.filter { $0.deletedAt == nil && ids.contains($0.id) }
+    }
+
+    private func sourceRow(_ source: LibrarySource) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            NavigationLink {
+                SourceReaderView(source: source, location: source.lastLocation)
+            } label: {
+                StudySourceTile(source: source, asset: model.assetURL(source), compact: true)
+            }
+            NavigationLink("项目研究笔记") {
+                ProjectSourceNoteView(projectID: projectID, sourceID: source.id)
+            }.font(.caption)
+        }
+    }
+
+    private func saveBoardCover(_ data: Data?) {
+        model.change { state in
+            guard let index = state.projects.firstIndex(where: { $0.id == projectID && $0.deletedAt == nil }) else {
+                throw LibraryError.invalid("项目已不可用")
+            }
+            state.projects[index].boardCoverImage = data
+        }
+    }
+
+    @ViewBuilder private func membership(_ project: LibraryProject) -> some View {
+        Section("关联资料") {
+            ForEach(model.state.sources.filter { $0.deletedAt == nil }) { source in
+                ObjectSelectionRow(
+                    source.title,
+                    isSelected: Binding(
+                        get: { project.sourceIDs.contains(source.id) },
+                        set: { enabled in
+                            model.change { state in
+                                if let i = state.projects.firstIndex(where: { $0.id == projectID }
+                                ) {
+                                    state.projects[i].sourceIDs.removeAll { $0 == source.id }
+                                    if enabled { state.projects[i].sourceIDs.append(source.id) }
+                                }
+                            }
+                        }))
+            }
+        }
+        Section("关联卡片") {
+            ForEach(model.state.cards.filter { $0.deletedAt == nil }) { card in
+                ObjectSelectionRow(
+                    card.title,
+                    isSelected: Binding(
+                        get: { project.cardIDs.contains(card.id) },
+                        set: { enabled in
+                            model.change { state in
+                                if let i = state.projects.firstIndex(where: { $0.id == projectID }
+                                ) {
+                                    state.projects[i].cardIDs.removeAll { $0 == card.id }
+                                    if enabled { state.projects[i].cardIDs.append(card.id) }
+                                }
+                            }
+                        }))
+            }
+        }
+        Text("解除关联只影响项目，不删除卡片或资料。").font(.caption)
     }
 }
 
@@ -510,7 +650,7 @@ struct DataManagerView: View {
                         }
                     }
                 }
-            }.navigationTitle("数据管理").searchable(text: $search)
+            }.studySurface().navigationTitle("数据管理").searchable(text: $search)
                 .toolbar { EditButton() }
                 .onChange(of: kind) { _, _ in selected.removeAll() }
                 .onChange(of: search) { _, _ in selected.removeAll() }

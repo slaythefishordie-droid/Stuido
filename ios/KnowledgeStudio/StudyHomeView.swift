@@ -1,76 +1,114 @@
 import KnowledgeCore
 import SwiftUI
 
-/// A view onto the existing library, not a second store or a new scheduling system.
 struct StudyHomeView: View {
     @EnvironmentObject private var model: StudioModel
+    @Environment(\.studyNavigation) private var navigation
+    @ScaledMetric(relativeTo: .body) private var columnWidth = 270.0
     private var reading: [LibrarySource] {
         model.state.sources.filter { $0.deletedAt == nil && $0.lastLocation != nil }
             .sorted { ($0.lastReadAt ?? $0.updatedAt) > ($1.lastReadAt ?? $1.updatedAt) }
     }
+    private var cards: [LibraryCard] {
+        model.state.cards.filter { $0.deletedAt == nil }.sorted { $0.updatedAt > $1.updatedAt }
+    }
+    private var projects: [LibraryProject] {
+        Array(model.state.projects.filter { $0.deletedAt == nil }.reversed())
+    }
+
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("留一点时间，读下去。").font(.title2).fontDesign(.serif)
-                        Text("从上次的位置继续，或打开一个研究项目。").foregroundStyle(.secondary)
-                    }.padding(.vertical, 12)
-                }
-                Section {
-                    NavigationLink {
-                        TodayView()
-                    } label: {
-                        Label("今日复习", systemImage: "calendar")
-                    }
-                }
-                Section("继续阅读") {
-                    if reading.isEmpty {
-                        Text("在资料库打开一本书，阅读位置会保留在这里。").foregroundStyle(.secondary)
-                    }
-                    ForEach(Array(reading.prefix(6))) { source in
-                        NavigationLink {
-                            SourceReaderView(source: source, location: source.lastLocation)
-                        } label: {
-                            Label {
-                                VStack(alignment: .leading, spacing: 4) {
-                                    Text(source.title).font(.headline)
-                                    Text(source.lastLocation.map(locationLabel) ?? "继续阅读").font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            } icon: {
-                                Image(systemName: "book")
-                            }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 22) {
+                    Text("书桌").font(.system(.largeTitle, design: .serif, weight: .semibold))
+                        .accessibilityAddTraits(.isHeader)
+                    ViewThatFits(in: .horizontal) {
+                        HStack(alignment: .top, spacing: 24) {
+                            thoughts.frame(minWidth: columnWidth + 90)
+                            activity.frame(idealWidth: columnWidth, maxWidth: columnWidth)
                         }
+                        VStack(alignment: .leading, spacing: 24) { thoughts; activity }
                     }
-                }
-                Section("研究项目") {
-                    ForEach(model.state.projects.filter { $0.deletedAt == nil }) { project in
-                        NavigationLink {
-                            ProjectView(projectID: project.id)
-                        } label: {
-                            Label(project.title, systemImage: "folder")
-                        }
-                    }
-                }
-                Section("最近更新的知识") {
-                    ForEach(
-                        Array(
-                            model.state.cards.filter { $0.deletedAt == nil }.sorted {
-                                $0.updatedAt > $1.updatedAt
-                            }.prefix(8))
-                    ) { card in
-                        NavigationLink {
-                            CardDetailView(cardID: card.id)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(card.title).lineLimit(3)
-                                Text(card.type.title).font(.caption).foregroundStyle(card.type.color)
-                            }
-                        }
-                    }
-                }
-            }.navigationTitle("书桌")
+                    recent
+                }.padding(24).frame(maxWidth: 1180)
+                    .frame(maxWidth: .infinity)
+            }.studySurface()
+                .navigationBarTitleDisplayMode(.inline)
         }
+    }
+
+    private var thoughts: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            StudyHeading(title: "思想卡片")
+            if let featured = cards.first(where: { $0.type == .key_sentence }) ?? cards.first {
+                cardLink(featured, featured: true)
+                LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
+                    ForEach(relatedCards(to: featured)) { cardLink($0) }
+                }
+            } else {
+                ContentUnavailableView("还没有知识卡片", systemImage: "rectangle.stack",
+                    description: Text("在阅读器留下一个 Mark，或在知识卡片中记录第一个想法。"))
+            }
+            Button("浏览知识卡片") { navigation.open(.cards) }.font(.subheadline)
+        }
+    }
+
+    private func relatedCards(to featured: LibraryCard) -> [LibraryCard] {
+        let remaining = cards.filter { $0.id != featured.id }
+        let distinct = CardKind.allCases.compactMap { kind in remaining.first { $0.type == kind } }
+        let distinctIDs = Set(distinct.map(\.id))
+        return Array((distinct + remaining.filter { !distinctIDs.contains($0.id) }).prefix(3))
+    }
+
+    private var activity: some View {
+        VStack(alignment: .leading, spacing: 13) {
+            StudyHeading(title: "继续阅读／观看")
+            if let source = reading.first {
+                sourceLink(source, compact: true).studyPanel()
+            } else {
+                Text("打开一份资料后，阅读位置会保存在这里。").foregroundStyle(.secondary)
+            }
+            StudyHeading(title: "活跃项目")
+            if projects.isEmpty { Text("在资料库创建研究项目。").foregroundStyle(.secondary) }
+            ForEach(projects.prefix(3)) { project in
+                NavigationLink {
+                    ProjectView(projectID: project.id)
+                } label: {
+                    HStack {
+                        Label(project.title, systemImage: "folder")
+                        Spacer()
+                        Text("\(project.sourceIDs.count + project.cardIDs.count) 项")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }.frame(minHeight: 44)
+                }
+            }
+            Button { navigation.open(.today) } label: {
+                Label("今日复习", systemImage: "calendar").frame(minHeight: 44)
+            }
+        }
+    }
+
+    private var recent: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            StudyHeading(title: "最近打开")
+            LazyVGrid(columns: [GridItem(.adaptive(minimum: 138), spacing: 12)], spacing: 14) {
+                ForEach(reading.prefix(6)) { sourceLink($0, compact: false) }
+            }
+            Button("浏览资料库") { navigation.open(.library) }.font(.subheadline)
+        }
+    }
+
+    private func cardLink(_ card: LibraryCard, featured: Bool = false) -> some View {
+        NavigationLink { CardDetailView(cardID: card.id) } label: {
+            StudyCardFace(card: card, featured: featured)
+        }.buttonStyle(.plain)
+    }
+
+    private func sourceLink(_ source: LibrarySource, compact: Bool) -> some View {
+        NavigationLink {
+            SourceReaderView(source: source, location: source.lastLocation)
+        } label: {
+            StudySourceTile(source: source, asset: model.assetURL(source), compact: compact)
+        }.buttonStyle(.plain)
     }
 }
