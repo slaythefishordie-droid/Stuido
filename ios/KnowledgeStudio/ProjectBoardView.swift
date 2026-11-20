@@ -7,6 +7,10 @@ struct ProjectBoardView: View {
     @State private var text = ""
     @GestureState private var drag: NodeDrag?
     @State private var choosingObject = false
+    @State private var zoom: CGFloat = 1
+    @GestureState private var magnification: CGFloat = 1
+
+    private var displayedZoom: CGFloat { min(1.6, max(0.5, zoom * magnification)) }
 
     private struct NodeDrag {
         let id: UUID
@@ -91,7 +95,12 @@ struct ProjectBoardView: View {
     var body: some View {
         VStack(spacing: 0) {
             controls
-            ScrollView([.horizontal, .vertical]) { canvas }
+            ScrollView([.horizontal, .vertical]) {
+                canvas.scaleEffect(displayedZoom, anchor: .topLeading)
+                    .frame(width: 1600 * displayedZoom, height: 1200 * displayedZoom, alignment: .topLeading)
+            }.simultaneousGesture(MagnifyGesture()
+                .updating($magnification) { value, scale, _ in scale = value.magnification }
+                .onEnded { value in zoom = min(1.6, max(0.5, zoom * value.magnification)) })
         }.studySurface().navigationTitle("研究白板").background(StudyTheme.paper)
             .sheet(item: $edited) { editSheet($0) }
             .sheet(isPresented: $connections) { connectionSheet }
@@ -120,6 +129,13 @@ struct ProjectBoardView: View {
             if start != nil { Button("取消连线") { start = nil } }
             Button("撤销") { undo() }.disabled(undoBoards.isEmpty)
             Button("连线") { connections = true }
+            Menu {
+                Button("缩小") { zoom = max(0.5, zoom - 0.15) }
+                Button("放大") { zoom = min(1.6, zoom + 0.15) }
+                Button("原始大小") { zoom = 1 }
+            } label: {
+                Image(systemName: "magnifyingglass").frame(minWidth: 35, minHeight: 44)
+            }.accessibilityLabel("缩放白板")
         }.padding()
     }
     private var canvas: some View {
@@ -257,6 +273,7 @@ private struct BoardObjectPicker: View {
     let add: (BoardNode) -> Void
     @State private var search = ""
     @State private var scope = "项目"
+    @State private var filterProject: UUID?
     @State private var kind = "全部"
 
     private struct Choice: Identifiable {
@@ -267,7 +284,7 @@ private struct BoardObjectPicker: View {
     }
 
     private var choices: [Choice] {
-        let project = model.state.projects.first { $0.id == projectID }
+        let project = model.state.projects.first { $0.id == (filterProject ?? projectID) && $0.deletedAt == nil }
         let ids = Set((project?.sourceIDs ?? []) + (project?.cardIDs ?? []))
         var results: [Choice] = []
         if kind != "卡片" {
@@ -293,6 +310,14 @@ private struct BoardObjectPicker: View {
                 Picker("范围", selection: $scope) {
                     ForEach(["项目", "最近", "全库"], id: \.self) { Text($0) }
                 }.pickerStyle(.segmented)
+                if scope == "项目" {
+                    Picker("项目", selection: $filterProject) {
+                        Text("当前项目").tag(nil as UUID?)
+                        ForEach(model.state.projects.filter { $0.deletedAt == nil && $0.id != projectID }) {
+                            Text($0.title).tag(Optional($0.id))
+                        }
+                    }
+                }
                 Picker("类型", selection: $kind) {
                     ForEach(["全部", "资料", "卡片"], id: \.self) { Text($0) }
                 }

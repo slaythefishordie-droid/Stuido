@@ -20,7 +20,7 @@ struct AIInboxView: View {
                     }.studyPanel()
                 }.listRowBackground(Color.clear)
                 Section("准备卡片包") {
-                    Button("选择 JSON 文件", systemImage: "doc.badge.plus") { importing = true }
+                    Button("选择 JSON 文件", systemImage: "doc.badge.plus") { importing = true }.disabled(staging)
                     DisclosureGroup("查看或粘贴 JSON", isExpanded: $editingJSON) {
                         TextEditor(text: $text).frame(minHeight: 126).font(.system(.body, design: .monospaced))
                     }
@@ -55,14 +55,23 @@ struct AIInboxView: View {
                 }
             }.studySurface().navigationTitle("导入箱")
         }.fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
-            do {
-                let url = try result.get()
-                let scope = url.startAccessingSecurityScopedResource()
-                defer { if scope { url.stopAccessingSecurityScopedResource() } }
-                let data = try Data(contentsOf: url)
-                guard data.count <= 10 * 1024 * 1024 else { throw LibraryError.invalid("JSON 超过 10 MiB") }
-                text = String(decoding: data, as: UTF8.self)
-            } catch { model.message = error.localizedDescription }
+            staging = true
+            Task {
+                defer { staging = false }
+                do {
+                    let url = try result.get()
+                    text = try await Task.detached(priority: .userInitiated) {
+                        let scope = url.startAccessingSecurityScopedResource()
+                        defer { if scope { url.stopAccessingSecurityScopedResource() } }
+                        let limit = 10 * 1024 * 1024
+                        let file = try FileHandle(forReadingFrom: url)
+                        defer { try? file.close() }
+                        let data = try file.read(upToCount: limit + 1) ?? Data()
+                        guard data.count <= limit else { throw LibraryError.invalid("JSON 超过 10 MiB") }
+                        return String(decoding: data, as: UTF8.self)
+                    }.value
+                } catch { model.message = error.localizedDescription }
+            }
         }.sheet(item: $pending) { ImportReviewView(pending: $0).environmentObject(model) }
     }
 }
@@ -384,6 +393,14 @@ struct LibraryView: View {
             }
         }
     }
+    @ViewBuilder private var importFeedback: some View {
+        if model.isImporting {
+            ProgressView("正在安全复制资料…").font(.caption)
+        } else if let status = model.importStatus {
+            Label(status, systemImage: "checkmark.circle").font(.caption).foregroundStyle(.secondary)
+        }
+    }
+
     @ViewBuilder private func sourceList(includeProjects: Bool) -> some View {
         if coverLayout {
             ScrollView {
@@ -393,6 +410,7 @@ struct LibraryView: View {
                     }
                     StudyHeading(title: "资料")
                     collectionPicker
+                    importFeedback
                     emptySources
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 138), spacing: 13)], spacing: 17) {
                         ForEach(sources) { source in
@@ -410,6 +428,7 @@ struct LibraryView: View {
                 if includeProjects { projectTree(wide: false) }
                 Section("资料") {
                     collectionPicker
+                    importFeedback
                     emptySources
                     ForEach(sources) { source in
                         if selecting {
@@ -666,6 +685,9 @@ struct DataManagerView: View {
     @State private var selectedFiles: Set<URL> = []
     @State private var fileSizes: [URL: Int64] = [:]
     @State private var cacheBytes: Int64 = 0
+    @State private var orphanBytes: Int64 = 0
+    @State private var databaseBytes: Int64 = 0
+    @State private var recoveryBytes: Int64 = 0
     @State private var sort = "类型"
     @State private var refreshStorage = UUID()
 
@@ -718,7 +740,72 @@ struct DataManagerView: View {
 
     var body: some View {
         NavigationStack {
-            List(selection: $selected) {
+            GeometryReader { geometry in
+                if geometry.size.width >= 830 {
+                    HStack(spacing: 0) {
+                        List { storageSummary; objectSummary }.studySurface().frame(width: 285)
+                        Divider()
+                        objectList(showStorage: false)
+                    }
+                } else {
+                    objectList(showStorage: true)
+                }
+            }.navigationTitle("数据管理").searchable(text: $search)
+                .toolbar { EditButton() }
+                .onChange(of: kind) { _, _ in selected.removeAll() }
+                .onChange(of: search) { _, _ in selected.removeAll() }
+        }.confirmationDialog(
+            permanent ? "永久清理不可撤销，确认已备份？" : "将所选对象移入回收站？",
+            isPresented: $confirming, titleVisibility: .visible
+        ) {
+            Button(permanent ? "永久清理" : "移入回收站", role: .destructive) {
+                model.delete(selected, permanently: permanent)
+                if model.message == nil { selected = [] }
+                refreshStorage = UUID()
+            }
+        }.confirmationDialog("清除可重新生成的缩略图缓存？", isPresented: $confirmCacheCleanup) {
+            Button("清理缓存", role: .destructive) {
+                do { try StudyThumbnails.clearCache(); refreshStorage = UUID() }
+                catch { model.message = error.localizedDescription }
+            }
+        }.sheet(isPresented: $showCleanup) { cleanupSheet }
+        .task(id: storageKey.refresh) { await readStorage() }
+        .onChange(of: storageKey.files) { _, _ in refreshStorage = UUID() }
+        .fileImporter(isPresented: $restoring, allowedContentTypes: [.zip]) { result in
+            busy = true
+            Task {
+                do {
+                    validated = try await BackupService.validate(result.get())
+                    confirmRestore = true
+                } catch { model.message = error.localizedDescription }
+                busy = false
+            }
+        }.confirmationDialog(
+            "校验通过。替换为备份中的 \(validated?.state.cards.count ?? 0) 张卡片、\(validated?.state.marks.count ?? 0) 条标记？",
+            isPresented: $confirmRestore, titleVisibility: .visible
+        ) {
+            Button("确认恢复并替换当前知识库", role: .destructive) {
+                guard let validated else { return }
+                busy = true
+                Task {
+                    do { try await BackupService.restore(validated, model: model) } catch {
+                        model.message = error.localizedDescription
+                    }
+                    try? FileManager.default.removeItem(at: validated.directory)
+                    self.validated = nil
+                    busy = false
+                    refreshStorage = UUID()
+                }
+            }
+            Button("取消", role: .cancel) {
+                if let validated { try? FileManager.default.removeItem(at: validated.directory) }
+                validated = nil
+            }
+        }
+    }
+
+    private func objectList(showStorage: Bool) -> some View {
+        List(selection: $selected) {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
                         StudyHeading(title: trash ? "回收站" : "知识库维护")
@@ -726,7 +813,10 @@ struct DataManagerView: View {
                             .font(.subheadline).foregroundStyle(.secondary)
                     }.studyPanel()
                 }.listRowBackground(Color.clear)
-                storageSummary
+                if showStorage {
+                    storageSummary
+                    objectSummary
+                }
                 DisclosureGroup("备份与恢复") {
                     Button(busy ? "正在处理…" : "生成完整备份 ZIP") {
                         busy = true
@@ -805,69 +895,58 @@ struct DataManagerView: View {
                         }
                     }
                 }
-            }.studySurface().navigationTitle("数据管理").searchable(text: $search)
-                .toolbar { EditButton() }
-                .onChange(of: kind) { _, _ in selected.removeAll() }
-                .onChange(of: search) { _, _ in selected.removeAll() }
-        }.confirmationDialog(
-            permanent ? "永久清理不可撤销，确认已备份？" : "将所选对象移入回收站？", isPresented: $confirming, titleVisibility: .visible
-        ) {
-            Button(permanent ? "永久清理" : "移入回收站", role: .destructive) {
-                model.delete(selected, permanently: permanent)
-                if model.message == nil { selected = [] }
-            }
-        }.confirmationDialog("清除可重新生成的缩略图缓存？", isPresented: $confirmCacheCleanup) {
-            Button("清理缓存", role: .destructive) {
-                do { try StudyThumbnails.clearCache(); refreshStorage = UUID() }
-                catch { model.message = error.localizedDescription }
-            }
-        }.sheet(isPresented: $showCleanup) { cleanupSheet }
-        .task(id: storageKey.refresh) { await readStorage() }
-        .onChange(of: storageKey.files) { _, _ in refreshStorage = UUID() }
-        .fileImporter(isPresented: $restoring, allowedContentTypes: [.zip]) { result in
-            busy = true
-            Task {
-                do {
-                    validated = try await BackupService.validate(result.get())
-                    confirmRestore = true
-                } catch { model.message = error.localizedDescription }
-                busy = false
-            }
-        }.confirmationDialog(
-            "校验通过。替换为备份中的 \(validated?.state.cards.count ?? 0) 张卡片、\(validated?.state.marks.count ?? 0) 条标记？",
-            isPresented: $confirmRestore, titleVisibility: .visible
-        ) {
-            Button("确认恢复并替换当前知识库", role: .destructive) {
-                guard let validated else { return }
-                busy = true
-                Task {
-                    do { try await BackupService.restore(validated, model: model) } catch {
-                        model.message = error.localizedDescription
-                    }
-                    try? FileManager.default.removeItem(at: validated.directory)
-                    self.validated = nil
-                    busy = false
+        }.studySurface()
+    }
+
+    private var objectSummary: some View {
+        let counts = [
+            ("资料", model.state.sources.lazy.filter { $0.deletedAt == nil }.count),
+            ("标记", model.state.marks.lazy.filter { $0.deletedAt == nil }.count),
+            ("卡片", model.state.cards.lazy.filter { $0.deletedAt == nil }.count),
+            ("项目", model.state.projects.lazy.filter { $0.deletedAt == nil }.count),
+            ("关系", model.state.relations.lazy.filter { $0.deletedAt == nil }.count),
+            ("复习记录", model.state.reviewRecords.lazy.filter { $0.deletedAt == nil }.count),
+        ]
+        let peak = max(1, counts.map { $0.1 }.max() ?? 1)
+        return Section("知识库对象") {
+            ForEach(counts, id: \.0) { name, count in
+                VStack(alignment: .leading, spacing: 5) {
+                    LabeledContent(name, value: "\(count)")
+                    ProgressView(value: Double(count), total: Double(peak))
+                        .tint(StudyTheme.copper).accessibilityHidden(true)
                 }
-            }
-            Button("取消", role: .cancel) {
-                if let validated { try? FileManager.default.removeItem(at: validated.directory) }
-                validated = nil
             }
         }
     }
+
     private var storageSummary: some View {
         let sources = fileSizes.values.reduce(0, +)
-        let total = max(1, sources + cacheBytes)
-        return Section("本地文件") {
+        let breakdown = [
+            (title: "资料文件（去重）", bytes: sources, color: StudyTheme.ink),
+            (title: "数据库", bytes: databaseBytes, color: StudyTheme.copper),
+            (title: "恢复前快照", bytes: recoveryBytes, color: Color.indigo),
+            (title: "待核对的资料文件", bytes: orphanBytes, color: Color.orange),
+            (title: "缩略图缓存", bytes: cacheBytes, color: Color.teal),
+        ]
+        let total = breakdown.reduce(Int64(0)) { $0 + $1.bytes }
+        return Section("本地存储") {
             VStack(alignment: .leading, spacing: 8) {
+                LabeledContent("合计", value: ByteCountFormatter.string(fromByteCount: total, countStyle: .file))
+                    .font(.headline)
                 GeometryReader { geometry in
                     HStack(spacing: 0) {
-                        Rectangle().fill(StudyTheme.ink).frame(width: geometry.size.width * Double(sources) / Double(total))
-                        Rectangle().fill(StudyTheme.copper).frame(width: geometry.size.width * Double(cacheBytes) / Double(total))
+                        ForEach(breakdown, id: \.title) { item in
+                            Rectangle().fill(item.color)
+                                .frame(width: geometry.size.width * Double(item.bytes) / Double(max(1, total)))
+                        }
                     }
                 }.frame(height: 7).background(StudyTheme.rule).clipShape(Capsule()).accessibilityHidden(true)
-                LabeledContent("资料文件（去重）", value: ByteCountFormatter.string(fromByteCount: sources, countStyle: .file))
-                LabeledContent("缩略图缓存", value: ByteCountFormatter.string(fromByteCount: cacheBytes, countStyle: .file))
+                ForEach(breakdown, id: \.title) { item in
+                    Label {
+                        LabeledContent(item.title, value: ByteCountFormatter.string(fromByteCount: item.bytes, countStyle: .file))
+                    } icon: { Circle().fill(item.color).frame(width: 7, height: 7) }
+                        .font(.caption)
+                }
             }
             Button("检查未引用的文件") {
                 do {
@@ -919,24 +998,32 @@ struct DataManagerView: View {
     private func readStorage() async {
         let urls = storageKey.files
         let cache = StudyThumbnails.cacheDirectory
+        let root = model.root
         let result = await Task.detached(priority: .utility) {
-            var sizes: [URL: Int64] = [:]
-            for url in urls {
-                if let metadata = try? url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey]),
-                    metadata.isRegularFile == true, metadata.isSymbolicLink != true {
-                    sizes[url] = Int64(metadata.fileSize ?? 0)
-                }
+            func size(_ url: URL) -> Int64? {
+                let metadata = try? url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey])
+                guard metadata?.isRegularFile == true, metadata?.isSymbolicLink != true else { return nil }
+                return Int64(metadata?.fileSize ?? 0)
             }
-            let files = cache.flatMap { try? FileManager.default.contentsOfDirectory(at: $0,
-                includingPropertiesForKeys: [.fileSizeKey]) } ?? []
-            let cached = files.reduce(Int64(0)) { total, file in
-                total + Int64((try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+            func fileList(_ directory: URL?) -> [URL] {
+                directory.flatMap {
+                    try? FileManager.default.contentsOfDirectory(at: $0,
+                        includingPropertiesForKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey])
+                } ?? []
             }
-            return (sizes, cached)
+            let files = fileList(root.appendingPathComponent("assets", isDirectory: true))
+            let known = Dictionary(uniqueKeysWithValues: urls.compactMap { url in size(url).map { (url, $0) } })
+            let filenames = Set(urls.map(\.lastPathComponent))
+            let untracked = files.filter { !filenames.contains($0.lastPathComponent) }.compactMap(size).reduce(0, +)
+            let cached = fileList(cache).compactMap(size).reduce(0, +)
+            let rootFiles = fileList(root)
+            let db = rootFiles.filter { $0.lastPathComponent.hasPrefix("library.sqlite") }.compactMap(size).reduce(0, +)
+            let recovery = rootFiles.filter { $0.lastPathComponent.hasPrefix("before-restore-") }
+                .compactMap(size).reduce(0, +)
+            return (known, untracked, cached, db, recovery)
         }.value
         guard !Task.isCancelled else { return }
-        fileSizes = result.0
-        cacheBytes = result.1
+        (fileSizes, orphanBytes, cacheBytes, databaseBytes, recoveryBytes) = result
     }
 
     @ViewBuilder private func managedContent(_ row: Row) -> some View {

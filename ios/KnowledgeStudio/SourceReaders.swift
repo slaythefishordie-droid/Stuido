@@ -15,8 +15,12 @@ struct SourceReaderView: View {
     @Environment(\.studyReaderPresentation) private var readerPresentation
     private var immersive: Bool { [.pdf, .epub, .local_video].contains(source.kind) }
     var body: some View {
-        Group {
-            if let url = model.assetURL(source), FileManager.default.fileExists(atPath: url.path) {
+        let live = model.state.sources.first { $0.id == source.id }
+        let source = live ?? self.source
+        return Group {
+            if live == nil || source.deletedAt != nil {
+                ContentUnavailableView("资料不可用", systemImage: "doc.questionmark")
+            } else if let url = model.assetURL(source), FileManager.default.fileExists(atPath: url.path) {
                 switch source.kind {
                 case .pdf: PDFStudyView(source: source, url: url, location: location ?? source.lastLocation)
                 case .epub: EPUBStudyView(source: source, url: url, location: location ?? source.lastLocation)
@@ -581,6 +585,24 @@ final class VideoSession: ObservableObject {
             toleranceBefore: .zero, toleranceAfter: .zero)
     }
 
+    func step(_ interval: Int) {
+        guard let time else { return }
+        let target = time + Double(interval)
+        if let start = loopA, target < start || target > (loopB ?? .infinity) { clearLoop() }
+        seek(target)
+    }
+
+    func checkLoopAfterSeek() {
+        if let start = loopA, let end = loopB, let time,
+            time < start - 0.1 || time > end + 0.1 { clearLoop() }
+    }
+
+    func finishItem() {
+        guard let start = loopA, loopB != nil else { return }
+        seek(start)
+        player.play()
+    }
+
     func startLoop(at time: Double) {
         clearLoop()
         loopA = time
@@ -665,6 +687,14 @@ struct LocalVideoStudyView: View {
                 }.studySurface().navigationTitle("时间标记")
                     .toolbar { Button("完成") { showMarks = false } }
             }
+        }.onReceive(NotificationCenter.default.publisher(
+            for: .AVPlayerItemTimeJumped, object: session.player.currentItem
+        )) { _ in
+            session.checkLoopAfterSeek()
+        }.onReceive(NotificationCenter.default.publisher(
+            for: .AVPlayerItemDidPlayToEndTime, object: session.player.currentItem
+        )) { _ in
+            session.finishItem()
         }.onDisappear {
             let seconds = session.player.currentTime().seconds
             session.player.pause()
@@ -692,7 +722,7 @@ struct LocalVideoStudyView: View {
             HStack {
                 ForEach([-3, -1, 1, 3], id: \.self) { offset in
                     Button(offset > 0 ? "+\(offset) 秒" : "\(offset) 秒") {
-                        if let time = session.time { session.seek(time + Double(offset)) }
+                        session.step(offset)
                     }.buttonStyle(.bordered)
                 }
             }
@@ -728,7 +758,7 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
         locationWarning = "部分书页资源无法读取，请检查原始书籍文件。原有标记仍保留。"
     }
     var savePosition: ((ReadingLocator) -> Void)?
-    var saveSelection: ((ReadingLocator, String, CardKind) -> Void)?
+    var saveSelection: ((ReadingLocator, String, CardKind) -> Bool)?
     var captureSelection: ((CardKind) -> Void)?
     @Published var selectionActive = false
     func navigator(_ navigator: SelectableNavigator, shouldShowMenuForSelection selection: ReadiumNavigator.Selection) -> Bool {
@@ -801,9 +831,10 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
                     !text.isEmpty
                 else { return }
                 do {
-                    self?.saveSelection?(try Self.readingLocator(locator), text, kind)
-                    reader?.clearSelection()
-                    self?.selectionActive = false
+                    if self?.saveSelection?(try Self.readingLocator(locator), text, kind) == true {
+                        reader?.clearSelection()
+                        self?.selectionActive = false
+                    }
                 } catch { self?.locationWarning = "选文定位未保存：\(error.localizedDescription)" }
             }
             reader.observeDecorationInteractions(inGroup: "knowledge-marks") { [weak self] event in
@@ -898,7 +929,10 @@ struct EPUBStudyView: View {
         }.task {
             session.selectMark = { id in selectedMark = model.state.marks.first { $0.id == id } }
             session.savePosition = { model.saveLocation(sourceID: source.id, locator: $0) }
-            session.saveSelection = { model.saveMark(source: source, locator: $0, excerpt: $1, kind: $2) }
+            session.saveSelection = { locator, text, kind in
+                model.saveMark(source: source, locator: locator, excerpt: text, kind: kind)
+                return model.message == nil
+            }
             await session.open(url: url, location: location, preferences: readerPreferences)
             applyPreferences()
         }

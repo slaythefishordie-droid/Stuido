@@ -8,6 +8,7 @@ final class StudioModel: ObservableObject {
     @Published var message: String?
     @Published var sharedWarning: String?
     @Published private(set) var isImporting = false
+    @Published private(set) var importStatus: String?
     let root: URL
     private(set) var repository: LibraryRepository?
 
@@ -78,6 +79,16 @@ final class StudioModel: ObservableObject {
             }
         }
     }
+    func suggestedProjects(for card: LibraryCard) -> Set<UUID> {
+        let exists = state.cards.contains { $0.id == card.id }
+        let sourceIDs = Set(card.sourceRefs.map(\.sourceID))
+        return Set(state.projects.filter { project in
+            project.deletedAt == nil && (exists
+                ? project.cardIDs.contains(card.id)
+                : !sourceIDs.isDisjoint(with: project.sourceIDs))
+        }.map(\.id))
+    }
+
     func card(from mark: LibraryMark, type: CardKind) -> LibraryCard {
         let field = LibraryCard.fields(for: type)[0]
         var card = LibraryCard(type: type, content: [field: mark.excerpt])
@@ -124,6 +135,7 @@ final class StudioModel: ObservableObject {
             return
         }
         isImporting = true
+        importStatus = nil
         defer { isImporting = false }
         let scope = url.startAccessingSecurityScopedResource()
         defer { if scope { url.stopAccessingSecurityScopedResource() } }
@@ -133,6 +145,7 @@ final class StudioModel: ObservableObject {
             let imported = try await Task.detached(priority: .userInitiated) {
                 try Self.prepareAsset(url: url, root: root)
             }.value
+            var wasExisting = false
             change { state in
                 if let sourceID {
                     guard
@@ -151,14 +164,23 @@ final class StudioModel: ObservableObject {
                     let existing = state.sources.first {
                         $0.assetHash == imported.assetHash && $0.deletedAt == nil
                     }
+                    wasExisting = existing != nil
                     let id = existing?.id ?? imported.id
                     if existing == nil { state.sources.append(imported) }
-                    if let projectID, let index = state.projects.firstIndex(where: {
-                        $0.id == projectID && $0.deletedAt == nil
-                    }), !state.projects[index].sourceIDs.contains(id) {
-                        state.projects[index].sourceIDs.append(id)
+                    if let projectID {
+                        guard let index = state.projects.firstIndex(where: {
+                            $0.id == projectID && $0.deletedAt == nil
+                        }) else { throw LibraryError.invalid("目标项目已不可用，请重新选择。") }
+                        if !state.projects[index].sourceIDs.contains(id) {
+                            state.projects[index].sourceIDs.append(id)
+                        }
                     }
                 }
+            }
+            if message == nil {
+                importStatus = wasExisting
+                    ? (projectID == nil ? "这份资料已在资料库。" : "已将现有资料关联到所选项目。")
+                    : "已导入「\(imported.title)」"
             }
         } catch { message = error.localizedDescription }
     }

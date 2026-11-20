@@ -1,6 +1,7 @@
 import Foundation
 import KnowledgeCore
 import PDFKit
+@preconcurrency import ReadiumNavigator
 import ReadiumShared
 @preconcurrency import ReadiumZIPFoundation
 import UIKit
@@ -112,11 +113,77 @@ final class LibraryAppTests: XCTestCase {
             let card = model.card(from: mark, type: kind)
             XCTAssertEqual(card.title, mark.excerpt)
             XCTAssertEqual(card.sourceRefs.first?.locator, locator)
-            model.saveCard(card, projects: [project.id])
+            XCTAssertEqual(model.suggestedProjects(for: card), [project.id])
+            model.saveCard(card, projects: model.suggestedProjects(for: card))
             XCTAssertNil(model.message)
             XCTAssertTrue(model.state.projects[0].cardIDs.contains(card.id))
             XCTAssertEqual(model.state.cards.last?.markIDs, [mark.id])
         }
+    }
+
+    func testImportedEPUBOpensInReadiumAndDuplicateLinksExistingSource() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let model = StudioModel(root: root)
+        let project = LibraryProject(title: "Reading")
+        try model.commit { $0.projects = [project] }
+
+        let input = root.appendingPathComponent("reading.epub")
+        let archive = try await Archive(url: input, accessMode: .create)
+        let entries = [
+            ("mimetype", "application/epub+zip"),
+            ("META-INF/container.xml", """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+                  <rootfiles><rootfile full-path="book.opf" media-type="application/oebps-package+xml"/></rootfiles>
+                </container>
+                """),
+            ("book.opf", """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="book-id">
+                  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+                    <dc:identifier id="book-id">urn:uuid:acea7480-0266-48f4-ad6c-70223c747f32</dc:identifier>
+                    <dc:title>Reading Fixture</dc:title><dc:language>en</dc:language>
+                    <meta property="dcterms:modified">2024-01-01T00:00:00Z</meta>
+                  </metadata>
+                  <manifest>
+                    <item id="navigation" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+                    <item id="chapter" href="chapter.xhtml" media-type="application/xhtml+xml"/>
+                  </manifest>
+                  <spine><itemref idref="chapter"/></spine>
+                </package>
+                """),
+            ("nav.xhtml", """
+                <html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+                  <head><title>Contents</title></head>
+                  <body><nav epub:type="toc"><ol><li><a href="chapter.xhtml">Chapter</a></li></ol></nav></body>
+                </html>
+                """),
+            ("chapter.xhtml", """
+                <html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter</title></head>
+                <body><p>A short passage for the EPUB reader.</p></body></html>
+                """),
+        ]
+        let entryFile = root.appendingPathComponent("entry")
+        for (name, content) in entries {
+            try Data(content.utf8).write(to: entryFile)
+            try await archive.addEntry(with: name, fileURL: entryFile, compressionMethod: .none)
+        }
+
+        await model.importFile(input)
+        XCTAssertNil(model.message)
+        let source = try XCTUnwrap(model.state.sources.first)
+        XCTAssertEqual(source.kind, .epub)
+        await model.importFile(input, projectID: project.id)
+        XCTAssertNil(model.message)
+        XCTAssertEqual(model.state.sources.count, 1)
+        XCTAssertEqual(model.state.projects[0].sourceIDs, [source.id])
+
+        let session = EPUBSession()
+        await session.open(url: try XCTUnwrap(model.assetURL(source)), location: nil,
+            preferences: .init(columnCount: .one, fontSize: EPUBSession.fontScale(for: 110)))
+        XCTAssertNil(session.error)
+        XCTAssertNotNil(session.navigator)
     }
 
     func testEPUBSelectionLocatorRoundTripPreservesTextContext() throws {
@@ -240,8 +307,11 @@ final class LibraryAppTests: XCTestCase {
         try JSONEncoder().encode(snapshot).write(to: root.appendingPathComponent("before-restore-test.json"))
         let orphan = assets.appendingPathComponent("orphan.pdf")
         try Data("unused".utf8).write(to: orphan)
+        let unselected = assets.appendingPathComponent("unselected.pdf")
+        try Data("also unused".utf8).write(to: unselected)
         model.cleanUnusedAssets([orphan])
         XCTAssertTrue(FileManager.default.fileExists(atPath: referenced.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: unselected.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: orphan.path))
     }
 

@@ -188,7 +188,6 @@ struct StudyCardFace: View {
             }
             Spacer(minLength: 4)
             HStack {
-                Text(studioLabel(card.organization.rawValue)).font(.caption)
                 if card.review != .not_enrolled {
                     Text(studioLabel(card.review.rawValue)).font(.caption)
                 }
@@ -207,8 +206,7 @@ struct StudyCardFace: View {
 
 struct StudyReaderPresentation: Sendable {
     let setActive: @MainActor @Sendable (UUID, Bool) -> Void
-    let toggleNavigation: @MainActor @Sendable () -> Void
-    static let neutral = StudyReaderPresentation(setActive: { _, _ in }, toggleNavigation: {})
+    static let neutral = StudyReaderPresentation(setActive: { _, _ in })
 
 }
 

@@ -8,6 +8,8 @@ struct StudioView: View {
     @StateObject private var model = StudioModel()
     @Environment(\.scenePhase) private var phase
     @State private var choosingCard = false
+    @State private var creatingProject = false
+    @State private var projectTitle = ""
     @State private var showingSearch = false
     @State private var quickCard: LibraryCard?
     @State private var pendingDocument: IncomingDocument?
@@ -73,16 +75,30 @@ struct StudioView: View {
                 if activeReaders.isEmpty { railRevealed = false }
                 activeReaders.insert(id)
             } else { activeReaders.remove(id) }
-        }, toggleNavigation: { railRevealed.toggle() }))
+        }))
         .background(StudyTheme.paper)
         .tint(StudyTheme.ink)
         .environment(\.defaultMinListRowHeight, compactDisplay ? 44 : 60)
         .preferredColorScheme(appearance == "dark" ? .dark : appearance == "light" ? .light : nil)
         .environmentObject(model)
-        .confirmationDialog("新建知识卡片", isPresented: $choosingCard) {
+        .confirmationDialog("新建", isPresented: $choosingCard) {
             ForEach(CardKind.allCases, id: \.self) { kind in
                 Button(kind.title) { quickCard = LibraryCard(type: kind, content: [:]) }
             }
+            Button("研究项目") {
+                projectTitle = ""
+                creatingProject = true
+            }
+        }
+        .alert("新建项目", isPresented: $creatingProject) {
+            TextField("项目名称", text: $projectTitle)
+            Button("创建") {
+                let title = projectTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                guard !title.isEmpty else { model.message = "请输入项目名称。"; return }
+                model.change { $0.projects.append(LibraryProject(title: title)) }
+                if model.message == nil { select(.library) }
+            }
+            Button("取消", role: .cancel) {}
         }
         .sheet(isPresented: $showingSearch) { StudioSearchView().environmentObject(model) }
         .sheet(item: $quickCard) { CardEditor(card: $0).environmentObject(model) }
@@ -159,7 +175,7 @@ struct StudioView: View {
                 }
                 Divider()
                 Button("全局搜索", systemImage: "magnifyingglass") { showingSearch = true }
-                Button("随手记一张卡片") { choosingCard = true }
+                Button("新建") { choosingCard = true }
                 if !activeReaders.isEmpty {
                     Button("隐藏导航") { railRevealed = false }
                 }
@@ -197,9 +213,9 @@ struct StudioView: View {
                 else { Image(systemName: "magnifyingglass") }
             }.frame(minHeight: 44).accessibilityLabel("全局搜索")
             Button { choosingCard = true } label: {
-                if expanded { Label("随手记一张卡片", systemImage: "square.and.pencil") }
+                if expanded { Label("新建", systemImage: "square.and.pencil") }
                 else { Image(systemName: "square.and.pencil") }
-            }.frame(minHeight: 44).accessibilityLabel("随手记一张卡片")
+            }.frame(minHeight: 44).accessibilityLabel("新建")
             Button {
                 railMode = expanded ? "compact" : "expanded"
             } label: {
@@ -341,7 +357,6 @@ struct InboxView: View {
             if !mark.excerpt.isEmpty {
                 Text(mark.excerpt).font(.system(.title3, design: .serif)).lineLimit(5)
             }
-            if !mark.note.isEmpty { Text(mark.note).foregroundStyle(.secondary) }
             Text(locationLabel(mark.locator)).font(.caption)
             ScrollView(.horizontal, showsIndicators: false) { markActions(mark, source: source) }
         }.studyPanel()
@@ -541,13 +556,7 @@ struct CardEditor: View {
         }.onAppear {
             guard !initialized else { return }
             initialized = true
-            let exists = model.state.cards.contains { $0.id == card.id }
-            let sourceIDs = Set(card.sourceRefs.map(\.sourceID))
-            projects = Set(model.state.projects.filter { project in
-                project.deletedAt == nil && (exists
-                    ? project.cardIDs.contains(card.id)
-                    : !sourceIDs.isDisjoint(with: project.sourceIDs))
-            }.map(\.id))
+            projects = model.suggestedProjects(for: card)
         }
     }
 
@@ -607,9 +616,6 @@ struct CardDetailView: View {
                     if let value = card.content[field] {
                         Section(studioFieldLabel(field)) {
                             Text(value).textSelection(.enabled)
-                            Text(studioLabel(card.provenance[field]?.kind ?? "user_input")).font(.caption)
-                                .foregroundStyle(
-                                    .secondary)
                         }
                     }
                 }
@@ -621,9 +627,11 @@ struct CardDetailView: View {
                             .sheet(isPresented: $showDictionary) { SystemDictionaryView(word: card.title) }
                     }
                 }
-                Section("笔记") {
-                    Text(card.note)
-                    if !card.importAnnotation.isEmpty { Text("导入说明：\(card.importAnnotation)") }
+                if !card.note.isEmpty || !card.importAnnotation.isEmpty {
+                    Section("笔记") {
+                        if !card.note.isEmpty { Text(card.note) }
+                        if !card.importAnnotation.isEmpty { Text(card.importAnnotation).foregroundStyle(.secondary) }
+                    }
                 }
                 Section("出处") {
                     ForEach(card.sourceRefs) { ref in
