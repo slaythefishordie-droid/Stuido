@@ -2,6 +2,10 @@
 
 本文件是交付状态、版本变更和真机结果的唯一入口。操作规则见[工作流](workflow.md)，错误与待办见[工程问题](engineering-issues.md)。日期使用北京时间；实现、自动验证、真机验收分别记录。
 
+## v3.0.0 iPadOS 交付 · 2026-11-20
+
+已发布 [v3.0.0](https://github.com/slaythefishordie-droid/Stuido/releases/tag/v3.0.0)，build 7，提交 `c8cc249cbad439430a9bdfe6db26ae34fd3e6b06`。Swift 核心 31/31、iPad 模拟器 49/49、协议与 Safari 43/43，设备归档与含 Safari 扩展的 IPA 校验通过。[下载 IPA 和 SHA-256](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44715715405/artifacts/14620712162)保留至北京时间 2026-11-27 18:22。使用原 AltStore Classic 签名身份重签，实际安装及 Apple Pencil 延迟待真机确认。
+
 ## 页边书房原生集成 · 2026-11-20
 
 独立开发分支 `feature/v2-reading-room` 从 `36d8d4aa2a26c42d64154ad593bb9b5fa55a12a7` 开始。美术基准为[第二版原型](https://github.com/slaythefishordie-droid/Stuido/blob/aaa9d4314ac9dce785cb3f94fc9ac7ece5b99518/design-lab/README.md)。既有冻结证据是原生编译成功、核心 30/30、模拟器 46/46，协议与 Safari 43/43。[既有原生运行](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44693478738) · [既有协议运行](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44693478678)
