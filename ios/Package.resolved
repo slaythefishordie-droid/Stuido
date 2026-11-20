@@ -73,6 +73,15 @@
       }
     },
     {
+      "identity": "swift-fsrs",
+      "kind": "remoteSourceControl",
+      "location": "https://github.com/open-spaced-repetition/swift-fsrs.git",
+      "state": {
+        "revision": "74cb02977ba94dd505aa2a13149238b5f5d48a1b",
+        "version": "6.0.0"
+      }
+    },
+    {
       "identity": "swift-json-schema",
       "kind": "remoteSourceControl",
       "location": "https://github.com/ajevans99/swift-json-schema.git",

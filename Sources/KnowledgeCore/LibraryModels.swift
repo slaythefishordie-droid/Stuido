@@ -17,6 +17,8 @@ public struct ReadingLocator: Codable, Equatable, Sendable {
     public var nativeJSON: String?
     public var fileFingerprint: String?
     public var anchorText: String?
+    public var pdfTextAnchors: [PDFTextAnchor]?
+    public var pdfTextQuads: [PDFTextQuad]?
     public var rectangles: [HighlightRect] = []
     public init(
         kind: String, page: Int? = nil, seconds: Double? = nil, href: String? = nil,
@@ -130,6 +132,7 @@ public struct LibraryCard: Codable, Identifiable, Equatable, Sendable {
     public var discovery: Discovery = .self
     public var organization: Organization = .saved
     public var review: ReviewStatus = .not_enrolled
+    public var schedule: ReviewSchedule?
     public var createdAt = Date()
     public var updatedAt = Date()
     public var deletedAt: Date?
@@ -155,6 +158,8 @@ public struct LibraryProject: Codable, Identifiable, Equatable, Sendable {
     public var cardIDs: [UUID] = []
     public var relationIDs: [UUID] = []
     public var board: ProjectBoard?
+    public var groups: [ProjectGroup]?
+    public var sourceNotes: [String: String]?
     public var deletedAt: Date?
     public init(title: String) { self.title = title }
 }
@@ -236,6 +241,7 @@ public struct LibraryState: Codable, Equatable, Sendable {
             try validateLocatorKind(mark.locator, source: sourceKinds[mark.sourceID]!)
         }
         for card in cards {
+            try card.schedule?.validate()
             let allowed = LibraryCard.fields(for: card.type)
             let required = card.type == .word ? allowed : [allowed[0]]
             guard
@@ -270,6 +276,18 @@ public struct LibraryState: Codable, Equatable, Sendable {
         }
         for project in projects {
             try project.board?.validate(sourceIDs: sourceIDs, cardIDs: cardIDs)
+            let groups = project.groups ?? []
+            try unique(groups.map(\.id))
+            for group in groups {
+                guard !group.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                    Set(group.sourceIDs).isSubset(of: sourceIDs), Set(group.cardIDs).isSubset(of: cardIDs)
+                else { throw LibraryError.invalid("项目分组名称或引用无效") }
+            }
+            for key in (project.sourceNotes ?? [:]).keys {
+                guard let id = UUID(uuidString: key), sourceIDs.contains(id) else {
+                    throw LibraryError.invalid("项目笔记引用的资料不存在")
+                }
+            }
             guard Set(project.sourceIDs).isSubset(of: sourceIDs), Set(project.cardIDs).isSubset(of: cardIDs),
                 Set(project.relationIDs).isSubset(of: relationIDs)
             else { throw LibraryError.invalid("项目关联对象缺失") }
@@ -298,6 +316,10 @@ public struct LibraryReviewRecord: Codable, Identifiable, Equatable, Sendable {
     public var elapsedMilliseconds: Int
     public var deletedAt: Date?
     public var schedulerVersion: String
+    public var schedulerBefore: Data?
+    public var schedulerAfter: Data?
+    public var schedulerLog: Data?
+    public var schedulerParameters: Data?
     public init(
         cardID: UUID, rating: Int, reviewedAt: Date, elapsedMilliseconds: Int, schedulerVersion: String
     ) {

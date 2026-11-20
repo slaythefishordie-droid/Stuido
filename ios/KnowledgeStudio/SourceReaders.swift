@@ -70,8 +70,9 @@ struct SourceReaderView: View {
 
 @MainActor
 final class PDFSession: ObservableObject {
-    let view = PDFView()
+    let view = StudyPDFView()
     @Published var anchorStatus = ""
+    @Published var verifiedFingerprint: String?
     private var restored = false
     init(url: URL, location: ReadingLocator?) {
         view.autoScales = true
@@ -99,7 +100,14 @@ final class PDFSession: ObservableObject {
                 return
             }
             view.go(to: bounds, on: page)
-            anchorStatus = "精确区域定位（不推断文字匹配）"
+            let anchors = locator.pdfTextAnchors ?? []
+            let verified =
+                !anchors.isEmpty
+                && anchors.allSatisfy { anchor in
+                    guard let text = document.page(at: anchor.page - 1)?.string else { return false }
+                    return anchor.matches(text)
+                }
+            anchorStatus = verified ? "精确文字定位：文件、文字范围与上下文一致" : "精确区域定位（未确认文字匹配）"
         }
     }
     var pageNumber: Int? {
@@ -111,6 +119,11 @@ struct PDFStudyView: View {
     @EnvironmentObject private var model: StudioModel
     let source: LibrarySource
     @State private var regionMode = false
+    @State private var recognizing = false
+    @State private var recognized: [RecognizedPDFRegion] = []
+    @State private var showRecognition = false
+    @State private var selectedMark: LibraryMark?
+    @State private var dictionaryWord: String?
     private let initialLocation: ReadingLocator?
     private let url: URL
     @State private var kind: CardKind = .expression
@@ -127,52 +140,86 @@ struct PDFStudyView: View {
             PDFHost(
                 view: session.view,
                 marks: model.state.marks.filter { $0.sourceID == source.id && $0.deletedAt == nil },
-                regionMode: regionMode,
+                regionMode: regionMode && session.verifiedFingerprint != nil,
+                fingerprint: session.verifiedFingerprint,
                 onRegion: { rect in
                     var locator = ReadingLocator(kind: "pdf", page: rect.page)
                     locator.rectangles = [rect]
-                    locator.fileFingerprint = source.assetHash
+                    locator.fileFingerprint = session.verifiedFingerprint
                     model.saveMark(source: source, locator: locator, kind: kind)
                     regionMode = false
                 })
+            PronunciationStatus()
             if !session.anchorStatus.isEmpty {
                 Text(session.anchorStatus).font(.caption).foregroundStyle(.secondary)
             }
-            HStack {
-                Toggle("区域标记", isOn: $regionMode).toggleStyle(.button)
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack {
+                    Toggle("区域标记", isOn: $regionMode).toggleStyle(.button)
+                    Button(recognizing ? "正在识别…" : "识别本页文字") {
+                        guard let page = session.pageNumber else { return }
+                        recognizing = true
+                        Task {
+                            defer { recognizing = false }
+                            do {
+                                recognized = try await PDFRecognition.recognize(url: url, pageNumber: page)
+                                showRecognition = true
+                            } catch { model.message = "文字识别失败：\(error.localizedDescription)" }
+                        }
+                    }.disabled(recognizing)
 
-                Picker("标记类型", selection: $kind) {
-                    ForEach(CardKind.allCases, id: \.self) { Text($0.title).tag($0) }
-                }
-                Button("保存选文或页码") {
-                    guard let page = session.pageNumber, let document = session.view.document else { return }
-                    let selection = session.view.currentSelection
-                    var locator = ReadingLocator(
-                        kind: "pdf", page: selection?.pages.first.map { document.index(for: $0) + 1 } ?? page)
-                    for line in selection?.selectionsByLine() ?? [] {
-                        for page in line.pages {
-                            let bounds = line.bounds(for: page)
-                            locator.rectangles.append(
-                                HighlightRect(
-                                    page: document.index(for: page) + 1, x: bounds.origin.x,
-                                    y: bounds.origin.y, width: bounds.width, height: bounds.height))
+                    Picker("标记类型", selection: $kind) {
+                        ForEach(CardKind.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                    Button("保存选文或页码") { capture(kind: kind, annotate: false) }.buttonStyle(.borderedProminent)
+                    Button {
+                        WordPronunciation.shared.speak(session.view.currentSelection?.string ?? "")
+                    } label: {
+                        Label("听发音", systemImage: "speaker.wave.2")
+                    }
+                    Text("长按选择文字可保存摘录与高亮；扫描页可开启区域标记，长按拖出范围；跨页区域请分次标记。").font(.caption)
+                }.padding()
+            }.disabled(session.verifiedFingerprint == nil)
+        }.sheet(item: $selectedMark) { mark in
+            NavigationStack {
+                MarkDetailView(markID: mark.id).toolbar { Button("完成") { selectedMark = nil } }
+            }.environmentObject(model)
+        }.sheet(
+            isPresented: Binding(get: { dictionaryWord != nil }, set: { if !$0 { dictionaryWord = nil } })
+        ) {
+            SystemDictionaryView(word: dictionaryWord ?? "")
+        }.sheet(isPresented: $showRecognition) {
+            NavigationStack {
+                List {
+                    Text("识别结果请自行核对。保存后按页面区域回跳，不标记为精确文字定位。").font(.caption)
+                    if recognized.isEmpty { Text("未识别到可靠文字，可使用手动区域标记。") }
+                    ForEach(recognized) { result in
+                        Button {
+                            var locator = ReadingLocator(kind: "pdf", page: result.rect.page)
+                            locator.rectangles = [result.rect]
+                            locator.fileFingerprint = session.verifiedFingerprint
+                            locator.anchorText = result.text
+                            model.saveMark(source: source, locator: locator, excerpt: result.text, kind: kind)
+                            if model.message == nil { recognized.removeAll { $0.id == result.id } }
+                        } label: {
+                            VStack(alignment: .leading) {
+                                Text(result.text)
+                                Text("保存区域摘录").font(.caption).foregroundStyle(.secondary)
+                            }
                         }
                     }
-                    locator.fileFingerprint = source.assetHash
-                    locator.anchorText = selection?.string
-                    model.saveMark(
-                        source: source, locator: locator, excerpt: selection?.string ?? "", kind: kind)
-                }.buttonStyle(.borderedProminent)
-                Button {
-                    WordPronunciation.shared.speak(session.view.currentSelection?.string ?? "")
-                } label: {
-                    Label("听发音", systemImage: "speaker.wave.2")
-                }
-                Text("长按选择文字可保存摘录与高亮；扫描页可开启区域标记，长按拖出范围；跨页区域请分次标记。").font(.caption)
-            }.padding()
+                }.navigationTitle("本页文字识别").toolbar { Button("完成") { showRecognition = false } }
+            }
         }.task {
+            session.view.capture = { capture(kind: $0, annotate: $1) }
+            session.view.dictionary = { dictionaryWord = $0 }
             do {
                 let fingerprint = try await Task.detached { try StudioModel.hash(url) }.value
+                guard fingerprint == source.assetHash else {
+                    session.anchorStatus = "文件与资料指纹不一致，已停止新增标记与精确回跳"
+                    return
+                }
+                session.verifiedFingerprint = fingerprint
                 session.restore(initialLocation, fingerprint: fingerprint)
             } catch { session.anchorStatus = "无法核对文件指纹，未执行精确回跳" }
         }.onDisappear {
@@ -181,11 +228,35 @@ struct PDFStudyView: View {
             }
         }
     }
+    private func capture(kind: CardKind, annotate: Bool) {
+        guard let fingerprint = session.verifiedFingerprint, let document = session.view.document,
+            let page = session.pageNumber
+        else { return }
+        var locator =
+            session.view.currentSelection?.studioLocator(
+                document: document, fallbackPage: page, fingerprint: fingerprint)
+            ?? ReadingLocator(kind: "pdf", page: page)
+        locator.fileFingerprint = fingerprint
+        var mark = LibraryMark(
+            sourceID: source.id, locator: locator, excerpt: session.view.currentSelection?.string ?? "")
+        mark.cardKind = kind
+        model.change { $0.marks.append(mark) }
+        if annotate && model.message == nil { selectedMark = mark }
+    }
+
+}
+private struct SystemDictionaryView: UIViewControllerRepresentable {
+    let word: String
+    func makeUIViewController(context: Context) -> UIReferenceLibraryViewController {
+        UIReferenceLibraryViewController(term: word)
+    }
+    func updateUIViewController(_ controller: UIReferenceLibraryViewController, context: Context) {}
 }
 struct PDFHost: UIViewRepresentable {
     let view: PDFView
     let marks: [LibraryMark]
     var regionMode = false
+    var fingerprint: String?
     var onRegion: ((HighlightRect) -> Void)?
     func makeUIView(context: Context) -> PDFView {
         let gesture = UILongPressGestureRecognizer(
@@ -200,7 +271,10 @@ struct PDFHost: UIViewRepresentable {
         context.coordinator.onRegion = onRegion
         context.coordinator.gesture?.isEnabled = regionMode
         guard let document = view.document else { return }
-        let ids = marks
+        let ids = marks.filter {
+            fingerprint != nil
+                && ($0.locator.fileFingerprint == nil || $0.locator.fileFingerprint == fingerprint)
+        }
         guard ids != context.coordinator.ids else { return }
         context.coordinator.ids = ids
         for i in 0..<document.pageCount {
@@ -210,7 +284,7 @@ struct PDFHost: UIViewRepresentable {
                 page.removeAnnotation(annotation)
             }
         }
-        for mark in marks {
+        for mark in ids {
             for rect in mark.locator.rectangles {
                 guard rect.isValid, let page = document.page(at: rect.page - 1) else { continue }
                 let annotation = PDFAnnotation(
@@ -319,6 +393,7 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
     }
     var savePosition: ((ReadingLocator) -> Void)?
     var saveSelection: ((ReadingLocator, String, CardKind) -> Void)?
+    var captureSelection: ((CardKind) -> Void)?
     var selectMark: ((UUID) -> Void)?
     func navigator(_ navigator: Navigator, locationDidChange locator: Locator) {
         if let value = try? Self.readingLocator(locator) { savePosition?(value) }
@@ -356,17 +431,17 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
                 locationWarning = "缺少完整选文定位，已回到章节阅读位置；不能保证精确到原句。"
             }
             if location != nil && initial == nil { locationWarning = "此定位无法精确还原，已打开资料。可在阅读器中重新标记。" }
-            let reader = try StudyEPUBNavigator(
+            let reader = try EPUBNavigatorViewController(
                 publication: publication, initialLocation: initial,
                 config: .init(editingActions: [
-                    EditingAction(title: "单词高亮", action: #selector(StudyEPUBNavigator.markWord)),
-                    EditingAction(title: "语料高亮", action: #selector(StudyEPUBNavigator.markExpression)),
-                    EditingAction(title: "关键词高亮", action: #selector(StudyEPUBNavigator.markKeyword)),
-                    EditingAction(title: "关键句高亮", action: #selector(StudyEPUBNavigator.markSentence)),
-                    EditingAction(title: "听发音（合成语音）", action: #selector(StudyEPUBNavigator.pronounce)),
+                    EditingAction(title: "单词高亮", action: #selector(StudyEPUBContainer.markWord)),
+                    EditingAction(title: "语料高亮", action: #selector(StudyEPUBContainer.markExpression)),
+                    EditingAction(title: "关键词高亮", action: #selector(StudyEPUBContainer.markKeyword)),
+                    EditingAction(title: "关键句高亮", action: #selector(StudyEPUBContainer.markSentence)),
+                    EditingAction(title: "听发音", action: #selector(StudyEPUBContainer.pronounce)),
                     .copy, .lookup,
                 ]))
-            reader.capture = { [weak self, weak reader] kind in
+            captureSelection = { [weak self, weak reader] kind in
                 guard let locator = reader?.currentSelection?.locator, let text = locator.text.highlight,
                     !text.isEmpty
                 else { return }
@@ -395,10 +470,32 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
         )
     }
 }
-final class StudyEPUBNavigator: EPUBNavigatorViewController {
+/// Readium's public convenience initializer cannot be inherited (its designated initializer is private).
+/// A parent controller adds selection actions through UIKit's responder chain instead of subclassing Readium.
+@MainActor
+final class StudyEPUBContainer: UIViewController {
+    let reader: EPUBNavigatorViewController
     var capture: ((CardKind) -> Void)?
+    init(reader: EPUBNavigatorViewController) {
+        self.reader = reader
+        super.init(nibName: nil, bundle: nil)
+    }
+    required init?(coder: NSCoder) { fatalError("init(coder:) has not been implemented") }
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        addChild(reader)
+        view.addSubview(reader.view)
+        reader.view.translatesAutoresizingMaskIntoConstraints = false
+        NSLayoutConstraint.activate([
+            reader.view.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            reader.view.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            reader.view.topAnchor.constraint(equalTo: view.topAnchor),
+            reader.view.bottomAnchor.constraint(equalTo: view.bottomAnchor),
+        ])
+        reader.didMove(toParent: self)
+    }
     @objc func pronounce() {
-        WordPronunciation.shared.speak(currentSelection?.locator.text.highlight ?? "")
+        WordPronunciation.shared.speak(reader.currentSelection?.locator.text.highlight ?? "")
     }
     @objc func markWord() { capture?(.word) }
     @objc func markExpression() { capture?(.expression) }
@@ -413,7 +510,9 @@ struct EPUBStudyView: View {
     @AppStorage("readerFontSize") private var fontSize = 110.0
     @AppStorage("readerLineHeight") private var lineHeight = 1.6
     @AppStorage("readerTheme") private var theme = "sepia"
-    @AppStorage("readerColumns") private var columns = true
+    @AppStorage("readerColumns") private var legacyColumns = true
+    @AppStorage("readerColumnMode") private var columnMode = "legacy"
+    @AppStorage("readerMargins") private var margins = 1.0
     @State private var settings = false
     @State private var selectedMark: LibraryMark?
     @AppStorage("readerFont") private var font = "serif"
@@ -425,10 +524,12 @@ struct EPUBStudyView: View {
             } else if let navigator = session.navigator {
                 EPUBHost(
                     navigator: navigator,
-                    marks: model.state.marks.filter { $0.sourceID == source.id && $0.deletedAt == nil })
+                    marks: model.state.marks.filter { $0.sourceID == source.id && $0.deletedAt == nil },
+                    capture: { session.captureSelection?($0) })
             } else {
                 ProgressView("正在打开 EPUB…")
             }
+            PronunciationStatus()
             HStack {
                 Text("选中文字后，点选对应颜色高亮；备注可在收集箱中编辑。").font(.caption).foregroundStyle(.secondary)
                 Button("保存当前位置") {
@@ -457,7 +558,8 @@ struct EPUBStudyView: View {
         .onChange(of: fontSize) { _, _ in applyPreferences() }
         .onChange(of: lineHeight) { _, _ in applyPreferences() }
         .onChange(of: theme) { _, _ in applyPreferences() }
-        .onChange(of: columns) { _, _ in applyPreferences() }
+        .onChange(of: columnMode) { _, _ in applyPreferences() }
+        .onChange(of: margins) { _, _ in applyPreferences() }
         .sheet(isPresented: $settings) {
             NavigationStack {
                 Form {
@@ -475,7 +577,13 @@ struct EPUBStudyView: View {
                         Text("暖纸").tag("sepia")
                         Text("夜读").tag("dark")
                     }
-                    Toggle("宽屏自动双页", isOn: $columns)
+                    Picker("分页", selection: $columnMode) {
+                        Text("沿用原设置").tag("legacy")
+                        Text("自动").tag("auto")
+                        Text("单页").tag("one")
+                        Text("双页").tag("two")
+                    }
+                    Section("页边距") { Slider(value: $margins, in: 0.5...2.0, step: 0.25) }
                     Text("双页按可用宽度与书籍排版自动调整；固定版式书籍可能不支持字号和行距调整。").font(.caption)
                 }.navigationTitle("阅读设置").toolbar { Button("完成") { settings = false } }
             }.presentationDetents([.medium])
@@ -489,8 +597,10 @@ struct EPUBStudyView: View {
     private func applyPreferences() {
         session.navigator?.submitPreferences(
             EPUBPreferences(
-                columnCount: columns ? .auto : .one, fontFamily: font == "serif" ? .serif : .sansSerif,
-                fontSize: fontSize, lineHeight: lineHeight,
+                columnCount: columnMode == "two"
+                    ? .two : columnMode == "one" || (columnMode == "legacy" && !legacyColumns) ? .one : .auto,
+                fontFamily: font == "serif" ? .serif : .sansSerif,
+                fontSize: fontSize, lineHeight: lineHeight, pageMargins: margins,
                 theme: theme == "dark" ? .dark : theme == "light" ? .light : .sepia))
     }
 
@@ -498,8 +608,15 @@ struct EPUBStudyView: View {
 struct EPUBHost: UIViewControllerRepresentable {
     let navigator: EPUBNavigatorViewController
     let marks: [LibraryMark]
-    func makeUIViewController(context: Context) -> EPUBNavigatorViewController { navigator }
-    func updateUIViewController(_ controller: EPUBNavigatorViewController, context: Context) {
+    var capture: (CardKind) -> Void
+    func makeUIViewController(context: Context) -> StudyEPUBContainer {
+        let container = StudyEPUBContainer(reader: navigator)
+        container.capture = capture
+        return container
+    }
+    func updateUIViewController(_ container: StudyEPUBContainer, context: Context) {
+        container.capture = capture
+        let controller = container.reader
         let decorations: [Decoration] = marks.compactMap { mark in
             guard !mark.excerpt.isEmpty, let json = mark.locator.nativeJSON,
                 let object = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],

@@ -1,13 +1,40 @@
 import Foundation
 import KnowledgeCore
+import PDFKit
 import ReadiumShared
 @preconcurrency import ReadiumZIPFoundation
+import UIKit
 import XCTest
 
 @testable import KnowledgeStudio
 
 @MainActor
 final class LibraryAppTests: XCTestCase {
+    func testPDFSelectedRangeAndRegionSurviveSerialization() throws {
+        let data = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 400, height: 600)).pdfData {
+            context in
+            context.beginPage()
+            ("First repeated word. Second repeated word." as NSString).draw(
+                at: CGPoint(x: 30, y: 80), withAttributes: [.font: UIFont.systemFont(ofSize: 16)])
+        }
+        let document = try XCTUnwrap(PDFKit.PDFDocument(data: data))
+        let page = try XCTUnwrap(document.page(at: 0))
+        let text = try XCTUnwrap(page.string) as NSString
+        let range = text.range(of: "repeated", options: .backwards)
+        XCTAssertNotEqual(range.location, NSNotFound)
+        let selection = try XCTUnwrap(page.selection(for: range))
+        let locator = selection.studioLocator(document: document, fallbackPage: 1, fingerprint: "fixture")
+        let decoded = try JSONDecoder().decode(ReadingLocator.self, from: JSONEncoder().encode(locator))
+        XCTAssertEqual(decoded, locator)
+        XCTAssertFalse(locator.rectangles.isEmpty)
+        XCTAssertTrue(try XCTUnwrap(locator.pdfTextAnchors).allSatisfy { $0.matches(text as String) })
+        XCTAssertEqual(locator.pdfTextAnchors?.first?.location, range.location)
+        XCTAssertEqual(locator.pdfAccuracy(currentFingerprint: "changed", pageCount: 1), .unavailable)
+        page.rotation = 90
+        XCTAssertEqual(
+            locator.rectangles, decoded.rectangles, "Page-space geometry must not be rewritten after rotation"
+        )
+    }
     func testEPUBSelectionLocatorRoundTripPreservesTextContext() throws {
         let json: [String: Any] = [
             "href": "chapter.xhtml", "type": "application/xhtml+xml",
@@ -41,6 +68,18 @@ final class LibraryAppTests: XCTestCase {
         var card = LibraryCard(type: .expression, content: ["text": "Example"])
         card.sourceRefs = [CardReference(sourceID: source.id, locator: ReadingLocator(kind: "pdf", page: 1))]
         model.saveCard(card)
+        model.change { state in
+            state.cards[0].review = .active
+            var project = LibraryProject(title: "Study")
+            project.sourceIDs = [source.id]
+            project.sourceNotes = [source.id.uuidString: "Project context"]
+            var group = ProjectGroup(title: "Reading")
+            group.cardIDs = [card.id]
+            project.groups = [group]
+            state.projects.append(project)
+        }
+        try model.repository?.recordReview(cardID: card.id, rating: 3, expectedRevision: nil, eventID: UUID())
+        model.perform {}
         let original = model.state
         let zip = try await BackupService.export(model: model)
         defer { try? FileManager.default.removeItem(at: zip) }
@@ -121,6 +160,18 @@ final class LibraryAppTests: XCTestCase {
         let model = StudioModel(root: root)
         model.saveCard(
             LibraryCard(type: .expression, content: ["text": String(repeating: "A", count: 10000)]))
+        model.change { state in
+            state.cards[0].review = .active
+            var project = LibraryProject(title: "Study")
+            project.sourceIDs = [source.id]
+            project.sourceNotes = [source.id.uuidString: "Project context"]
+            var group = ProjectGroup(title: "Reading")
+            group.cardIDs = [card.id]
+            project.groups = [group]
+            state.projects.append(project)
+        }
+        try model.repository?.recordReview(cardID: card.id, rating: 3, expectedRevision: nil, eventID: UUID())
+        model.perform {}
         let original = model.state
         let zip = try await BackupService.export(model: model)
         defer { try? FileManager.default.removeItem(at: zip) }

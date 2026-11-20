@@ -43,7 +43,9 @@ final class StudioModel: ObservableObject {
     func saveCard(_ card: LibraryCard, project: UUID? = nil) {
         change { state in
             if let index = state.cards.firstIndex(where: { $0.id == card.id }) {
-                state.cards[index] = card
+                var edited = card
+                edited.schedule = state.cards[index].schedule
+                state.cards[index] = edited
             } else {
                 state.cards.append(card)
             }
@@ -65,7 +67,8 @@ final class StudioModel: ObservableObject {
         }
         return card
     }
-    func saveMark(source: LibrarySource, locator: ReadingLocator, excerpt: String = "", kind: CardKind? = nil) {
+    func saveMark(source: LibrarySource, locator: ReadingLocator, excerpt: String = "", kind: CardKind? = nil)
+    {
         change { state in
             var mark = LibraryMark(sourceID: source.id, locator: locator, excerpt: excerpt)
             mark.cardKind = kind
@@ -227,7 +230,7 @@ final class StudioModel: ObservableObject {
         let marks = state.marks.filter { $0.sourceID == id }.count
         let relations = state.relations.filter { $0.from == id || $0.to == id }.count
         let projects = state.projects.filter {
-            $0.cardIDs.contains(id) || $0.sourceIDs.contains(id) || $0.relationIDs.contains(id)
+            $0.references(id)
         }.count
         return "关联卡片 \(cards)、标记 \(marks)、关系 \(relations)、项目 \(projects)。移入回收站保留关联；永久清理仅允许没有引用的对象。"
     }
@@ -242,8 +245,7 @@ final class StudioModel: ObservableObject {
                             $0.markIDs.contains(id) || $0.sourceRefs.contains { $0.sourceID == id }
                         } || state.relations.contains { $0.from == id || $0.to == id }
                         || state.projects.contains {
-                            $0.sourceIDs.contains(id) || $0.cardIDs.contains(id)
-                                || $0.relationIDs.contains(id)
+                            $0.references(id)
                         }
                     guard !linked else { throw LibraryError.invalid("对象仍被引用，请先解除关联或清理引用对象") }
                 }

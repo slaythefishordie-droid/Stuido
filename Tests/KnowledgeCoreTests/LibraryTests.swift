@@ -76,6 +76,35 @@ final class LibraryTests: XCTestCase {
             XCTAssertEqual(state.projects[0].board?.edges.count, 0)
         }
     }
+    func testProjectContextIsolationAndReferenceProtection() throws {
+        try withStore { repository, root in
+            let source = LibrarySource(kind: .pdf, title: "Shared book")
+            var first = LibraryProject(title: "First")
+            var second = LibraryProject(title: "Second")
+            first.sourceIDs = [source.id]
+            second.sourceIDs = [source.id]
+            first.sourceNotes = [source.id.uuidString: "Interpretation A"]
+            second.sourceNotes = [source.id.uuidString: "Interpretation B"]
+            var group = ProjectGroup(title: "Chapter")
+            group.sourceIDs = [source.id]
+            first.groups = [group]
+            try repository.update {
+                $0.sources = [source]
+                $0.projects = [first, second]
+            }
+            let state = try LibraryRepository(url: root.appendingPathComponent("library.sqlite")).read()
+            XCTAssertEqual(state.projects[0].sourceNotes?[source.id.uuidString], "Interpretation A")
+            XCTAssertEqual(state.projects[1].sourceNotes?[source.id.uuidString], "Interpretation B")
+            XCTAssertTrue(state.projects[0].references(source.id))
+            XCTAssertThrowsError(try repository.update { $0.sources.removeAll() })
+            XCTAssertEqual(try repository.read(), state)
+            try repository.update { $0.projects[0].groups?.removeAll() }
+            XCTAssertEqual(try repository.read().sources, [source])
+            XCTAssertEqual(try repository.read().projects[1], second)
+            XCTAssertThrowsError(
+                try repository.update { $0.projects[0].sourceNotes = [UUID().uuidString: "Missing source"] })
+        }
+    }
     private func withStore(_ body: (LibraryRepository, URL) throws -> Void) throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

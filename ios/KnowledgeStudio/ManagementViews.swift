@@ -154,49 +154,59 @@ struct LibraryView: View {
     @State private var importing = false
     @State private var search = ""
     @State private var projectTitle = ""
+    @State private var selectedProject: UUID?
+    @State private var selecting = false
+    @State private var selected: Set<UUID> = []
+    private var sources: [LibrarySource] {
+        model.state.sources.filter {
+            $0.deletedAt == nil && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search))
+        }
+    }
     var body: some View {
         NavigationStack {
-            List {
-                Section("项目") {
-                    DisclosureGroup("新建研究项目") {
-                        HStack {
-                            TextField("新项目名称", text: $projectTitle)
-                            Button("创建") {
-                                let title = projectTitle.trimmingCharacters(in: .whitespacesAndNewlines)
-                                if !title.isEmpty {
-                                    model.change { $0.projects.append(LibraryProject(title: title)) }
-                                    projectTitle = ""
-                                }
+            GeometryReader { geometry in
+                if geometry.size.width >= 850 {
+                    HStack(spacing: 0) {
+                        List {
+                            Button {
+                                selectedProject = nil
+                            } label: {
+                                Label("全部资料", systemImage: "books.vertical")
                             }
+                            projectTree(wide: true)
+                        }.frame(width: 240)
+                        Divider()
+                        if let selectedProject {
+                            ProjectView(projectID: selectedProject).id(selectedProject)
+                        } else {
+                            sourceList(includeProjects: false)
                         }
                     }
-                    ForEach(model.state.projects.filter { $0.deletedAt == nil }) { project in
-                        NavigationLink(project.title) { ProjectView(projectID: project.id) }
-                    }
-                }
-                Section("资料") {
-                    Button(model.isImporting ? "正在导入资料…" : "导入 PDF、EPUB 或本地视频") { importing = true }.disabled(
-                        model.isImporting)
-                    ForEach(
-                        model.state.sources.filter {
-                            $0.deletedAt == nil
-                                && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search))
-                        }
-                    ) { source in
-                        NavigationLink {
-                            SourceReaderView(source: source, location: source.lastLocation)
-                        } label: {
-                            VStack(alignment: .leading) {
-                                Text(source.title)
-                                Text(studioLabel(source.kind.rawValue)).font(.caption).foregroundStyle(
-                                    .secondary)
-                            }
-                        }.contextMenu {
-                            Button("移入回收站", role: .destructive) { model.delete([source.id]) }
-                        }
-                    }
+                } else {
+                    sourceList(includeProjects: true)
                 }
             }.navigationTitle("资料库").searchable(text: $search)
+                .toolbar {
+                    Button(model.isImporting ? "导入中…" : "导入资料") { importing = true }.disabled(
+                        model.isImporting)
+                    if selectedProject == nil {
+                        Button(selecting ? "完成" : "选择") {
+                            selecting.toggle()
+                            selected.removeAll()
+                        }
+                    }
+                }
+                .safeAreaInset(edge: .bottom) {
+                    if selecting && !selected.isEmpty {
+                        HStack {
+                            Text("已选 \(selected.count) 项")
+                            Button("移入回收站", role: .destructive) {
+                                model.delete(selected)
+                                if model.message == nil { selected.removeAll() }
+                            }
+                        }.padding().frame(maxWidth: .infinity).background(.regularMaterial)
+                    }
+                }
         }.fileImporter(
             isPresented: $importing,
             allowedContentTypes: [.pdf, UTType(filenameExtension: "epub") ?? .data, .movie]
@@ -208,7 +218,72 @@ struct LibraryView: View {
             }
         }
     }
+    @ViewBuilder private func projectTree(wide: Bool) -> some View {
+        Section("研究项目") {
+            DisclosureGroup("新建项目") {
+                TextField("项目名称", text: $projectTitle)
+                Button("创建") {
+                    let title = projectTitle.trimmingCharacters(in: .whitespacesAndNewlines)
+                    guard !title.isEmpty else { return }
+                    model.change { $0.projects.append(LibraryProject(title: title)) }
+                    if model.message == nil { projectTitle = "" }
+                }
+            }
+            ForEach(model.state.projects.filter { $0.deletedAt == nil }) { project in
+                if wide {
+                    Button {
+                        selectedProject = project.id
+                        selecting = false
+                        selected.removeAll()
+                    } label: {
+                        Label(
+                            project.title,
+                            systemImage: selectedProject == project.id ? "folder.fill" : "folder")
+                    }
+                } else {
+                    NavigationLink(project.title) { ProjectView(projectID: project.id) }
+                }
+            }
+        }
+    }
+    private func sourceList(includeProjects: Bool) -> some View {
+        List {
+            if includeProjects { projectTree(wide: false) }
+            Section("资料") {
+                if sources.isEmpty {
+                    Text(search.isEmpty ? "导入一本书，开始阅读。" : "没有找到资料").foregroundStyle(.secondary)
+                }
+                ForEach(sources) { source in
+                    if selecting {
+                        Button {
+                            if selected.contains(source.id) {
+                                selected.remove(source.id)
+                            } else {
+                                selected.insert(source.id)
+                            }
+                        } label: {
+                            Label(
+                                source.title,
+                                systemImage: selected.contains(source.id) ? "checkmark.circle.fill" : "circle"
+                            )
+                        }
+                    } else {
+                        NavigationLink {
+                            SourceReaderView(source: source, location: source.lastLocation)
+                        } label: {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(source.title)
+                                Text(studioLabel(source.kind.rawValue)).font(.caption).foregroundStyle(
+                                    .secondary)
+                            }
+                        }.contextMenu { Button("移入回收站", role: .destructive) { model.delete([source.id]) } }
+                    }
+                }
+            }
+        }
+    }
 }
+
 struct ProjectView: View {
     @EnvironmentObject private var model: StudioModel
     let projectID: UUID
@@ -232,6 +307,7 @@ struct ProjectView: View {
                     }
                 }
                 NavigationLink("研究白板") { ProjectBoardView(projectID: projectID) }
+                NavigationLink("自定义分组") { ProjectGroupsView(projectID: projectID) }
                 if !managingLinks {
                     Section("项目资料") {
                         ForEach(
@@ -239,8 +315,13 @@ struct ProjectView: View {
                                 $0.deletedAt == nil && project.sourceIDs.contains($0.id)
                             }
                         ) { source in
-                            NavigationLink(source.title) {
-                                SourceReaderView(source: source, location: source.lastLocation)
+                            VStack(alignment: .leading, spacing: 8) {
+                                NavigationLink(source.title) {
+                                    SourceReaderView(source: source, location: source.lastLocation)
+                                }
+                                NavigationLink("项目研究笔记") {
+                                    ProjectSourceNoteView(projectID: projectID, sourceID: source.id)
+                                }.font(.caption)
                             }
                         }
                     }

@@ -25,6 +25,10 @@ on:
       - '.github/workflows/ipados.yml'
   workflow_dispatch:
     inputs:
+      package_ipa:
+        description: 'Explicit delivery stage: archive and package IPA'
+        type: boolean
+        default: false
       runner:
         description: 'Standard macOS runner (Intel preferred while ARM64 capacity is constrained)'
         type: choice
@@ -118,6 +122,7 @@ jobs:
           PYERROR
       - name: Archive the actual iPadOS device App without signing
         id: archive
+        if: github.event_name == 'workflow_dispatch' && inputs.package_ipa
         run: |
           set -euo pipefail
           xcodebuild archive -project ios/KnowledgeStudio.xcodeproj -scheme KnowledgeStudio \
@@ -128,6 +133,7 @@ jobs:
             2>&1 | tee artifacts/logs/archive.log
       - name: Package and verify re-signable IPA candidate
         id: ipa
+        if: github.event_name == 'workflow_dispatch' && inputs.package_ipa
         run: |
           set -euo pipefail
           bash scripts/package-unsigned-ipa.sh 2>&1 | tee artifacts/logs/package.log

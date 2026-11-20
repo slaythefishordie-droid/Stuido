@@ -13,7 +13,7 @@ struct StudioView: View {
         NavigationSplitView {
             List(selection: $destination) {
                 Section("阅读与思考") {
-                    ForEach([StudySection.home, .library, .inbox, .cards]) { section in
+                    ForEach([StudySection.home, .library, .inbox, .cards, .today]) { section in
                         NavigationLink(value: section) { Label(section.title, systemImage: section.symbol) }
                     }
                 }
@@ -37,6 +37,7 @@ struct StudioView: View {
             Group {
                 switch destination ?? .home {
                 case .home: StudyHomeView()
+                case .today: TodayView()
                 case .library: LibraryView()
                 case .inbox: InboxView()
                 case .cards: CardsView()
@@ -148,7 +149,7 @@ struct InboxView: View {
                             selected.removeAll()
                         }
                         Button("移入回收站", role: .destructive) {
-                            model.delete(Array(selected))
+                            model.delete(selected)
                             selected.removeAll()
                         }
                     }
@@ -204,9 +205,12 @@ struct CardsView: View {
     var cards: [LibraryCard] {
         model.state.cards.filter { card in
             card.deletedAt == nil
-                && (category == "全部" || card.type.title == category)
+                && (category == "全部" || card.type.title == category
+                    || (category == "词汇库" && [.word, .keyword].contains(card.type))
+                    || (category == "语料库" && [.expression, .key_sentence].contains(card.type)))
                 && (search.isEmpty
-                    || (card.title + card.note + card.tags.joined(separator: " "))
+                    || (card.content.values.joined(separator: " ") + card.note
+                        + card.tags.joined(separator: " "))
                         .localizedCaseInsensitiveContains(search))
         }
     }
@@ -214,8 +218,8 @@ struct CardsView: View {
         NavigationStack {
             List {
                 Picker("视图", selection: $category) {
-                    ForEach(["全部"] + CardKind.allCases.map(\.title), id: \.self) { Text($0) }
-                }.pickerStyle(.segmented)
+                    ForEach(["全部", "词汇库", "语料库"] + CardKind.allCases.map(\.title), id: \.self) { Text($0) }
+                }.pickerStyle(.menu)
                 ForEach(cards) { card in
                     NavigationLink {
                         CardDetailView(cardID: card.id)
@@ -273,7 +277,7 @@ struct CardEditor: View {
                 Picker("复习状态（由你选择）", selection: $card.review) {
                     ForEach(ReviewStatus.allCases, id: \.self) { Text(studioLabel($0.rawValue)) }
                 }
-                Text("复习调度与每日任务将在产品阶段 6 接入。").font(.caption)
+                Text("主动加入复习后，可在今日复习查看到期卡片；暂停和退出均保留历史。").font(.caption)
                 Picker("关联项目", selection: $project) {
                     Text("不新增项目关联").tag(nil as UUID?)
                     ForEach(model.state.projects.filter { $0.deletedAt == nil }) {
@@ -316,6 +320,7 @@ struct CardEditor: View {
 struct CardDetailView: View {
     @EnvironmentObject private var model: StudioModel
     let cardID: UUID
+    var reviewMode = false
     @State private var editor: LibraryCard?
     @State private var comparison: CardReference?
     var body: some View {
@@ -336,7 +341,9 @@ struct CardDetailView: View {
                     }
                 }
             }
-        }.navigationTitle("卡片详情").sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
+        }.safeAreaInset(edge: .bottom) { if reviewMode { ReviewControls(cardID: cardID) } }.navigationTitle(
+            "卡片详情"
+        ).sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
     }
     private func content(showComparison: Bool) -> some View {
         Form {
@@ -351,7 +358,9 @@ struct CardDetailView: View {
                         }
                     }
                 }
-                if card.type == .word { Section("发音") { PronunciationButton(word: card.content["word"] ?? "") } }
+                if card.type == .word {
+                    Section("发音") { PronunciationButton(word: card.content["word"] ?? "") }
+                }
                 Section("笔记") {
                     Text(card.note)
                     if !card.importAnnotation.isEmpty { Text("导入说明：\(card.importAnnotation)") }
@@ -386,6 +395,7 @@ struct CardDetailView: View {
                             string: "https://en.wiktionary.org/wiki/" + card.title.addingPercentEncoding(
                                 withAllowedCharacters: .urlPathAllowed)!)!)
                 }
+                CardReviewHistory(card: card)
                 Button("编辑") { editor = card }
             }
         }.tint(model.state.cards.first { $0.id == cardID }?.type.color ?? .accentColor)

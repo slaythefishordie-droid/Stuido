@@ -18,7 +18,13 @@ struct ExtensionSetupView: View {
                         Text("浅色").tag("light")
                         Text("深色").tag("dark")
                     }
-                    Picker("发音口音偏好", selection: $accent) { Text("美式英语").tag("en-US"); Text("英式英语").tag("en-GB") }
+                    Picker("发音口音偏好", selection: $accent) {
+                        Text("美式英语").tag("en-US")
+                        Text("英式英语").tag("en-GB")
+                    }
+                    Text(
+                        "听发音会向维基词典查询所选单词，并缓存许可明确的录音；其他阅读内容不会发送。无法取得录音时使用设备语音，实际口音与来源会显示在播放入口。缓存由系统管理，不纳入知识库备份。"
+                    ).font(.caption).foregroundStyle(.secondary)
                     Toggle("紧凑显示", isOn: $compactDisplay)
                     Text("Safari 面板可设置回溯、字号、控件位置和网站适配器。文章与播客按网站主动授权；停用后刷新网页生效。")
                 }

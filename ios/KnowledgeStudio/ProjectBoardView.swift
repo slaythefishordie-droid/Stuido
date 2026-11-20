@@ -7,16 +7,42 @@ struct ProjectBoardView: View {
     @State private var text = ""
     @State private var start: UUID?
     @State private var opened: BoardNode?
+    @State private var edited: BoardNode?
+    @State private var draft = ""
+    @State private var connections = false
+    @State private var undoBoards: [ProjectBoard] = []
+    @State private var expectedBoard: ProjectBoard?
     private var board: ProjectBoard {
         model.state.projects.first { $0.id == projectID }?.board ?? ProjectBoard()
     }
     private func change(_ action: (inout ProjectBoard) -> Void) {
+        let previous = board
         model.change { state in
             guard let i = state.projects.firstIndex(where: { $0.id == projectID && $0.deletedAt == nil })
             else { throw LibraryError.invalid("项目不可用") }
             var value = state.projects[i].board ?? ProjectBoard()
             action(&value)
             state.projects[i].board = value
+        }
+        if model.message == nil && board != previous {
+            undoBoards.append(previous)
+            if undoBoards.count > 20 { undoBoards.removeFirst() }
+            expectedBoard = board
+        }
+    }
+    private func undo() {
+        guard let previous = undoBoards.last else { return }
+        model.change { state in
+            guard let i = state.projects.firstIndex(where: { $0.id == projectID }),
+                (state.projects[i].board ?? ProjectBoard()) == expectedBoard
+            else {
+                throw LibraryError.invalid("白板已在别处更新，未覆盖新修改")
+            }
+            state.projects[i].board = previous
+        }
+        if model.message == nil {
+            undoBoards.removeLast()
+            expectedBoard = board
         }
     }
     private func add(_ node: BoardNode) {
@@ -56,6 +82,8 @@ struct ProjectBoardView: View {
                     }
                 }
                 if start != nil { Button("取消连线") { start = nil } }
+                Button("撤销") { undo() }.disabled(undoBoards.isEmpty)
+                Button("连线") { connections = true }
             }.padding()
             Text("拖动节点布局，点击打开内容；长按节点连线或移除。移除节点不会删除原资料和卡片。").font(.caption).foregroundStyle(.secondary)
                 .padding(.horizontal)
@@ -75,7 +103,19 @@ struct ProjectBoardView: View {
                     }
                     ForEach(board.nodes) { node in
                         Button {
-                            opened = node
+                            if let start, start != node.id {
+                                change { value in
+                                    if !value.edges.contains(where: {
+                                        ($0.from == start && $0.to == node.id)
+                                            || ($0.to == start && $0.from == node.id)
+                                    }) {
+                                        value.edges.append(BoardEdge(from: start, to: node.id))
+                                    }
+                                }
+                                self.start = nil
+                            } else {
+                                opened = node
+                            }
                         } label: {
                             Text(node.text).lineLimit(5).frame(width: 190).frame(minHeight: 70).padding(12)
                                 .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
@@ -96,10 +136,21 @@ struct ProjectBoardView: View {
                                 }
                             )
                             .contextMenu {
+                                Button("编辑文字") {
+                                    draft = node.text
+                                    edited = node
+                                }
                                 Button("从这里连线") { start = node.id }
                                 if let start, start != node.id {
                                     Button("连接到此处") {
-                                        change { $0.edges.append(BoardEdge(from: start, to: node.id)) }
+                                        change { value in
+                                            if !value.edges.contains(where: {
+                                                ($0.from == start && $0.to == node.id)
+                                                    || ($0.to == start && $0.from == node.id)
+                                            }) {
+                                                value.edges.append(BoardEdge(from: start, to: node.id))
+                                            }
+                                        }
                                         self.start = nil
                                     }
                                 }
@@ -112,6 +163,39 @@ struct ProjectBoardView: View {
                 }.frame(width: 1600, height: 1200)
             }
         }.navigationTitle("研究白板").background(StudyTheme.paper)
+            .sheet(item: $edited) { node in
+                NavigationStack {
+                    TextEditor(text: $draft).padding().navigationTitle("编辑白板文字").toolbar {
+                        Button("取消") { edited = nil }
+                        Button("保存") {
+                            change { value in
+                                if let i = value.nodes.firstIndex(where: { $0.id == node.id }) {
+                                    value.nodes[i].text = draft
+                                }
+                            }
+                            if model.message == nil { edited = nil }
+                        }
+                    }
+                }
+            }
+            .sheet(isPresented: $connections) {
+                NavigationStack {
+                    List {
+                        if board.edges.isEmpty { Text("长按节点选择“从这里连线”，再点另一节点。") }
+                        ForEach(board.edges) { edge in
+                            HStack {
+                                Text(
+                                    (board.nodes.first { $0.id == edge.from }?.text ?? "") + " → "
+                                        + (board.nodes.first { $0.id == edge.to }?.text ?? ""))
+                                Spacer()
+                                Button("移除", role: .destructive) {
+                                    change { $0.edges.removeAll { $0.id == edge.id } }
+                                }
+                            }
+                        }
+                    }.navigationTitle("白板连线").toolbar { Button("完成") { connections = false } }
+                }
+            }
             .sheet(item: $opened) { node in
                 NavigationStack {
                     Group {

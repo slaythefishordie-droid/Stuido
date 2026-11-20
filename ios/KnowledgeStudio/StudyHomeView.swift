@@ -17,6 +17,13 @@ struct StudyHomeView: View {
                         Text("从上次的位置继续，或打开一个研究项目。").foregroundStyle(.secondary)
                     }.padding(.vertical, 12)
                 }
+                Section {
+                    NavigationLink {
+                        TodayView()
+                    } label: {
+                        Label("今日复习", systemImage: "calendar")
+                    }
+                }
                 Section("继续阅读") {
                     if reading.isEmpty {
                         Text("在资料库打开一本书，阅读位置会保留在这里。").foregroundStyle(.secondary)

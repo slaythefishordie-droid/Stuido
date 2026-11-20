@@ -89,3 +89,13 @@ SwiftPM 解析生成 ios/Package.resolved，根 Package.resolved 锁核心依赖
 | youtubeplayerkit | 2.0.5 | `1ae827573024ab13dd6adea33b25d3eef6ff667c` |
 | zip | 2.1.2 | `67fa55813b9e7b3b9acee9c0ae501def28746d76` |
 | zipfoundation | 3.0.1 | `adb49c8bfe060cc187370b12fa081012a6440b86` |
+
+
+## V2 实际接入与研究（2026-11-20）
+
+- **swift-fsrs 6.0.0**，MIT，revision `74cb02977ba94dd505aa2a13149238b5f5d48a1b`，已加入 KnowledgeCore、双锁文件及完整第三方声明。薄适配层 ReviewScheduler 显式使用 `FSRSDefaults.defaultWv6` 的 21 个参数，不使用该包仍为 FSRS-5 的默认权重。调度 JSON、参数、版本及每次前后状态保留。上方候选评估的“未接入”属于历史。
+- **FSRS-7**：官方 [ts-fsrs 更新](https://open-spaced-repetition.github.io/ts-fsrs/updates/)及[迁移说明](https://open-spaced-repetition.github.io/ts-fsrs/guide/migration.md)已有版本相关接口。不能再笼统称其尚不存在；未确认等价且稳定的 Swift 集成，本轮不替换 FSRS-6 或重排历史。
+- **图谱**：采用系统 SwiftUI Canvas + 手势，无新布局依赖。原“尚未实现”已由本轮混合白板覆盖。
+- **OCR**：用户 V2 扩展范围后采用 Apple Vision 单页识别，PDFKit/CGPDFPage 绘制变换反算原页坐标；原文档“OCR 不在范围”只描述早期版本。
+- **真人发音**：不接商业字典 API。读取维基词典引用的 Commons 音频，通过 [videoinfo](https://www.mediawiki.org/wiki/Extension:TimedMediaHandler/API) 获取真实转码地址与 extmetadata；按每个文件的许可署名，不套用维基百科文字许可。参考 [机器可读许可](https://commons.wikimedia.org/wiki/Commons:Machine-readable_data)、[美式 hello 录音](https://commons.wikimedia.org/wiki/File:En-us-hello.ogg)、[英式 hello 录音](https://commons.wikimedia.org/wiki/File:En-uk-hello-1.ogg)。优先核对 Dvortygirl、EncycloPetey、Celestianpower 或明确 recorded-by 的录制信息；无法核对、许可缺失、合成标识、无可播放转码均回退 TTS。作者/源页/许可链接保留在缓存与 UI。
+- 用户主动点发音才向第三方发送所选短词；其他知识内容不上传。开放录音并非完整词典，不保证每个口音和词义覆盖。真实网络播放与离线语音待设备验证。
