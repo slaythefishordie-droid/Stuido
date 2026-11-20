@@ -32,6 +32,11 @@ public final class LibraryRepository {
         }
     }
     public func update(_ mutate: (inout LibraryState) throws -> Void) throws {
+        _ = try updateAndRead(mutate)
+    }
+
+    /// Returns the snapshot only after SQLite successfully commits the transaction.
+    public func updateAndRead(_ mutate: (inout LibraryState) throws -> Void) throws -> LibraryState {
         try database.write { db in
             guard let data = try Data.fetchOne(db, sql: "SELECT payload FROM library_state WHERE id = 1")
             else { throw LibraryError.invalid("知识库记录缺失") }
@@ -39,11 +44,12 @@ public final class LibraryRepository {
             try state.validate()
             let previous = state
             try mutate(&state)
+            guard state != previous else { return previous }
             try state.validate()
-            guard state != previous else { return }
             try db.execute(
                 sql: "UPDATE library_state SET payload = ? WHERE id = 1",
                 arguments: [try JSONEncoder().encode(state)])
+            return state
         }
     }
     public func restore(_ snapshot: LibraryState) throws {
@@ -52,6 +58,7 @@ public final class LibraryRepository {
     }
 
     public func receive(_ webMarks: [WebMark]) throws {
+        guard !webMarks.isEmpty else { return }
         try update { state in
             var markIndices = Dictionary(
                 uniqueKeysWithValues: state.marks.enumerated().map { ($0.element.id, $0.offset) })

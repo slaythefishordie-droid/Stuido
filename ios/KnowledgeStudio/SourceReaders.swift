@@ -405,47 +405,85 @@ struct PDFHost: UIViewRepresentable {
         context.coordinator.tap?.isEnabled = marksInteractive
         context.coordinator.gesture?.isEnabled = regionMode
         guard let document = view.document else { return }
-        let ids = marks.filter {
-            fingerprint != nil
-                && ($0.locator.fileFingerprint == nil || $0.locator.fileFingerprint == fingerprint)
+        let coordinator = context.coordinator
+        if coordinator.document !== document {
+            coordinator.removeHighlights()
+            coordinator.document = document
         }
-        guard ids != context.coordinator.ids else { return }
-        context.coordinator.ids = ids
-        for i in 0..<document.pageCount {
-            guard let page = document.page(at: i) else { continue }
-            for annotation in page.annotations
-            where annotation.contents?.hasPrefix("KnowledgeStudio:") == true {
-                page.removeAnnotation(annotation)
-            }
-        }
-        for mark in ids {
-            for (index, rect) in mark.locator.rectangles.enumerated() {
-                guard rect.isValid, rect.page <= document.pageCount,
-                    let page = document.page(at: rect.page - 1)
-                else { continue }
-                let annotation = PDFAnnotation(
-                    bounds: CGRect(x: rect.x, y: rect.y, width: rect.width, height: rect.height),
-                    forType: .highlight, withProperties: nil)
-                annotation.color = mark.highlightKind.highlightColor.withAlphaComponent(0.4)
-                if let quads = mark.locator.pdfTextQuads, quads.indices.contains(index),
-                    quads[index].page == rect.page, quads[index].points.count == 4,
-                    quads[index].points.allSatisfy({
-                        $0.x.isFinite && $0.y.isFinite && (rect.x...(rect.x + rect.width)).contains($0.x)
-                            && (rect.y...(rect.y + rect.height)).contains($0.y)
-                    })
+
+        var latest: [Int: [Highlight]] = [:]
+        if let fingerprint {
+            for mark in marks where mark.locator.fileFingerprint == nil || mark.locator.fileFingerprint == fingerprint {
+                for (index, rect) in mark.locator.rectangles.enumerated()
+                    where rect.isValid && rect.page <= document.pageCount
                 {
-                    annotation.quadrilateralPoints = quads[index].points.map {
-                        NSValue(cgPoint: CGPoint(x: $0.x - rect.x, y: $0.y - rect.y))
-                    }
+                    let quads = mark.locator.pdfTextQuads
+                    let quad = quads.flatMap { $0.indices.contains(index) ? $0[index] : nil }
+                    latest[rect.page, default: []].append(
+                        Highlight(id: mark.id, kind: mark.highlightKind, rect: rect, quad: quad))
                 }
-                annotation.contents = "KnowledgeStudio:" + mark.id.uuidString
-                page.addAnnotation(annotation)
             }
         }
+        guard latest != coordinator.highlights else { return }
+        let pages = Set(latest.keys).union(coordinator.highlights.keys)
+        for number in pages where latest[number] != coordinator.highlights[number] {
+            coordinator.removeHighlights(on: number)
+            guard let highlights = latest[number], let page = document.page(at: number - 1) else { continue }
+            let annotations = highlights.map(makeAnnotation)
+            for annotation in annotations { page.addAnnotation(annotation) }
+            coordinator.annotations[number] = (page, annotations)
+        }
+        coordinator.highlights = latest
     }
+
+    struct Highlight: Equatable {
+        let id: UUID
+        let kind: CardKind
+        let rect: HighlightRect
+        let quad: PDFTextQuad?
+    }
+
+    private func makeAnnotation(_ mark: Highlight) -> PDFAnnotation {
+        let rect = mark.rect
+        let annotation = PDFAnnotation(
+            bounds: CGRect(x: rect.x, y: rect.y, width: rect.width, height: rect.height),
+            forType: .highlight, withProperties: nil)
+        annotation.color = mark.kind.highlightColor.withAlphaComponent(0.4)
+        if let quad = mark.quad, quad.page == rect.page, quad.points.count == 4,
+            quad.points.allSatisfy({
+                $0.x.isFinite && $0.y.isFinite && (rect.x...(rect.x + rect.width)).contains($0.x)
+                    && (rect.y...(rect.y + rect.height)).contains($0.y)
+            })
+        {
+            annotation.quadrilateralPoints = quad.points.map {
+                NSValue(cgPoint: CGPoint(x: $0.x - rect.x, y: $0.y - rect.y))
+            }
+        }
+        annotation.contents = "KnowledgeStudio:" + mark.id.uuidString
+        return annotation
+    }
+
+    static func dismantleUIView(_ view: PDFView, coordinator: Coordinator) {
+        if let gesture = coordinator.gesture { view.removeGestureRecognizer(gesture) }
+        if let tap = coordinator.tap { view.removeGestureRecognizer(tap) }
+        coordinator.removeHighlights()
+    }
+
     func makeCoordinator() -> Coordinator { Coordinator() }
     @MainActor final class Coordinator: NSObject, UIGestureRecognizerDelegate {
-        var ids: [LibraryMark] = []
+        weak var document: PDFKit.PDFDocument?
+        var highlights: [Int: [Highlight]] = [:]
+        var annotations: [Int: (PDFPage, [PDFAnnotation])] = [:]
+
+        func removeHighlights(on pageNumber: Int) {
+            guard let (page, previous) = annotations.removeValue(forKey: pageNumber) else { return }
+            for annotation in previous { page.removeAnnotation(annotation) }
+        }
+
+        func removeHighlights() {
+            for number in Array(annotations.keys) { removeHighlights(on: number) }
+            highlights.removeAll()
+        }
         var gesture: UILongPressGestureRecognizer?
         var tap: UITapGestureRecognizer?
         var onMark: ((UUID) -> Void)?
@@ -829,18 +867,34 @@ struct EPUBHost: UIViewControllerRepresentable {
         container.capture = capture
         return container
     }
+    struct Highlight: Equatable {
+        let id: UUID
+        let kind: CardKind
+        let json: String
+    }
+
+    final class Coordinator {
+        var highlights: [Highlight]?
+    }
+
+    func makeCoordinator() -> Coordinator { Coordinator() }
+
     func updateUIViewController(_ container: StudyEPUBContainer, context: Context) {
         container.capture = capture
-        let controller = container.reader
-        let decorations: [Decoration] = marks.compactMap { mark in
-            guard !mark.excerpt.isEmpty, let json = mark.locator.nativeJSON,
-                let object = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
+        let highlights = marks.compactMap { mark -> Highlight? in
+            guard !mark.excerpt.isEmpty, let json = mark.locator.nativeJSON else { return nil }
+            return Highlight(id: mark.id, kind: mark.highlightKind, json: json)
+        }
+        guard highlights != context.coordinator.highlights else { return }
+        context.coordinator.highlights = highlights
+        let decorations: [Decoration] = highlights.compactMap { mark in
+            guard let object = try? JSONSerialization.jsonObject(with: Data(mark.json.utf8)) as? [String: Any],
                 let locator = try? Locator(json: ReadiumShared.JSONValue(object), warnings: nil)
             else { return nil }
             return Decoration(
                 id: mark.id.uuidString, locator: locator,
-                style: .highlight(tint: mark.highlightKind.highlightColor))
+                style: .highlight(tint: mark.kind.highlightColor))
         }
-        controller.apply(decorations: decorations, in: "knowledge-marks")
+        container.reader.apply(decorations: decorations, in: "knowledge-marks")
     }
 }

@@ -152,7 +152,7 @@ struct StudySourceCover: View {
 
 @MainActor
 enum StudyThumbnails {
-    final class Artwork {
+    @MainActor final class Artwork {
         let image: UIImage?
         let author: String?
         init(image: UIImage? = nil, author: String? = nil) {
@@ -163,6 +163,7 @@ enum StudyThumbnails {
     }
 
     private static let memory = NSCache<NSURL, Artwork>()
+    private static var requests: [URL: (UUID, Task<Artwork, Never>)] = [:]
 
     private static func cacheFile(_ asset: URL) -> URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
@@ -172,6 +173,7 @@ enum StudyThumbnails {
 
     static func invalidate(_ asset: URL) throws {
         memory.removeObject(forKey: asset as NSURL)
+        requests.removeValue(forKey: asset)?.1.cancel()
         if let file = cacheFile(asset) {
             for target in [file, file.appendingPathExtension("author")] where FileManager.default.fileExists(atPath: target.path) {
                 try FileManager.default.removeItem(at: target)
@@ -181,6 +183,17 @@ enum StudyThumbnails {
 
     static func artwork(_ asset: URL, kind: SourceKind) async -> Artwork {
         if let cached = memory.object(forKey: asset as NSURL) { return cached }
+        if let request = requests[asset] { return await request.1.value }
+
+        let id = UUID()
+        let task = Task { await loadArtwork(asset, kind: kind) }
+        requests[asset] = (id, task)
+        let artwork = await task.value
+        if requests[asset]?.0 == id { requests.removeValue(forKey: asset) }
+        return artwork
+    }
+
+    private static func loadArtwork(_ asset: URL, kind: SourceKind) async -> Artwork {
         let file = cacheFile(asset)
         if let file, let image = UIImage(contentsOfFile: file.path) {
             let author = try? String(contentsOf: file.appendingPathExtension("author"), encoding: .utf8)

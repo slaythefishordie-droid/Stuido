@@ -4,7 +4,7 @@ import SwiftUI
 
 @MainActor
 final class StudioModel: ObservableObject {
-    @Published var state = LibraryState()
+    @Published private(set) var state = LibraryState()
     @Published var message: String?
     @Published var sharedWarning: String?
     @Published private(set) var isImporting = false
@@ -27,7 +27,7 @@ final class StudioModel: ObservableObject {
         do {
             guard repository != nil else { throw LibraryError.invalid("知识库不可用，禁止写入") }
             try action()
-            state = try repository!.read()
+            publish(try repository!.read())
         } catch { message = error.localizedDescription }
     }
     func refresh() {
@@ -35,11 +35,27 @@ final class StudioModel: ObservableObject {
             do {
                 try repository!.receive(WebMarkStore.configured().readAll())
                 try repository!.receivePages(PageCaptureStore.configured().readAll())
-                sharedWarning = nil
-            } catch { sharedWarning = "Safari 交接未完成：\(error.localizedDescription)" }
+                if sharedWarning != nil { sharedWarning = nil }
+            } catch {
+                let warning = "Safari 交接未完成：\(error.localizedDescription)"
+                if sharedWarning != warning { sharedWarning = warning }
+            }
         }
     }
-    func change(_ action: (inout LibraryState) throws -> Void) { perform { try repository!.update(action) } }
+    private func publish(_ snapshot: LibraryState) {
+        if snapshot != state { state = snapshot }
+    }
+
+    func commit(_ action: (inout LibraryState) throws -> Void) throws {
+        guard let repository else { throw LibraryError.invalid("知识库不可用，禁止写入") }
+        publish(try repository.updateAndRead(action))
+    }
+
+    func change(_ action: (inout LibraryState) throws -> Void) {
+        message = nil
+        do { try commit(action) }
+        catch { message = error.localizedDescription }
+    }
     func saveCard(_ card: LibraryCard, project: UUID? = nil) {
         change { state in
             if let index = state.cards.firstIndex(where: { $0.id == card.id }) {

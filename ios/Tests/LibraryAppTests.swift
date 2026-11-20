@@ -10,6 +10,23 @@ import XCTest
 
 @MainActor
 final class LibraryAppTests: XCTestCase {
+    func testCommitPublishesPersistedSourceAndMarkTogether() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let model = StudioModel(root: root)
+        let source = LibrarySource(kind: .pdf, title: "Paper")
+        let mark = LibraryMark(sourceID: source.id, locator: ReadingLocator(kind: "pdf", page: 2))
+        try model.commit {
+            $0.sources.append(source)
+            $0.marks.append(mark)
+        }
+        XCTAssertEqual(model.state.marks.first?.sourceID, model.state.sources.first?.id)
+        let saved = model.state
+        XCTAssertThrowsError(try model.commit { $0.sources.removeAll() })
+        XCTAssertEqual(model.state, saved)
+        XCTAssertEqual(try model.repository?.read(), saved)
+    }
+
     func testReadingSpreadsRespectTheActualWindow() {
         XCTAssertTrue(StudyPageLayout.automatic.usesSpread(in: CGSize(width: 1024, height: 680)))
         XCTAssertFalse(StudyPageLayout.automatic.usesSpread(in: CGSize(width: 820, height: 1050)))

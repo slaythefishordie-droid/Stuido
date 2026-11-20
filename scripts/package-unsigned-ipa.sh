@@ -40,6 +40,9 @@ python3 - "$ks_extension" <<'CHECK'
 import json, pathlib, plistlib, re, sys
 extension = pathlib.Path(sys.argv[1])
 info = plistlib.loads((extension / 'Info.plist').read_bytes())
+app_info = plistlib.loads((extension.parents[1] / 'Info.plist').read_bytes())
+for version_key in ['CFBundleShortVersionString', 'CFBundleVersion']:
+    assert info[version_key] == app_info[version_key], f'Mismatched extension {version_key}'
 assert info['NSExtension']['NSExtensionPointIdentifier'] == 'com.apple.Safari.web-extension'
 assert info['CFBundleSupportedPlatforms'] == ['iPhoneOS']
 assert re.search(r'platform\s+IOS\s*$', pathlib.Path('.build/extension-platform.txt').read_text(), re.M)
@@ -92,6 +95,8 @@ report = {
     'app_group_sharing': 'not_tested',
     'requires_resigning': True,
     'bundle_identifier': info['CFBundleIdentifier'],
+    'version': info['CFBundleShortVersionString'],
+    'build': info['CFBundleVersion'],
     'minimum_os_version': info['MinimumOSVersion'],
     'sdk': info.get('DTSDKName'),
     'device_family': info['UIDeviceFamily'],

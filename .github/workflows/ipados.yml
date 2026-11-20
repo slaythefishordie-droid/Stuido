@@ -48,7 +48,7 @@ jobs:
   build:
     name: Xcode 26.2 · iPadOS
     runs-on: ${{ inputs.runner || 'macos-15-intel' }}
-    timeout-minutes: 25
+    timeout-minutes: ${{ inputs.package_ipa && 45 || 25 }}
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
     defaults:

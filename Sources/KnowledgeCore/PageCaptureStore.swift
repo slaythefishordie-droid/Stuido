@@ -65,6 +65,7 @@ public struct PageCaptureStore {
 }
 extension LibraryRepository {
     public func receivePages(_ captures: [PageCapture]) throws {
+        guard !captures.isEmpty else { return }
         try update { state in
             var received = Set(state.receivedWebIDs).union(state.marks.map(\.id))
             var sourcesByKey: [String: LibrarySource] = [:]

@@ -241,14 +241,14 @@ final class PDFStudyInk: NSObject, ObservableObject, @preconcurrency PDFPageOver
 
     private func persist(_ overlay: StudyInkPage) {
         guard overlay.dirty, !overlay.active, overlay.isValid, let transform = overlay.transformToOverlay,
-            let model, let repository = model.repository, let sourceID, let identity = identity(of: overlay.page)
+            let model, let sourceID, let identity = identity(of: overlay.page)
         else { return }
         let drawing = overlay.canvas.drawing
         let data = drawing.strokes.isEmpty ? nil : drawing.transformed(using: transform.inverted()).dataRepresentation()
         let expected = overlay.saved
         guard data != expected else { overlay.dirty = false; return }
         do {
-            try repository.update { state in
+            try model.commit { state in
                 guard let index = state.sources.firstIndex(where: {
                     $0.id == sourceID && $0.deletedAt == nil && $0.assetHash == identity.fingerprint
                 }) else { throw LibraryError.invalid("原始 PDF 已变更，笔迹未写入") }
@@ -265,7 +265,6 @@ final class PDFStudyInk: NSObject, ObservableObject, @preconcurrency PDFPageOver
             }
             overlay.saved = data
             overlay.dirty = false
-            model.state = try repository.read()
         } catch { model.message = error.localizedDescription }
     }
 
