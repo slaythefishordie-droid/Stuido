@@ -26,6 +26,15 @@ info = plistlib.loads((app / 'Info.plist').read_bytes())
 require(info.get('CFBundlePackageType') == 'APPL', f"Not an application bundle: {info.get('CFBundlePackageType')}")
 require(info.get('CFBundleSupportedPlatforms') == ['iPhoneOS'], f"Expected iPhoneOS, got {info.get('CFBundleSupportedPlatforms')}; simulator output cannot become an iPadOS IPA")
 require(2 in info.get('UIDeviceFamily', []), f"App must support iPad; got device family {info.get('UIDeviceFamily')}")
+icons = info.get('CFBundleIcons~ipad', info.get('CFBundleIcons', {}))
+require(icons.get('CFBundlePrimaryIcon', {}).get('CFBundleIconName') == 'AppIcon',
+        'The device App does not declare the approved AppIcon asset')
+require((app / 'Assets.car').is_file(), 'The compiled asset catalog is missing')
+document_types = {uti for item in info.get('CFBundleDocumentTypes', [])
+                  for uti in item.get('LSItemContentTypes', [])}
+require({'com.adobe.pdf', 'org.idpf.epub-container', 'public.mpeg-4', 'com.apple.quicktime-movie'} <= document_types,
+        'The device App is missing its Files document declarations')
+require(info.get('LSSupportsOpeningDocumentsInPlace') is True, 'Files opening is disabled')
 build = pathlib.Path('.build/device-platform.txt').read_text()
 require(re.search(r'platform\s+IOS\s*$', build, re.M), f'Mach-O is not built for iOS devices: {build[:500]}')
 require(not (app / 'embedded.mobileprovision').exists(), 'Unexpected provisioning profile')
@@ -90,6 +99,8 @@ report = {
     'signed': True,
     'signing': 'ad-hoc; user provisioning required',
     'safari_extension_embedded': True,
+    'app_icon_asset_compiled': True,
+    'files_document_types_verified': True,
     'requested_app_group': 'group.org.knowledge-studio.prototype',
     'safari_recognition': 'not_tested',
     'app_group_sharing': 'not_tested',

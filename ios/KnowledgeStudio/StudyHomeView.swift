@@ -4,6 +4,7 @@ import SwiftUI
 struct StudyHomeView: View {
     @EnvironmentObject private var model: StudioModel
     @Environment(\.studyNavigation) private var navigation
+    @AppStorage("studyHomeReviewFirst") private var reviewFirst = false
     @ScaledMetric(relativeTo: .body) private var columnWidth = 270.0
     private var reading: [LibrarySource] {
         model.state.sources.filter { $0.deletedAt == nil && $0.lastLocation != nil }
@@ -62,6 +63,7 @@ struct StudyHomeView: View {
 
     private var activity: some View {
         VStack(alignment: .leading, spacing: 13) {
+            if reviewFirst { reviewModule }
             StudyHeading(title: "继续阅读／观看")
             if let source = reading.first {
                 sourceLink(source, compact: true).studyPanel()
@@ -82,9 +84,21 @@ struct StudyHomeView: View {
                     }.frame(minHeight: 44)
                 }
             }
+            if !reviewFirst { reviewModule }
+        }
+    }
+
+    private var reviewModule: some View {
+        TimelineView(.periodic(from: .now, by: 60)) { clock in
+            let count = TodayReview.due(model.state.cards, at: clock.date).count
             Button { navigation.open(.today) } label: {
-                Label("今日复习", systemImage: "calendar").frame(minHeight: 44)
-            }
+                VStack(alignment: .leading, spacing: 9) {
+                    Label("今日复习", systemImage: "calendar")
+                        .font(.system(.title3, design: .serif, weight: .semibold))
+                    Text(count == 0 ? "今日没有到期卡片" : "\(count) 张卡片待复习")
+                        .font(.subheadline).foregroundStyle(.secondary)
+                }.frame(maxWidth: .infinity, minHeight: 84, alignment: .leading).studyPanel()
+            }.buttonStyle(.plain)
         }
     }
 

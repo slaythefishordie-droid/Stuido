@@ -1,7 +1,7 @@
 import Foundation
 import JSONSchema
 
-public struct ImportPreview {
+public struct ImportPreview: Sendable {
     public let packageID: String
     public let title: String
     public let sources: [LibrarySource]

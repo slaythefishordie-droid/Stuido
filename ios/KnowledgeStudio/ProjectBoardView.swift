@@ -5,8 +5,13 @@ struct ProjectBoardView: View {
     @EnvironmentObject private var model: StudioModel
     let projectID: UUID
     @State private var text = ""
-    @State private var dragged: UUID?
-    @GestureState private var dragOffset = CGSize.zero
+    @GestureState private var drag: NodeDrag?
+    @State private var choosingObject = false
+
+    private struct NodeDrag {
+        let id: UUID
+        let offset: CGSize
+    }
     @State private var start: UUID?
     @State private var opened: BoardNode?
     @State private var edited: BoardNode?
@@ -48,7 +53,7 @@ struct ProjectBoardView: View {
         }
     }
     private func position(_ node: BoardNode) -> CGPoint {
-        let offset = dragged == node.id ? dragOffset : .zero
+        let offset = drag.flatMap { $0.id == node.id ? $0.offset : nil } ?? .zero
         return CGPoint(
             x: min(1480, max(120, node.x + offset.width)), y: min(1100, max(100, node.y + offset.height)))
     }
@@ -65,6 +70,8 @@ struct ProjectBoardView: View {
             var node = node
             node.x = 180 + Double(value.nodes.count % 5) * 270
             node.y = 150 + Double(value.nodes.count / 5 % 6) * 170
+            if let target = node.targetID,
+                value.nodes.contains(where: { $0.kind == node.kind && $0.targetID == target }) { return }
             value.nodes.append(node)
         }
     }
@@ -84,13 +91,17 @@ struct ProjectBoardView: View {
     var body: some View {
         VStack(spacing: 0) {
             controls
-            Text("拖动节点布局，点击打开内容；长按节点连线或移除。移除节点不会删除原资料和卡片。")
-                .font(.caption).foregroundStyle(.secondary).padding(.horizontal)
             ScrollView([.horizontal, .vertical]) { canvas }
         }.studySurface().navigationTitle("研究白板").background(StudyTheme.paper)
             .sheet(item: $edited) { editSheet($0) }
             .sheet(isPresented: $connections) { connectionSheet }
             .sheet(item: $opened) { contentSheet($0) }
+            .sheet(isPresented: $choosingObject) {
+                BoardObjectPicker(projectID: projectID, existingTargets: Set(board.nodes.compactMap(\.targetID))) {
+                    add($0)
+                    if model.message == nil { choosingObject = false }
+                }
+            }
     }
     private var controls: some View {
         HStack {
@@ -104,20 +115,7 @@ struct ProjectBoardView: View {
                     add(BoardNode(kind: .note, text: text))
                     text = ""
                 }.disabled(text.isEmpty)
-                Menu("已有资料") {
-                    ForEach(model.state.sources.filter { $0.deletedAt == nil }) { source in
-                        Button(source.title) {
-                            add(BoardNode(kind: .source, text: source.title, targetID: source.id))
-                        }
-                    }
-                }
-                Menu("已有卡片") {
-                    ForEach(model.state.cards.filter { $0.deletedAt == nil }) { card in
-                        Button(card.title) {
-                            add(BoardNode(kind: .card, text: card.title, targetID: card.id))
-                        }
-                    }
-                }
+                Button("已有资料或卡片") { choosingObject = true }
             }
             if start != nil { Button("取消连线") { start = nil } }
             Button("撤销") { undo() }.disabled(undoBoards.isEmpty)
@@ -137,12 +135,13 @@ struct ProjectBoardView: View {
                 }
             }
             ForEach(board.nodes) { node in nodeView(node) }
-        }.frame(width: 1600, height: 1200)
+        }.frame(width: 1600, height: 1200).coordinateSpace(name: "board-canvas")
     }
     private func nodeView(_ node: BoardNode) -> some View {
         nodeButton(node)
             .position(position(node))
-            .gesture(nodeDrag(node.id))
+            .highPriorityGesture(nodeDrag(node.id))
+            .zIndex(drag?.id == node.id ? 1 : 0)
             .accessibilityAction(named: "向左移动") { move(node.id, x: -40, y: 0) }
             .accessibilityAction(named: "向右移动") { move(node.id, x: 40, y: 0) }
             .accessibilityAction(named: "向上移动") { move(node.id, x: 0, y: -40) }
@@ -172,12 +171,13 @@ struct ProjectBoardView: View {
         }
     }
     private func nodeDrag(_ id: UUID) -> some Gesture {
-        DragGesture(minimumDistance: 10)
-            .updating($dragOffset) { value, state, _ in state = value.translation }
-            .onChanged { _ in dragged = id }
+        DragGesture(minimumDistance: 8, coordinateSpace: .named("board-canvas"))
+            .updating($drag) { value, state, transaction in
+                transaction.animation = nil
+                state = NodeDrag(id: id, offset: value.translation)
+            }
             .onEnded { value in
                 move(id, x: value.translation.width, y: value.translation.height)
-                dragged = nil
             }
     }
     @ViewBuilder private func nodeMenu(_ node: BoardNode) -> some View {
@@ -244,6 +244,69 @@ struct ProjectBoardView: View {
             CardDetailView(cardID: id)
         } else {
             ScrollView { Text(node.text).textSelection(.enabled).padding() }
+        }
+    }
+}
+
+
+private struct BoardObjectPicker: View {
+    @EnvironmentObject private var model: StudioModel
+    @Environment(\.dismiss) private var dismiss
+    let projectID: UUID
+    let existingTargets: Set<UUID>
+    let add: (BoardNode) -> Void
+    @State private var search = ""
+    @State private var scope = "项目"
+    @State private var kind = "全部"
+
+    private struct Choice: Identifiable {
+        let id: UUID
+        let title: String
+        let kind: BoardNode.Kind
+        let date: Date
+    }
+
+    private var choices: [Choice] {
+        let project = model.state.projects.first { $0.id == projectID }
+        let ids = Set((project?.sourceIDs ?? []) + (project?.cardIDs ?? []))
+        var results: [Choice] = []
+        if kind != "卡片" {
+            results += model.state.sources.lazy.filter { $0.deletedAt == nil }.map {
+                Choice(id: $0.id, title: $0.title, kind: .source, date: $0.lastReadAt ?? $0.updatedAt)
+            }
+        }
+        if kind != "资料" {
+            results += model.state.cards.lazy.filter { $0.deletedAt == nil }.map {
+                Choice(id: $0.id, title: $0.title, kind: .card, date: $0.updatedAt)
+            }
+        }
+        results = results.filter {
+            !existingTargets.contains($0.id) && (scope != "项目" || ids.contains($0.id))
+                && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search))
+        }.sorted { $0.date > $1.date }
+        return scope == "最近" ? Array(results.prefix(40)) : results
+    }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Picker("范围", selection: $scope) {
+                    ForEach(["项目", "最近", "全库"], id: \.self) { Text($0) }
+                }.pickerStyle(.segmented)
+                Picker("类型", selection: $kind) {
+                    ForEach(["全部", "资料", "卡片"], id: \.self) { Text($0) }
+                }
+                let results = choices
+                if results.isEmpty { ContentUnavailableView("没有可添加的对象", systemImage: "square.on.square") }
+                ForEach(results) { item in
+                    Button {
+                        add(BoardNode(kind: item.kind, text: item.title, targetID: item.id))
+                    } label: {
+                        Label(item.title, systemImage: item.kind == .source ? "doc" : "rectangle.on.rectangle")
+                    }
+                }
+            }.studySurface().searchable(text: $search).navigationTitle("添加知识对象")
+                .toolbar { Button("关闭") { dismiss() } }
         }
     }
 }

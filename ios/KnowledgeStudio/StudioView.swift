@@ -1,12 +1,21 @@
 import KnowledgeCore
 import SwiftUI
 import UniformTypeIdentifiers
+import UIKit
 
 @MainActor
 struct StudioView: View {
     @StateObject private var model = StudioModel()
     @Environment(\.scenePhase) private var phase
-    @State private var quickCard = false
+    @State private var choosingCard = false
+    @State private var showingSearch = false
+    @State private var quickCard: LibraryCard?
+    @State private var pendingDocument: IncomingDocument?
+    @State private var importProject: UUID?
+    private struct IncomingDocument: Identifiable {
+        let id = UUID()
+        let url: URL
+    }
     @SceneStorage("studyDestination") private var destination = StudySection.home.rawValue
     @SceneStorage("studyRailRevealed") private var railRevealed = false
     @AppStorage("studyRailMode") private var railMode = "auto"
@@ -27,13 +36,34 @@ struct StudioView: View {
             HStack(spacing: 0) {
                 if sideVisible { sidebar(expanded: expanded).frame(width: expanded ? 208 : 64) }
                 VStack(spacing: 0) {
-                    if !sideVisible && (!immersive || railRevealed) {
+                    if !sideVisible && !immersive {
                         compactNavigation
                     }
                     detail
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
+            .overlay(alignment: .leading) {
+                if immersive {
+                    if railRevealed {
+                        HStack(spacing: 0) {
+                            sidebar(expanded: expanded).frame(width: expanded ? 208 : 64)
+                            Color.black.opacity(0.18).onTapGesture { railRevealed = false }
+                                .accessibilityHidden(true)
+                        }.transition(.move(edge: .leading))
+                    } else {
+                        Button { railRevealed = true } label: {
+                            Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
+                                .padding(.vertical, 15).padding(.horizontal, 5)
+                                .background(StudyTheme.plum, in: Capsule()).foregroundStyle(StudyTheme.railText)
+                        }.buttonStyle(.plain).accessibilityLabel("展开书房导航")
+                            .simultaneousGesture(DragGesture(minimumDistance: 12).onEnded { value in
+                                if value.translation.width > 14 { railRevealed = true }
+                            })
+                    }
+                }
+            }
+            .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: railRevealed)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: sideVisible)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: expanded)
         }
@@ -49,8 +79,47 @@ struct StudioView: View {
         .environment(\.defaultMinListRowHeight, compactDisplay ? 44 : 60)
         .preferredColorScheme(appearance == "dark" ? .dark : appearance == "light" ? .light : nil)
         .environmentObject(model)
-        .sheet(isPresented: $quickCard) {
-            CardEditor(card: LibraryCard(type: .keyword, content: [:])).environmentObject(model)
+        .confirmationDialog("新建知识卡片", isPresented: $choosingCard) {
+            ForEach(CardKind.allCases, id: \.self) { kind in
+                Button(kind.title) { quickCard = LibraryCard(type: kind, content: [:]) }
+            }
+        }
+        .sheet(isPresented: $showingSearch) { StudioSearchView().environmentObject(model) }
+        .sheet(item: $quickCard) { CardEditor(card: $0).environmentObject(model) }
+        .onOpenURL { url in
+            guard url.isFileURL else { return }
+            guard pendingDocument == nil, !model.isImporting else {
+                model.message = "正在处理另一份资料，请稍后重新打开此文件。"
+                return
+            }
+            importProject = nil
+            pendingDocument = IncomingDocument(url: url)
+        }
+        .sheet(item: $pendingDocument) { document in
+            NavigationStack {
+                Form {
+                    Text(document.url.lastPathComponent)
+                    Picker("归入项目", selection: $importProject) {
+                        Text("暂不分类").tag(nil as UUID?)
+                        ForEach(model.state.projects.filter { $0.deletedAt == nil }) { project in
+                            Text(project.title).tag(Optional(project.id))
+                        }
+                    }
+                }.studySurface().navigationTitle("导入资料")
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("取消") { pendingDocument = nil }
+                        }
+                        ToolbarItem(placement: .confirmationAction) {
+                            Button("导入") {
+                                let project = importProject
+                                pendingDocument = nil
+                                select(.library)
+                                Task { await model.importFile(document.url, projectID: project) }
+                            }
+                        }
+                    }
+            }.presentationDetents([.medium])
         }
         .alert(
             "提示", isPresented: Binding(get: { model.message != nil }, set: { if !$0 { model.message = nil } })
@@ -89,7 +158,8 @@ struct StudioView: View {
                     }
                 }
                 Divider()
-                Button("随手记一张卡片") { quickCard = true }
+                Button("全局搜索", systemImage: "magnifyingglass") { showingSearch = true }
+                Button("随手记一张卡片") { choosingCard = true }
                 if !activeReaders.isEmpty {
                     Button("隐藏导航") { railRevealed = false }
                 }
@@ -122,19 +192,28 @@ struct StudioView: View {
                     ForEach(secondary) { railButton($0, expanded: expanded) }
                 }
             }.scrollIndicators(.hidden)
-            Button { quickCard = true } label: {
+            Button { showingSearch = true } label: {
+                if expanded { Label("全局搜索", systemImage: "magnifyingglass") }
+                else { Image(systemName: "magnifyingglass") }
+            }.frame(minHeight: 44).accessibilityLabel("全局搜索")
+            Button { choosingCard = true } label: {
                 if expanded { Label("随手记一张卡片", systemImage: "square.and.pencil") }
                 else { Image(systemName: "square.and.pencil") }
             }.frame(minHeight: 44).accessibilityLabel("随手记一张卡片")
-            Menu {
-                Picker("导航栏布局", selection: $railMode) {
-                    Text("自动调整").tag("auto")
-                    Text("固定展开").tag("expanded")
-                    Text("紧凑图标").tag("compact")
-                }
+            Button {
+                railMode = expanded ? "compact" : "expanded"
             } label: {
-                Image(systemName: "sidebar.leading").frame(width: 44, height: 44)
-            }.accessibilityLabel("导航栏布局")
+                Image(systemName: expanded ? "sidebar.left" : "sidebar.leading")
+                    .frame(width: 44, height: 44)
+            }.accessibilityLabel(expanded ? "收起导航栏" : "展开导航栏")
+                .contextMenu {
+                    Button("自动调整") { railMode = "auto" }
+                }
+            if !activeReaders.isEmpty {
+                Button { railRevealed = false } label: {
+                    Image(systemName: "xmark").frame(width: 44, height: 44)
+                }.accessibilityLabel("隐藏导航")
+            }
         }.padding(8).foregroundStyle(StudyTheme.railText).background(StudyTheme.plum.ignoresSafeArea())
             .tint(StudyTheme.railText)
     }
@@ -155,6 +234,59 @@ struct StudioView: View {
             .accessibilityAddTraits(selected == section ? .isSelected : [])
     }
 
+}
+
+private struct StudioSearchView: View {
+    @EnvironmentObject private var model: StudioModel
+    @Environment(\.dismiss) private var dismiss
+    @State private var text = ""
+    @State private var projectID: UUID?
+
+    var body: some View {
+        NavigationStack {
+            List {
+                let projects = model.state.projects.filter { $0.deletedAt == nil }
+                Picker("范围", selection: $projectID) {
+                    Text("全书房").tag(nil as UUID?)
+                    ForEach(projects) { Text($0.title).tag(Optional($0.id)) }
+                }
+                let query = text.trimmingCharacters(in: .whitespacesAndNewlines)
+                if !query.isEmpty {
+                    let project = projects.first { $0.id == projectID }
+                    let sources = Set(project?.sourceIDs ?? [])
+                    let cards = Set(project?.cardIDs ?? [])
+                    Section("资料") {
+                        ForEach(model.state.sources.filter {
+                            $0.deletedAt == nil && (project == nil || sources.contains($0.id))
+                                && $0.title.localizedCaseInsensitiveContains(query)
+                        }) { source in
+                            NavigationLink { SourceReaderView(source: source, location: source.lastLocation) } label: {
+                                StudySourceTile(source: source, asset: model.assetURL(source), compact: true)
+                            }
+                        }
+                    }
+                    Section("卡片") {
+                        ForEach(model.state.cards.filter {
+                            $0.deletedAt == nil && (project == nil || cards.contains($0.id))
+                                && $0.content.values.contains { $0.localizedCaseInsensitiveContains(query) }
+                        }) { card in
+                            NavigationLink { CardDetailView(cardID: card.id) } label: {
+                                Label(card.title, systemImage: "rectangle.on.rectangle").foregroundStyle(card.type.color)
+                            }
+                        }
+                    }
+                    if project == nil {
+                        Section("项目") {
+                            ForEach(projects.filter { $0.title.localizedCaseInsensitiveContains(query) }) { item in
+                                NavigationLink(item.title) { ProjectView(projectID: item.id) }
+                            }
+                        }
+                    }
+                }
+            }.studySurface().navigationTitle("搜索书房").searchable(text: $text)
+                .toolbar { Button("关闭") { dismiss() } }
+        }
+    }
 }
 
 struct InboxView: View {
@@ -212,7 +344,6 @@ struct InboxView: View {
             if !mark.note.isEmpty { Text(mark.note).foregroundStyle(.secondary) }
             Text(locationLabel(mark.locator)).font(.caption)
             ScrollView(.horizontal, showsIndicators: false) { markActions(mark, source: source) }
-            NavigationLink("备注与详情") { MarkDetailView(markID: mark.id) }
         }.studyPanel()
             .overlay(alignment: .leading) { Rectangle().fill(mark.highlightKind.color).frame(width: 2) }
             .listRowBackground(Color.clear).listRowSeparator(.hidden)
@@ -222,10 +353,7 @@ struct InboxView: View {
     }
     private func markActions(_ mark: LibraryMark, source: LibrarySource?) -> some View {
         HStack {
-            Button("整理为\(mark.highlightKind.title)") {
-                editor = model.card(from: mark, type: mark.highlightKind)
-            }
-            Menu("其他类型") {
+            Menu("整理成卡片") {
                 ForEach(CardKind.allCases, id: \.self) { kind in
                     Button(kind.title) { editor = model.card(from: mark, type: kind) }
                 }
@@ -346,7 +474,6 @@ struct CardsView: View {
                     }
                 }
             }.studySurface().navigationTitle("知识卡片").searchable(text: $search)
-                .toolbar { Button("新建") { editor = LibraryCard(type: .keyword, content: [:]) } }
         }.sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
     }
 }
@@ -355,70 +482,90 @@ struct CardEditor: View {
     @EnvironmentObject private var model: StudioModel
     @Environment(\.dismiss) private var dismiss
     @State var card: LibraryCard
-    @State private var tags = ""
-    @State private var project: UUID?
+    @State private var projects: Set<UUID> = []
+    @State private var initialized = false
+
+    private var fields: [String] { LibraryCard.fields(for: card.type) }
+
     var body: some View {
         NavigationStack {
             Form {
-                Picker("类型", selection: $card.type) {
-                    ForEach(CardKind.allCases, id: \.self) { Text(studioLabel($0.rawValue)) }
-                }
-                ForEach(LibraryCard.fields(for: card.type), id: \.self) { field in
-                    TextField(
-                        studioFieldLabel(field),
-                        text: Binding(
-                            get: { card.content[field] ?? "" },
-                            set: { value in
-                                card.content[field] = value
-                                card.provenance[field] = FieldOrigin(kind: "user_input")
-                            }), axis: .vertical)
-                }
-                TextField("语言", text: $card.language)
-                TextField("标签（逗号分隔）", text: $tags)
-                TextField("个人笔记", text: $card.note, axis: .vertical)
-                Picker("整理状态", selection: $card.organization) {
-                    ForEach(Organization.allCases, id: \.self) { Text(studioLabel($0.rawValue)) }
-                }
-                Picker("复习状态（由你选择）", selection: $card.review) {
-                    ForEach(ReviewStatus.allCases, id: \.self) { Text(studioLabel($0.rawValue)) }
-                }
-                Text("主动加入复习后，可在今日复习查看到期卡片；暂停和退出均保留历史。").font(.caption)
-                Picker("关联项目", selection: $project) {
-                    Text("不新增项目关联").tag(nil as UUID?)
-                    ForEach(model.state.projects.filter { $0.deletedAt == nil }) {
-                        Text($0.title).tag(Optional($0.id))
+                Section {
+                    fieldEditor(fields[0])
+                    if fields.count > 1 {
+                        DisclosureGroup("补充内容") {
+                            ForEach(fields.dropFirst(), id: \.self) { fieldEditor($0) }
+                        }
                     }
+                } header: {
+                    Label(card.type.title, systemImage: "circle.fill").foregroundStyle(card.type.color)
                 }
                 if !card.sourceRefs.isEmpty {
-                    Text("已保留 \(card.sourceRefs.count) 个出处和 \(card.markIDs.count) 个标记关联。")
+                    Section("出处") {
+                        ForEach(card.sourceRefs) { ref in
+                            if let source = model.state.sources.first(where: { $0.id == ref.sourceID }) {
+                                LabeledContent(source.title, value: ref.locator.map { locationLabel($0) } ?? "")
+                            }
+                        }
+                    }
                 }
+                if model.state.projects.contains(where: { $0.deletedAt == nil }) {
+                    DisclosureGroup("关联项目（\(projects.count)）") {
+                        ForEach(model.state.projects.filter { $0.deletedAt == nil }) { project in
+                            Toggle(project.title, isOn: Binding(
+                                get: { projects.contains(project.id) },
+                                set: { enabled in
+                                    if enabled { projects.insert(project.id) }
+                                    else { projects.remove(project.id) }
+                                }))
+                        }
+                    }
+                }
+                if model.state.cards.contains(where: { $0.id == card.id }) {
+                    DisclosureGroup("个人笔记") {
+                        TextField("个人笔记", text: $card.note, axis: .vertical)
+                    }
+                }
+                Toggle("加入复习", isOn: Binding(
+                    get: { card.review == .active },
+                    set: { card.review = $0 ? .active : (card.schedule == nil ? .not_enrolled : .paused) }))
             }.studySurface().navigationTitle("编辑卡片")
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("保存") {
-                            let allowed = Set(LibraryCard.fields(for: card.type))
-                            card.content = card.content.filter {
-                                allowed.contains($0.key) && !$0.value.isEmpty
-                            }
-                            card.provenance = card.provenance.filter {
-                                allowed.contains($0.key) || $0.key == "import_annotation"
-                            }
-                            for field in card.content.keys where card.provenance[field] == nil {
-                                card.provenance[field] = FieldOrigin(kind: "user_input")
-                            }
-                            card.tags = Array(
-                                Set(
-                                    tags.split(separator: ",").map { $0.trimmingCharacters(in: .whitespaces) }
-                                        .filter { !$0.isEmpty }))
-                            card.updatedAt = Date()
-                            model.message = nil
-                            model.saveCard(card, project: project)
-                            if model.message == nil { dismiss() }
-                        }
+                        Button("保存") { save() }
+                            .disabled(card.content[fields[0]]?.trimmingCharacters(in: .whitespacesAndNewlines)
+                                .isEmpty ?? true)
                     }
                 }
-        }.onAppear { tags = card.tags.joined(separator: ", ") }
+        }.onAppear {
+            guard !initialized else { return }
+            initialized = true
+            let exists = model.state.cards.contains { $0.id == card.id }
+            let sourceIDs = Set(card.sourceRefs.map(\.sourceID))
+            projects = Set(model.state.projects.filter { project in
+                project.deletedAt == nil && (exists
+                    ? project.cardIDs.contains(card.id)
+                    : !sourceIDs.isDisjoint(with: project.sourceIDs))
+            }.map(\.id))
+        }
+    }
+
+    private func fieldEditor(_ field: String) -> some View {
+        TextField(studioFieldLabel(field), text: Binding(
+            get: { card.content[field] ?? "" },
+            set: { value in
+                card.content[field] = value
+                card.provenance[field] = FieldOrigin(kind: "user_input")
+            }), axis: .vertical)
+    }
+
+    private func save() {
+        card.content = card.content.filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
+        card.provenance = card.provenance.filter { card.content[$0.key] != nil || $0.key == "import_annotation" }
+        card.updatedAt = Date()
+        model.saveCard(card, projects: projects)
+        if model.message == nil { dismiss() }
     }
 }
 
@@ -427,6 +574,7 @@ struct CardDetailView: View {
     let cardID: UUID
     var reviewMode = false
     @State private var editor: LibraryCard?
+    @State private var showDictionary = false
     @State private var comparison: CardReference?
     var body: some View {
         GeometryReader { geometry in
@@ -466,7 +614,12 @@ struct CardDetailView: View {
                     }
                 }
                 if card.type == .word {
-                    Section("发音") { PronunciationButton(word: card.content["word"] ?? "") }
+                    Section("发音与释义") {
+                        PronunciationButton(word: card.title)
+                        Button("系统词典") { showDictionary = true }
+                            .disabled(!UIReferenceLibraryViewController.dictionaryHasDefinition(forTerm: card.title))
+                            .sheet(isPresented: $showDictionary) { SystemDictionaryView(word: card.title) }
+                    }
                 }
                 Section("笔记") {
                     Text(card.note)
@@ -501,13 +654,6 @@ struct CardDetailView: View {
                                 : "查看标记与备注"
                         ) { MarkDetailView(markID: id) }
                     }
-                }
-                Section("词典外链") {
-                    Link(
-                        "维基词典",
-                        destination: URL(
-                            string: "https://en.wiktionary.org/wiki/" + card.title.addingPercentEncoding(
-                                withAllowedCharacters: .urlPathAllowed)!)!)
                 }
                 CardReviewHistory(card: card)
                 Button("编辑") { editor = card }

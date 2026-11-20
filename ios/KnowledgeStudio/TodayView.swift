@@ -1,65 +1,87 @@
 import KnowledgeCore
 import SwiftUI
 
+enum TodayReview {
+    static func due(_ cards: [LibraryCard], at date: Date) -> [LibraryCard] {
+        cards.filter {
+            $0.deletedAt == nil && $0.review == .active && ($0.schedule?.due ?? .distantPast) <= date
+        }.sorted { ($0.schedule?.due ?? .distantPast) < ($1.schedule?.due ?? .distantPast) }
+    }
+}
+
 struct TodayView: View {
     @EnvironmentObject private var model: StudioModel
-    @AppStorage("reviewRetention") private var retention = 0.9
+
     var body: some View {
         NavigationStack {
             TimelineView(.periodic(from: .now, by: 60)) { clock in
-                let active = model.state.cards.filter { $0.deletedAt == nil && $0.review == .active }
-                let end =
-                    Calendar.current.date(
-                        byAdding: .day, value: 1, to: Calendar.current.startOfDay(for: clock.date))
-                    ?? clock.date
+                let due = Dictionary(grouping: TodayReview.due(model.state.cards, at: clock.date), by: \.type)
                 List {
-                    Section("现在可复习") {
-                        let due = active.filter { ($0.schedule?.due ?? .distantPast) <= clock.date }.sorted {
-                            ($0.schedule?.due ?? .distantPast) < ($1.schedule?.due ?? .distantPast)
-                        }
-                        if due.isEmpty { Text("今天可以从容阅读。没有到期卡片。").foregroundStyle(.secondary) }
-                        ForEach(due) { card in
-                            NavigationLink {
-                                CardDetailView(cardID: card.id, reviewMode: true)
-                            } label: {
-                                StudyCardFace(card: card)
-                            }.listRowBackground(Color.clear).listRowSeparator(.hidden)
-                        }
+                    ForEach(CardKind.allCases, id: \.self) { kind in
+                        let ids = (due[kind] ?? []).map(\.id)
+                        NavigationLink {
+                            ReviewQueueView(kind: kind, cardIDs: ids)
+                        } label: {
+                            Label {
+                                LabeledContent(kind.title, value: "\(ids.count)")
+                            } icon: {
+                                Image(systemName: "circle.fill").foregroundStyle(kind.color)
+                            }.frame(minHeight: 44)
+                        }.disabled(ids.isEmpty)
                     }
-                    Section("今天稍后") {
-                        ForEach(
-                            active.filter {
-                                ($0.schedule?.due ?? .distantPast) > clock.date
-                                    && ($0.schedule?.due ?? .distantFuture) < end
-                            }
-                        ) { card in
-                            NavigationLink {
-                                CardDetailView(cardID: card.id)
-                            } label: {
-                                HStack {
-                                    Text(card.title)
-                                    Spacer()
-                                    Text(card.schedule?.due ?? clock.date, style: .time).foregroundStyle(
-                                        .secondary)
-                                }
-                            }
-                        }
-                    }
-                    DisclosureGroup("调度设置") {
-                        Slider(value: $retention, in: 0.7...0.97, step: 0.01)
-                        Text("新卡目标保持率：\(Int(retention * 100))%")
-                        Text("仅在首次记录复习时采用；已有卡片保留原参数与到期时间。日期按设备时区展示，算法按固定时间戳计算。").font(.caption)
-                    }
-                    Text("只显示你主动加入复习的卡片。打开原卡后记录自评，不增加题型。").font(.caption).foregroundStyle(.secondary)
                 }.studySurface().navigationTitle("今日复习")
             }
         }
     }
 }
 
+private struct ReviewQueueView: View {
+    @EnvironmentObject private var model: StudioModel
+    let kind: CardKind
+    @State var cardIDs: [UUID]
+    @State private var index = 0
+    @State private var reviewed = 0
+
+    init(kind: CardKind, cardIDs: [UUID]) {
+        self.kind = kind
+        _cardIDs = State(initialValue: cardIDs)
+    }
+
+    private var nextIndex: Int? {
+        let active = Set(model.state.cards.lazy.filter {
+            $0.deletedAt == nil && $0.review == .active && ($0.schedule?.due ?? .distantPast) <= .now
+        }.map(\.id))
+        return cardIDs.indices.dropFirst(index).first { active.contains(cardIDs[$0]) }
+    }
+
+    var body: some View {
+        Group {
+            if let nextIndex {
+                let id = cardIDs[nextIndex]
+                CardDetailView(cardID: id)
+                    .safeAreaInset(edge: .bottom) {
+                        ReviewControls(cardID: id) {
+                            reviewed += 1
+                            index = nextIndex + 1
+                        }
+                    }.id(id)
+                    .toolbar {
+                        ToolbarItem(placement: .principal) {
+                            Text("\(kind.title) · \(nextIndex + 1)/\(cardIDs.count)").font(.subheadline)
+                        }
+                    }
+            } else {
+                ContentUnavailableView("本轮结束", systemImage: "checkmark.circle",
+                    description: Text("已完成 \(reviewed) 张\(kind.title)。"))
+            }
+        }.studySurface()
+    }
+}
+
 struct ReviewControls: View {
     @EnvironmentObject private var model: StudioModel
     let cardID: UUID
+    var onSaved: () -> Void = {}
     @State private var eventID = UUID()
     @State private var expectedRevision: Int?
     @State private var started = Date()
@@ -80,6 +102,7 @@ struct ReviewControls: View {
                                 retention: retention)
                         }
                         saved = model.message == nil
+                        if saved { onSaved() }
                     }.buttonStyle(.bordered).disabled(saved)
                 }
             }

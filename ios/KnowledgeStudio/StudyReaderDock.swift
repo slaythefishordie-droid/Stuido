@@ -21,108 +21,77 @@ enum StudyPageLayout: String, CaseIterable {
     }
 }
 
-/// Reserves space at the snapped edge, so controls never sit over a line of text or captions.
+/// Keep reader tools in the upper margin, outside the document's touch and drawing area.
 struct StudyReaderDock<Content: View, Tools: View>: View {
-    @AppStorage("studyReaderDockBottom") private var bottom = false
-    @AppStorage("studyReaderDockPosition") private var horizontalPosition = 0.5
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+    @AppStorage("studyReaderToolsFade") private var fade = true
     @State private var hidden = false
-    @GestureState private var offset: CGSize = .zero
-    @State private var toolbarWidth: CGFloat = 0
+    @State private var idle = false
+    @State private var activity = UUID()
+    var selectionActive: Bool
     let content: Content
     let tools: Tools
-    init(@ViewBuilder content: () -> Content, @ViewBuilder tools: () -> Tools) {
+
+    init(selectionActive: Bool = false, @ViewBuilder content: () -> Content,
+        @ViewBuilder tools: () -> Tools)
+    {
+        self.selectionActive = selectionActive
         self.content = content()
         self.tools = tools()
     }
 
     var body: some View {
-        GeometryReader { geometry in
-            let width = geometry.size.width
-            let height = geometry.size.height
-            let inset: CGFloat = hidden ? 26 : 58
-            content
-                .padding(bottom ? .bottom : .top, inset)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .overlay(alignment: bottom ? .bottom : .top) {
-                    toolbar
-                        .frame(maxWidth: max(1, width - 12))
-                        .fixedSize(horizontal: false, vertical: true)
-                        .background {
-                            GeometryReader { measure in
-                                Color.clear.onChange(of: measure.size.width, initial: true) { _, value in
-                                    toolbarWidth = value
-                                }
-                            }
-                        }
-                        .offset(x: xPosition(container: width) + offset.width, y: offset.height)
-                        .gesture(drag(width: width, height: height))
-                        .padding(.vertical, 2)
-                }
-                .clipped()
+        VStack(spacing: 0) {
+            HStack(spacing: 1) {
+                Button {
+                    setHidden(!hidden)
+                } label: {
+                    Image(systemName: hidden ? "chevron.down" : "chevron.up")
+                        .font(.caption.weight(.semibold)).frame(width: 44, height: hidden ? 25 : 44)
+                }.buttonStyle(.plain)
+                    .accessibilityLabel(hidden ? "显示标记工具" : "隐藏标记工具")
+                if !hidden { tools }
+            }.padding(.horizontal, 4)
+                .background(.regularMaterial, in: Capsule())
+                .overlay { Capsule().strokeBorder(StudyTheme.rule, lineWidth: 1).allowsHitTesting(false) }
+                .opacity(fade && idle && !hidden && !voiceOver ? 0.58 : 1)
+                .padding(.vertical, 2)
+                .simultaneousGesture(DragGesture(minimumDistance: 15).onEnded { value in
+                    if value.translation.height < -20 { setHidden(true) }
+                    if value.translation.height > 20 { setHidden(false) }
+                })
+                .simultaneousGesture(TapGesture().onEnded { wake() })
+            content.frame(maxWidth: .infinity, maxHeight: .infinity)
         }.background(StudyTheme.paper)
-    }
-
-    private var toolbar: some View {
-        HStack(spacing: 1) {
-            Button {
-                animate { hidden.toggle() }
-            } label: {
-                Image(systemName: hidden ? (bottom ? "chevron.up" : "chevron.down") : "line.3.horizontal")
-                    .font(.caption.weight(.semibold)).frame(width: 44, height: hidden ? 24 : 44)
-            }.buttonStyle(.plain)
-                .accessibilityLabel(hidden ? "显示标记工具" : "隐藏标记工具")
-            if !hidden { tools }
-        }.padding(.horizontal, 4)
-            .background(.regularMaterial, in: Capsule())
-            .overlay { Capsule().strokeBorder(StudyTheme.rule, lineWidth: 1) }
-            .accessibilityAction(named: "切换工具栏边缘") { animate { bottom.toggle() } }
-    }
-
-    private func xPosition(container: CGFloat) -> CGFloat {
-        let travel = max(0, (container - toolbarWidth) / 2 - 6)
-        return travel * CGFloat(horizontalPosition * 2 - 1)
-    }
-
-    private func drag(width: CGFloat, height: CGFloat) -> some Gesture {
-        DragGesture(minimumDistance: 13)
-            .updating($offset) { value, state, _ in
-                let travel = max(0, (width - toolbarWidth) / 2 - 6)
-                let x = min(travel, max(-travel, xPosition(container: width) + value.translation.width))
-                let dy = max(-height + 54, min(height - 54, value.translation.height))
-                state = CGSize(width: x - xPosition(container: width), height: dy)
+            .onChange(of: selectionActive) { _, selected in
+                if selected { setHidden(false) }
+                else { wake() }
             }
-            .onEnded { value in
-                animate {
-                    let dy = value.translation.height
-                    let outward = bottom ? dy : -dy
-                    if hidden {
-                        if outward < -14 { hidden = false }
-                    } else if outward > 23 {
-                        hidden = true
-                    } else if abs(dy) > max(74, height * 0.34) {
-                        bottom = dy > 0
-                    }
-                    let travel = max(1, (width - toolbarWidth) / 2 - 6)
-                    let relativeX = (xPosition(container: width) + value.translation.width) / travel
-                    horizontalPosition = min(1, max(0, Double((relativeX + 1) / 2)))
-                }
+            .task(id: activity) {
+                guard !voiceOver, !selectionActive, !hidden else { return }
+                do { try await Task.sleep(for: .seconds(8)) } catch { return }
+                withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { idle = true }
             }
     }
 
-    private func animate(_ action: () -> Void) {
-        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.19), action)
+    private func wake() { idle = false; activity = UUID() }
+
+    private func setHidden(_ value: Bool) {
+        withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.19)) { hidden = value }
+        wake()
     }
 }
 
 struct StudyMarkColors: View {
     @Binding var selection: CardKind
+    var onPick: (CardKind) -> Void = { _ in }
 
     var body: some View {
         ViewThatFits(in: .horizontal) {
             HStack(spacing: 0) {
                 ForEach(CardKind.allCases, id: \.self) { kind in
-                    Button { selection = kind } label: {
+                    Button { pick(kind) } label: {
                         Circle().fill(kind.color).frame(width: 15, height: 15)
                             .overlay {
                                 if kind == selection { Circle().strokeBorder(StudyTheme.text, lineWidth: 2) }
@@ -133,8 +102,8 @@ struct StudyMarkColors: View {
                 }
             }
             Menu {
-                Picker("标记颜色", selection: $selection) {
-                    ForEach(CardKind.allCases, id: \.self) { Text($0.title).tag($0) }
+                ForEach(CardKind.allCases, id: \.self) { kind in
+                    Button(kind.title) { pick(kind) }
                 }
             } label: {
                 Circle().fill(selection.color).frame(width: 17, height: 17)
@@ -142,30 +111,43 @@ struct StudyMarkColors: View {
             }.accessibilityLabel("标记颜色，\(selection.title)")
         }
     }
+
+    private func pick(_ kind: CardKind) {
+        selection = kind
+        onPick(kind)
+    }
 }
 
 struct PDFStudyDockControls<Options: View>: View {
     @ObservedObject var ink: PDFStudyInk
     @Binding var selection: CardKind
     let enabled: Bool
-    let save: () -> Void
+    let save: (CardKind) -> Void
+    @Binding var regionMode: Bool
     let choose: (PDFInkTool) -> Void
     let options: Options
 
-    init(ink: PDFStudyInk, selection: Binding<CardKind>, enabled: Bool, save: @escaping () -> Void,
-        choose: @escaping (PDFInkTool) -> Void, @ViewBuilder options: () -> Options)
+    init(ink: PDFStudyInk, selection: Binding<CardKind>, enabled: Bool,
+        regionMode: Binding<Bool>, save: @escaping (CardKind) -> Void, choose: @escaping (PDFInkTool) -> Void, @ViewBuilder options: () -> Options)
     {
         self.ink = ink
         self._selection = selection
         self.enabled = enabled
         self.save = save
+        self._regionMode = regionMode
         self.choose = choose
         self.options = options()
     }
 
     var body: some View {
-        StudyMarkColors(selection: $selection).disabled(!enabled)
-        Button("Mark", action: save).buttonStyle(.bordered).disabled(!enabled)
+        StudyMarkColors(selection: $selection, onPick: save).disabled(!enabled)
+        Button {
+            regionMode.toggle()
+        } label: {
+            Image(systemName: regionMode ? "viewfinder.circle.fill" : "viewfinder")
+                .frame(minWidth: 40, minHeight: 44)
+        }.buttonStyle(.plain).accessibilityLabel("区域标记")
+            .accessibilityAddTraits(regionMode ? .isSelected : []).disabled(!enabled)
         historyButton("arrow.uturn.backward", label: "撤销笔迹", enabled: ink.canUndo, action: ink.undo)
         historyButton("arrow.uturn.forward", label: "重做笔迹", enabled: ink.canRedo, action: ink.redo)
         Menu {

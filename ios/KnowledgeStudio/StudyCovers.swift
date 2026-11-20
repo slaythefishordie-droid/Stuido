@@ -46,12 +46,14 @@ struct StudySourceCover: View {
 
     private struct RequestKey: Hashable {
         let asset: URL?
-        let custom: Bool
+        let mode: SourceCoverMode
         let revision: Int
     }
 
     private var variant: Int {
-        source.id.uuidString.utf8.reduce(0) { ($0 * 31 + Int($1)) % 6 }
+        let key = source.id.uuidString + source.kind.rawValue + source.title
+        let base = key.utf8.reduce(0) { ($0 * 31 + Int($1)) % 6 }
+        return (base + max(0, source.coverVariation ?? 0) % 6) % 6
     }
 
     private var palette: (UInt32, UInt32, UInt32) {
@@ -77,7 +79,7 @@ struct StudySourceCover: View {
             let coverHeight = isWide ? min(h * 0.89, w * 0.59) : h * 0.9
             ZStack {
                 StudyTheme.mat
-                if let image = source.coverImage.flatMap({ UIImage(data: $0) }) ?? thumbnail {
+                if let image = displayImage {
                     Image(uiImage: image).resizable().scaledToFill()
                         .frame(width: coverWidth, height: coverHeight).clipped()
                         .shadow(color: .black.opacity(0.17), radius: 3, x: 2, y: 3)
@@ -88,16 +90,24 @@ struct StudySourceCover: View {
                 }
             }
         }.accessibilityHidden(true)
-            .task(id: RequestKey(asset: asset, custom: source.coverImage != nil, revision: revision)) {
+            .task(id: RequestKey(asset: asset, mode: source.resolvedCoverMode, revision: revision)) {
                 thumbnail = nil
                 author = nil
-                guard let asset, source.coverImage == nil else { return }
+                guard let asset, source.resolvedCoverMode != .custom else { return }
                 let artwork = await StudyThumbnails.artwork(asset, kind: source.kind)
                 if !Task.isCancelled {
                     thumbnail = artwork.image
                     author = artwork.author
                 }
             }
+    }
+
+    private var displayImage: UIImage? {
+        switch source.resolvedCoverMode {
+        case .custom: source.coverImage.flatMap { UIImage(data: $0) }
+        case .original: thumbnail
+        case .generated: nil
+        }
     }
 
     private func editorialCover(showTitle: Bool) -> some View {
@@ -109,13 +119,14 @@ struct StudySourceCover: View {
             Canvas { context, size in
                 let w = size.width
                 let h = size.height
-                if variant % 3 == 0 {
+                switch variant {
+                case 0:
                     for step in 0..<5 {
                         let d = CGFloat(step) * w * 0.12
                         context.stroke(Path(ellipseIn: CGRect(x: w * 0.19 + d, y: h * 0.43 + d * 0.35,
                             width: w * 1.1, height: w * 1.1)), with: .color(lines.opacity(0.75)), lineWidth: 1)
                     }
-                } else if variant % 3 == 1 {
+                case 1:
                     for step in 0..<10 {
                         let offset = CGFloat(step) * w * 0.115
                         var line = Path()
@@ -123,7 +134,7 @@ struct StudySourceCover: View {
                         line.addLine(to: CGPoint(x: offset + w * 0.48, y: h * 0.44))
                         context.stroke(line, with: .color(lines.opacity(0.64)), lineWidth: step.isMultiple(of: 3) ? 2 : 0.6)
                     }
-                } else {
+                case 2:
                     let grid = CGRect(x: w * 0.35, y: h * 0.53, width: w * 0.65, height: h * 0.47)
                     context.fill(Path(grid), with: .color(lines.opacity(0.28)))
                     for step in 1..<5 {
@@ -132,6 +143,31 @@ struct StudySourceCover: View {
                         line.move(to: CGPoint(x: grid.minX, y: y))
                         line.addLine(to: CGPoint(x: w, y: y))
                         context.stroke(line, with: .color(lines.opacity(0.8)), lineWidth: 0.75)
+                    }
+                case 3:
+                    for step in 0..<5 {
+                        let y = h * (0.45 + Double(step) * 0.075)
+                        let x = w * (0.22 + Double(step) * 0.095)
+                        var leaf = Path()
+                        leaf.move(to: CGPoint(x: x, y: h))
+                        leaf.addQuadCurve(to: CGPoint(x: w * 0.95, y: y),
+                            control: CGPoint(x: x - w * 0.15, y: y + h * 0.04))
+                        context.stroke(leaf, with: .color(lines.opacity(0.73)), lineWidth: 1.35)
+                    }
+                case 4:
+                    for step in 0..<4 {
+                        let d = Double(step) * w * 0.14
+                        let box = CGRect(x: w * 0.09 + d, y: h * 0.42 + d * 0.46,
+                            width: w * 0.62, height: h * 0.43)
+                        context.fill(Path(box), with: .color(lines.opacity(0.10 + Double(step) * 0.05)))
+                        context.stroke(Path(box), with: .color(lines.opacity(0.7)), lineWidth: 0.85)
+                    }
+                default:
+                    for step in 0..<9 {
+                        let x = w * (0.09 + Double(step) * 0.105)
+                        let top = h * (0.48 + 0.15 * sin(Double(step) * 0.88))
+                        let bar = CGRect(x: x, y: top, width: w * 0.05, height: h * 0.92 - top)
+                        context.fill(Path(bar), with: .color(lines.opacity(step.isMultiple(of: 2) ? 0.62 : 0.26)))
                     }
                 }
             }
@@ -165,19 +201,21 @@ enum StudyThumbnails {
     private static let memory = NSCache<NSURL, Artwork>()
     private static var requests: [URL: (UUID, Task<Artwork, Never>)] = [:]
 
-    private static func cacheFile(_ asset: URL) -> URL? {
+    static var cacheDirectory: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
             .appendingPathComponent("StudyCovers-v2", isDirectory: true)
-            .appendingPathComponent(asset.lastPathComponent + ".jpg")
     }
 
-    static func invalidate(_ asset: URL) throws {
-        memory.removeObject(forKey: asset as NSURL)
-        requests.removeValue(forKey: asset)?.1.cancel()
-        if let file = cacheFile(asset) {
-            for target in [file, file.appendingPathExtension("author")] where FileManager.default.fileExists(atPath: target.path) {
-                try FileManager.default.removeItem(at: target)
-            }
+    private static func cacheFile(_ asset: URL) -> URL? {
+        cacheDirectory?.appendingPathComponent(asset.lastPathComponent + ".jpg")
+    }
+
+    static func clearCache() throws {
+        for (_, task) in requests.values { task.cancel() }
+        requests.removeAll()
+        memory.removeAllObjects()
+        if let cacheDirectory, FileManager.default.fileExists(atPath: cacheDirectory.path) {
+            try FileManager.default.removeItem(at: cacheDirectory)
         }
     }
 

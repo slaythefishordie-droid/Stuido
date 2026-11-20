@@ -42,11 +42,6 @@ struct SourceReaderView: View {
             .onAppear {
                 if immersive { readerPresentation.setActive(readerID, true) }
             }.onDisappear { readerPresentation.setActive(readerID, false) }
-            .toolbar {
-                if immersive {
-                    Button("书房导航", systemImage: "sidebar.leading") { readerPresentation.toggleNavigation() }
-                }
-            }
             .fileImporter(isPresented: $attach, allowedContentTypes: [.pdf, .movie, .data]) { result in
                 Task {
                     do { await model.importFile(try result.get(), replacing: source.id) } catch {
@@ -120,7 +115,7 @@ final class PDFSession: ObservableObject {
                 anchorStatus = "仅页面定位：保存区域超出书页范围"
                 return
             }
-            view.go(to: bounds, on: page)
+            focus(bounds, on: page)
             let anchors = locator.pdfTextAnchors ?? []
             let verified =
                 !anchors.isEmpty
@@ -130,9 +125,35 @@ final class PDFSession: ObservableObject {
                     else { return false }
                     return anchor.matches(text)
                 }
-            anchorStatus = verified ? "精确文字定位：文件、文字范围与上下文一致" : "精确区域定位（未确认文字匹配）"
+            anchorStatus = anchors.isEmpty || verified ? "" : "已定位原区域，文字内容无法核对。"
         }
     }
+    private func focus(_ bounds: CGRect, on page: PDFPage) {
+        view.go(to: bounds, on: page)
+        view.layoutIfNeeded()
+        if let parent = view.documentView?.superview,
+            let scroll = sequence(first: parent, next: { $0.superview }).compactMap({ $0 as? UIScrollView }).first {
+            let area = view.convert(view.convert(bounds, from: page), to: scroll)
+            let inset = scroll.adjustedContentInset
+            let x = area.midX - (scroll.bounds.width + inset.left - inset.right) / 2
+            let y = area.midY - (scroll.bounds.height + inset.top - inset.bottom) / 2
+            let maxX = max(-inset.left, scroll.contentSize.width - scroll.bounds.width + inset.right)
+            let maxY = max(-inset.top, scroll.contentSize.height - scroll.bounds.height + inset.bottom)
+            scroll.setContentOffset(CGPoint(x: min(maxX, max(-inset.left, x)),
+                y: min(maxY, max(-inset.top, y))), animated: false)
+        }
+        let cue = PDFAnnotation(bounds: bounds, forType: .square, withProperties: nil)
+        cue.color = UIColor.systemOrange
+        let border = PDFBorder()
+        border.lineWidth = 2
+        cue.border = border
+        page.addAnnotation(cue)
+        Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(1100))
+            page.removeAnnotation(cue)
+        }
+    }
+
     func setLayout(spread: Bool, continuous: Bool, book: Bool, rtl: Bool) {
         let mode: PDFDisplayMode = spread
             ? (continuous ? .twoUpContinuous : .twoUp)
@@ -175,8 +196,7 @@ struct PDFStudyView: View {
     let source: LibrarySource
     @State private var regionMode = false
     @State private var recognizing = false
-    @State private var recognized: [RecognizedPDFRegion] = []
-    @State private var showRecognition = false
+    @State private var selectionActive = false
     @State private var selectedMark: LibraryMark?
     @State private var dictionaryWord: String?
     private let initialLocation: ReadingLocator?
@@ -199,11 +219,15 @@ struct PDFStudyView: View {
 
     var body: some View {
         GeometryReader { geometry in
-            StudyReaderDock {
+            StudyReaderDock(selectionActive: selectionActive || regionMode) {
                 readerContent
             } tools: {
                 PDFStudyDockControls(ink: session.ink, selection: $kind, enabled: session.verifiedFingerprint != nil,
-                    save: { capture(kind: kind, annotate: false) }, choose: selectInkTool) { pdfOptions }
+                    regionMode: $regionMode, save: { color in
+                        guard session.ink.tool == .select,
+                            session.view.currentSelection?.string?.isEmpty == false else { return }
+                        capture(kind: color, annotate: false)
+                    }, choose: selectInkTool) { pdfOptions }
             }
             .onChange(of: geometry.size, initial: true) { _, size in
                 readerSize = size
@@ -234,28 +258,10 @@ struct PDFStudyView: View {
             isPresented: Binding(get: { dictionaryWord != nil }, set: { if !$0 { dictionaryWord = nil } })
         ) {
             SystemDictionaryView(word: dictionaryWord ?? "")
-        }.sheet(isPresented: $showRecognition) {
-            NavigationStack {
-                List {
-                    Text("识别结果请自行核对。保存后按页面区域回跳，不标记为精确文字定位。").font(.caption)
-                    if recognized.isEmpty { Text("未识别到可靠文字，可使用手动区域标记。") }
-                    ForEach(recognized) { result in
-                        Button {
-                            var locator = ReadingLocator(kind: "pdf", page: result.rect.page)
-                            locator.rectangles = [result.rect]
-                            locator.fileFingerprint = session.verifiedFingerprint
-                            locator.anchorText = result.text
-                            model.saveMark(source: source, locator: locator, excerpt: result.text, kind: kind)
-                            if model.message == nil { recognized.removeAll { $0.id == result.id } }
-                        } label: {
-                            VStack(alignment: .leading) {
-                                Text(result.text)
-                                Text("保存区域摘录").font(.caption).foregroundStyle(.secondary)
-                            }
-                        }
-                    }
-                }.navigationTitle("本页文字识别").toolbar { Button("完成") { showRecognition = false } }
-            }
+        }.onChange(of: regionMode) { _, active in
+            if active { selectInkTool(.select) }
+        }.onReceive(NotificationCenter.default.publisher(for: .PDFViewSelectionChanged, object: session.view)) { _ in
+            selectionActive = session.view.currentSelection?.string?.isEmpty == false
         }.task {
             session.view.capture = { capture(kind: $0, annotate: $1) }
             session.view.dictionary = { dictionaryWord = $0 }
@@ -289,32 +295,18 @@ struct PDFStudyView: View {
                 fingerprint: session.verifiedFingerprint,
                 marksInteractive: session.ink.tool == .select && !regionMode,
                 onMark: { id in selectedMark = model.state.marks.first { $0.id == id && $0.deletedAt == nil } },
-                onRegion: { rect in
-                    var locator = ReadingLocator(kind: "pdf", page: rect.page)
-                    locator.rectangles = [rect]
-                    locator.fileFingerprint = session.verifiedFingerprint
-                    model.saveMark(source: source, locator: locator, kind: kind)
-                    regionMode = false
-                })
+                onRegion: saveRegion)
             PronunciationStatus()
             if !session.anchorStatus.isEmpty {
                 Text(session.anchorStatus).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8)
             }
-            if regionMode {
-                Text("长按并拖动，选取本页的图像区域。").font(.caption).foregroundStyle(.secondary)
-            }
+            if recognizing { ProgressView("正在识别选区…").font(.caption) }
         }
     }
 
     @ViewBuilder private var pdfOptions: some View {
-        Toggle("区域标记", isOn: $regionMode)
+        Button("收藏当前位置") { capture(kind: kind, annotate: false) }
             .disabled(session.verifiedFingerprint == nil)
-            .onChange(of: regionMode) { _, active in
-                if active { selectInkTool(.select) }
-            }
-        Button(recognizing ? "正在识别…" : "识别本页文字") {
-            recognizePage()
-        }.disabled(recognizing || session.verifiedFingerprint == nil)
         Button("选文批注") { capture(kind: kind, annotate: true) }
             .disabled(session.verifiedFingerprint == nil)
         Button("听发音", systemImage: "speaker.wave.2") {
@@ -341,17 +333,32 @@ struct PDFStudyView: View {
         session.setLayout(spread: mode.usesSpread(in: readerSize), continuous: continuous, book: book, rtl: rtl)
     }
 
-    private func recognizePage() {
-        guard let page = session.pageNumber else { return }
+    private func saveRegion(_ rect: HighlightRect) {
+        guard !recognizing, let fingerprint = session.verifiedFingerprint else { return }
+        let color = kind
+        var locator = ReadingLocator(kind: "pdf", page: rect.page)
+        locator.rectangles = [rect]
+        locator.fileFingerprint = fingerprint
+        regionMode = false
+        let page = session.view.document?.page(at: rect.page - 1)
+        if page?.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
+            model.saveMark(source: source, locator: locator, kind: color)
+            return
+        }
         recognizing = true
         Task {
             defer { recognizing = false }
-            do {
-                recognized = try await PDFRecognition.recognize(url: url, pageNumber: page)
-                showRecognition = true
-            } catch { model.message = "文字识别失败：\(error.localizedDescription)" }
+            let target = CGRect(x: rect.x, y: rect.y, width: rect.width, height: rect.height)
+            let results = (try? await PDFRecognition.recognize(url: url, pageNumber: rect.page)) ?? []
+            let excerpt = results.filter {
+                let line = CGRect(x: $0.rect.x, y: $0.rect.y, width: $0.rect.width, height: $0.rect.height)
+                return target.contains(CGPoint(x: line.midX, y: line.midY))
+            }.sorted { $0.rect.y > $1.rect.y }.map(\.text).joined(separator: "\n")
+            locator.anchorText = excerpt.isEmpty ? nil : excerpt
+            model.saveMark(source: source, locator: locator, excerpt: excerpt, kind: color)
         }
     }
+
     private func capture(kind: CardKind, annotate: Bool) {
         guard let fingerprint = session.verifiedFingerprint, let document = session.view.document,
             let page = session.pageNumber
@@ -366,11 +373,14 @@ struct PDFStudyView: View {
             sourceID: source.id, locator: locator, excerpt: selection?.string ?? "")
         mark.cardKind = kind
         model.change { $0.marks.append(mark) }
-        if annotate && model.message == nil { selectedMark = mark }
+        if model.message == nil {
+            session.view.clearSelection()
+            if annotate { selectedMark = mark }
+        }
     }
 
 }
-private struct SystemDictionaryView: UIViewControllerRepresentable {
+struct SystemDictionaryView: UIViewControllerRepresentable {
     let word: String
     func makeUIViewController(context: Context) -> UIReferenceLibraryViewController {
         UIReferenceLibraryViewController(term: word)
@@ -498,8 +508,16 @@ struct PDFHost: UIViewRepresentable {
         }
 
         @objc func openMark(_ gesture: UITapGestureRecognizer) {
-            guard let view = gesture.view as? PDFView, view.currentSelection?.string?.isEmpty != false else { return }
+            guard let view = gesture.view as? PDFView else { return }
             let location = gesture.location(in: view)
+            if let selection = view.currentSelection, selection.string?.isEmpty == false {
+                let inside = selection.pages.contains { page in
+                    view.convert(selection.bounds(for: page), from: page).insetBy(dx: -6, dy: -6)
+                        .contains(location)
+                }
+                if !inside { view.clearSelection() }
+                return
+            }
             let prefix = "KnowledgeStudio:"
             guard let page = view.page(for: location, nearest: false),
                 let value = page.annotation(at: view.convert(location, to: page))?.contents,
@@ -546,6 +564,52 @@ struct PDFHost: UIViewRepresentable {
 @MainActor
 final class VideoSession: ObservableObject {
     let player: AVPlayer
+    @Published private(set) var loopA: Double?
+    @Published private(set) var loopB: Double?
+    private var loopObserver: Any?
+
+    var time: Double? {
+        let value = player.currentTime().seconds
+        guard player.currentItem?.status == .readyToPlay, value.isFinite, value >= 0 else { return nil }
+        return value
+    }
+
+    func seek(_ seconds: Double) {
+        let duration = player.currentItem?.duration.seconds ?? .infinity
+        let capped = duration.isFinite ? min(duration, seconds) : seconds
+        player.seek(to: CMTime(seconds: max(0, capped), preferredTimescale: 600),
+            toleranceBefore: .zero, toleranceAfter: .zero)
+    }
+
+    func startLoop(at time: Double) {
+        clearLoop()
+        loopA = time
+    }
+
+    func finishLoop(at time: Double) -> Bool {
+        guard let start = loopA, time > start + 0.1 else { return false }
+        if let loopObserver { player.removeTimeObserver(loopObserver) }
+        loopB = time
+        loopObserver = player.addBoundaryTimeObserver(
+            forTimes: [NSValue(time: CMTime(seconds: time, preferredTimescale: 600))],
+            queue: .main
+        ) { [weak self] in
+            Task { @MainActor [weak self] in
+                guard let self, self.loopA == start, self.loopB == time else { return }
+                self.seek(start)
+            }
+        }
+        seek(start)
+        return true
+    }
+
+    func clearLoop() {
+        if let loopObserver { player.removeTimeObserver(loopObserver) }
+        loopObserver = nil
+        loopA = nil
+        loopB = nil
+    }
+
     init(url: URL, location: ReadingLocator?) {
         player = AVPlayer(url: url)
         if let seconds = location?.seconds {
@@ -563,31 +627,34 @@ struct LocalVideoStudyView: View {
             wrappedValue: VideoSession(url: url, location: location ?? source.lastLocation))
     }
     @State private var showMarks = false
+    @State private var showListening = false
+    @State private var lastMark: Double?
+    @AppStorage("quickMarkLead") private var lead = 2
     var body: some View {
         VStack(spacing: 0) {
             VideoPlayer(player: session.player)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .background(.black)
             HStack {
-                Button("时间标记", systemImage: "bookmark") {
-                    let seconds = session.player.currentTime().seconds
-                    guard session.player.currentItem?.status == .readyToPlay, seconds.isFinite, seconds >= 0
-                    else {
-                        model.message = "未取得有效播放位置，本次未保存"
-                        return
-                    }
-                    model.saveMark(source: source, locator: ReadingLocator(kind: "video", seconds: seconds))
-                }.buttonStyle(.borderedProminent)
+                Button("标记", systemImage: "bookmark") { markTime() }.buttonStyle(.borderedProminent)
+                if let lastMark {
+                    Text("已标记 " + locationLabel(ReadingLocator(kind: "video", seconds: lastMark)))
+                        .font(.caption).foregroundStyle(.secondary).lineLimit(1)
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
                 Spacer()
-                Button("标记历史", systemImage: "list.bullet") { showMarks = true }
-            }.padding(.horizontal, 16).padding(.vertical, 8).background(StudyTheme.mat)
-
+                Button("精听", systemImage: session.loopB == nil ? "waveform" : "repeat") {
+                    showListening = true
+                }.popover(isPresented: $showListening) { listeningTools }
+                Button("标记历史", systemImage: "list.bullet") { showMarks = true }.labelStyle(.iconOnly)
+            }.padding(.horizontal, 14).padding(.vertical, 7).background(StudyTheme.mat)
         }.sheet(isPresented: $showMarks) {
             NavigationStack {
                 List(model.state.marks.filter { $0.sourceID == source.id && $0.deletedAt == nil }) { mark in
                     Button {
                         guard let seconds = mark.locator.seconds else { return }
-                        session.player.seek(to: CMTime(seconds: seconds, preferredTimescale: 600))
+                        session.clearLoop()
+                        session.seek(seconds)
                         showMarks = false
                     } label: {
                         VStack(alignment: .leading) {
@@ -601,12 +668,53 @@ struct LocalVideoStudyView: View {
         }.onDisappear {
             let seconds = session.player.currentTime().seconds
             session.player.pause()
+            session.clearLoop()
             if seconds.isFinite && seconds >= 0 {
                 model.saveLocation(
                     sourceID: source.id, locator: ReadingLocator(kind: "video", seconds: seconds))
             }
         }
     }
+
+    private func markTime() {
+        guard let time = session.time else {
+            model.message = "视频尚未就绪，本次标记未保存。"
+            return
+        }
+        let seconds = max(0, floor(time - Double(min(3, max(0, lead)))))
+        model.saveMark(source: source, locator: ReadingLocator(kind: "video", seconds: seconds))
+        if model.message == nil { lastMark = seconds }
+    }
+
+    private var listeningTools: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            StudyHeading(title: "精听")
+            HStack {
+                ForEach([-3, -1, 1, 3], id: \.self) { offset in
+                    Button(offset > 0 ? "+\(offset) 秒" : "\(offset) 秒") {
+                        if let time = session.time { session.seek(time + Double(offset)) }
+                    }.buttonStyle(.bordered)
+                }
+            }
+            Picker("标记提前量", selection: $lead) {
+                ForEach(0...3, id: \.self) { Text("\($0) 秒").tag($0) }
+            }
+            if let start = session.loopA {
+                let a = start.formatted(.number.precision(.fractionLength(1)))
+                let b = session.loopB.map { " → B " + $0.formatted(.number.precision(.fractionLength(1))) + " 秒" } ?? ""
+                Text("A \(a) 秒" + b).font(.caption).foregroundStyle(.secondary)
+            }
+            HStack {
+                Button("设 A") { if let time = session.time { session.startLoop(at: time) } }
+                Button("设 B") {
+                    guard let time = session.time else { return }
+                    if !session.finishLoop(at: time) { model.message = "终点 B 必须在 A 之后。" }
+                }.disabled(session.loopA == nil)
+                Button("清除") { session.clearLoop() }.disabled(session.loopA == nil)
+            }.buttonStyle(.bordered)
+        }.padding(18).presentationCompactAdaptation(.popover)
+    }
+
 }
 
 @MainActor
@@ -622,10 +730,20 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
     var savePosition: ((ReadingLocator) -> Void)?
     var saveSelection: ((ReadingLocator, String, CardKind) -> Void)?
     var captureSelection: ((CardKind) -> Void)?
+    @Published var selectionActive = false
+    func navigator(_ navigator: SelectableNavigator, shouldShowMenuForSelection selection: ReadiumNavigator.Selection) -> Bool {
+        if selection.locator.text.highlight?.isEmpty == false {
+            Task { @MainActor in selectionActive = true }
+        }
+        return true
+    }
     var selectMark: ((UUID) -> Void)?
     func navigator(_ navigator: Navigator, locationDidChange locator: Locator) {
         if let value = try? Self.readingLocator(locator) { savePosition?(value) }
     }
+    /// The Settings slider stores whole percentages. Readium expects a scale factor.
+    static func fontScale(for percent: Double) -> Double { min(180, max(80, percent)) / 100 }
+
     static func readingLocator(_ locator: Locator) throws -> ReadingLocator {
         ReadingLocator(
             kind: "epub", href: locator.href.string, progression: locator.locations.progression,
@@ -640,8 +758,10 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
     }
     @Published var error: String?
     @Published var locationWarning: String?
-    func open(url: URL, location: ReadingLocator?) async {
+    func open(url: URL, location: ReadingLocator?, preferences: EPUBPreferences) async {
         guard navigator == nil else { return }
+        error = nil
+        locationWarning = nil
         do {
             guard let file = FileURL(url: url) else { throw LibraryError.invalid("EPUB 文件路径无效") }
             let retriever = AssetRetriever(httpClient: DefaultHTTPClient())
@@ -665,9 +785,10 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
                 locationWarning = "缺少完整选文定位，已回到章节阅读位置；不能保证精确到原句。"
             }
             if location != nil && initial == nil { locationWarning = "此定位无法精确还原，已打开资料。可在阅读器中重新标记。" }
+            try Task.checkCancellation()
             let reader = try EPUBNavigatorViewController(
                 publication: publication, initialLocation: initial,
-                config: .init(editingActions: [
+                config: .init(preferences: preferences, editingActions: [
                     EditingAction(title: "单词高亮", action: #selector(StudyEPUBContainer.markWord)),
                     EditingAction(title: "语料高亮", action: #selector(StudyEPUBContainer.markExpression)),
                     EditingAction(title: "关键词高亮", action: #selector(StudyEPUBContainer.markKeyword)),
@@ -679,16 +800,21 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
                 guard let locator = reader?.currentSelection?.locator, let text = locator.text.highlight,
                     !text.isEmpty
                 else { return }
-                do { self?.saveSelection?(try Self.readingLocator(locator), text, kind) } catch {
-                    self?.error = "选文定位未保存：\(error.localizedDescription)"
-                }
+                do {
+                    self?.saveSelection?(try Self.readingLocator(locator), text, kind)
+                    reader?.clearSelection()
+                    self?.selectionActive = false
+                } catch { self?.locationWarning = "选文定位未保存：\(error.localizedDescription)" }
             }
             reader.observeDecorationInteractions(inGroup: "knowledge-marks") { [weak self] event in
                 if let id = UUID(uuidString: event.decoration.id) { self?.selectMark?(id) }
             }
             reader.delegate = self
+            self.preferences = preferences
             navigator = reader
-        } catch { self.error = "EPUB 无法打开（不支持 DRM）：\(error.localizedDescription)" }
+        } catch is CancellationError {
+            return
+        } catch { self.error = "无法打开 EPUB：\(error.localizedDescription)" }
     }
     func location(selection: Bool) throws -> (ReadingLocator, String)? {
         guard let navigator,
@@ -754,12 +880,11 @@ struct EPUBStudyView: View {
     @State private var kind: CardKind = .expression
     var body: some View {
         GeometryReader { geometry in
-            StudyReaderDock {
+            StudyReaderDock(selectionActive: session.selectionActive) {
                 epubContent
             } tools: {
-                StudyMarkColors(selection: $kind)
-                Button("Mark") { saveReadingMark() }
-                    .buttonStyle(.bordered).disabled(session.navigator == nil)
+                StudyMarkColors(selection: $kind, onPick: { session.captureSelection?($0) })
+                    .disabled(session.navigator == nil)
                 Button {
                     settings = true
                 } label: {
@@ -774,7 +899,7 @@ struct EPUBStudyView: View {
             session.selectMark = { id in selectedMark = model.state.marks.first { $0.id == id } }
             session.savePosition = { model.saveLocation(sourceID: source.id, locator: $0) }
             session.saveSelection = { model.saveMark(source: source, locator: $0, excerpt: $1, kind: $2) }
-            await session.open(url: url, location: location)
+            await session.open(url: url, location: location, preferences: readerPreferences)
             applyPreferences()
         }
         .onChange(of: font) { _, _ in applyPreferences() }
@@ -791,6 +916,8 @@ struct EPUBStudyView: View {
         .sheet(isPresented: $settings) {
             NavigationStack {
                 Form {
+                    Button("收藏当前阅读位置") { saveReadingMark() }
+                        .disabled(session.navigator == nil)
                     Picker("字体", selection: $font) {
                         Text("衬线阅读体").tag("serif")
                         Text("无衬线体").tag("sans")
@@ -825,8 +952,19 @@ struct EPUBStudyView: View {
     private var epubContent: some View {
         VStack(spacing: 2) {
             if let warning = session.locationWarning { Text(warning).font(.caption).foregroundStyle(.orange) }
-            if let error = session.error { Text(error) }
-            else if let navigator = session.navigator {
+            if let error = session.error {
+                ContentUnavailableView {
+                    Label("无法打开 EPUB", systemImage: "book.closed")
+                } description: {
+                    Text(error)
+                } actions: {
+                    if session.navigator == nil {
+                        Button("重试") {
+                            Task { await session.open(url: url, location: location, preferences: readerPreferences) }
+                        }.buttonStyle(.bordered)
+                    }
+                }
+            } else if let navigator = session.navigator {
                 EPUBHost(
                     navigator: navigator,
                     marks: model.state.marks.filter { $0.sourceID == source.id && $0.deletedAt == nil },
@@ -846,16 +984,18 @@ struct EPUBStudyView: View {
         } catch { model.message = error.localizedDescription }
     }
 
-    private func applyPreferences() {
+    private var readerPreferences: EPUBPreferences {
         let mode: StudyPageLayout = columnMode == "two" ? .spread :
             columnMode == "one" || (columnMode == "legacy" && !legacyColumns) ? .single : .automatic
-        session.submit(
-            EPUBPreferences(
-                columnCount: mode.usesSpread(in: readerSize) ? .two : .one,
-                fontFamily: font == "serif" ? .serif : .sansSerif,
-                fontSize: fontSize, lineHeight: lineHeight, pageMargins: margins,
-                theme: theme == "dark" ? .dark : theme == "light" ? .light : .sepia))
+        return EPUBPreferences(
+            columnCount: mode.usesSpread(in: readerSize) ? .two : .one,
+            fontFamily: font == "serif" ? .serif : .sansSerif,
+            fontSize: EPUBSession.fontScale(for: fontSize),
+            lineHeight: lineHeight, pageMargins: margins,
+            theme: theme == "dark" ? .dark : theme == "light" ? .light : .sepia)
     }
+
+    private func applyPreferences() { session.submit(readerPreferences) }
 
 }
 struct EPUBHost: UIViewControllerRepresentable {

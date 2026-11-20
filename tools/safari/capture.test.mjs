@@ -90,7 +90,7 @@ function contentHarness(send) {
   }]));
   const video = { currentTime: 12.8, duration: 100, readyState: 4,
     pause() { throw new Error('Capture must not pause playback'); } };
-  const root = { innerHTML: '', querySelector: name => elements[name] };
+  const root = { innerHTML: '', querySelector: name => elements[({ '#quick-save': 'button', '.feedback': 'p' })[name] ?? name] };
   const context = vm.createContext({ URL, TextEncoder, setTimeout, clearTimeout,
     HTMLVideoElement: class {}, crypto: { randomUUID: () => id }, location: { href: input.url },
     browser: { runtime: { sendMessage: send }, storage: { local: { async get() { return {}; }, async set() {} } } },
@@ -113,8 +113,8 @@ test('page button saves without pausing playback and acknowledges the captured p
   await page.click();
   assert.equal(sent.seconds, 10);
   assert.equal(page.elements.button.disabled, false);
-  assert.equal(page.elements.button.textContent, '标记');
-  assert.match(page.elements.p.textContent, /已保存 10 秒/);
+  assert.equal(page.elements.button.textContent, '＋标记');
+  assert.match(page.elements.p.textContent, /已标记 10 秒/);
 });
 
 test('failed page delivery retries its original position even after playback advances', async () => {
@@ -128,7 +128,7 @@ test('failed page delivery retries its original position even after playback adv
   page.video.currentTime = 50;
   await page.click();
   assert.deepEqual(sent[0], sent[1]);
-  assert.equal(page.elements.button.textContent, '标记');
+  assert.equal(page.elements.button.textContent, '＋标记');
 });
 
 test('navigation blocks capture before replacement video metadata is ready', async () => {

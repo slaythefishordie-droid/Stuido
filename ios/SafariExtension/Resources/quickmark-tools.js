@@ -2,32 +2,68 @@
   const root = globalThis.KnowledgeQuickMarkUI?.root;
   if (!root) return;
   const section = root.querySelector('section');
-  const tools = document.createElement('details');
-  tools.innerHTML = `<summary style="padding:10px;cursor:pointer">阅读控制</summary>
-    <div id="adjust"></div><div><button id="a">设 A</button><button id="b">设 B</button><button id="clear">清除循环</button></div>
-    <p id="loop" role="status">未启用循环</p><details id="history"><summary style="padding:10px">历史书签</summary>
-    <input id="search" placeholder="搜索标题、备注或时间" aria-label="搜索历史" style="width:90%;min-height:40px">
-    <label><input type="checkbox" id="current">仅当前视频</label><button id="refresh">刷新</button>
-    <p id="count"></p><div id="rows" style="max-height:35vh;overflow:auto"></div><button id="more">显示更多</button>
-    <button id="export">导出书签 JSON</button><label>导入旧书签<input id="import" type="file" accept="application/json,.json"></label></details>
-    <p id="feedback" role="status" aria-live="polite"></p>`;
-  section.append(tools);
-  const preRollLabel = root.querySelector('label');
-  if (preRollLabel) tools.append(preRollLabel);
-  const find = id => tools.querySelector('#' + id), feedback = find('feedback');
+  const tools = document.createElement('div');
+  tools.innerHTML = `<section class="pane" id="listening" aria-label="精听" hidden style="width:auto;background:#f5e8d8;color:#3c2637;box-shadow:none">
+    <h2>精听</h2>
+    <div id="adjust" class="step-row"></div>
+    <p id="loop" role="status">未启用循环</p>
+    <div class="loop-row"><button id="a">设 A</button><button id="b" disabled>设 B</button><button id="clear" disabled>清除</button></div>
+    </section>
+    <section class="pane" id="history" aria-label="标记历史" hidden style="width:auto;background:#f5e8d8;color:#3c2637;box-shadow:none">
+    <h2>标记历史</h2>
+    <div class="history-filter"><input type="search" id="search" placeholder="搜索标题、备注或时间" aria-label="搜索历史"></div>
+    <div class="history-filter"><label><input type="checkbox" id="current">仅当前视频</label><button id="refresh">刷新</button></div>
+    <p id="count"></p><div id="rows" style="max-height:29vh;overflow:auto"></div><button id="more">显示更多</button>
+    <details><summary>导入与导出</summary><button id="export">导出书签 JSON</button>
+    <label>导入旧书签<input id="import" type="file" accept="application/json,.json"></label></details></section>`;
+  section.querySelector('.panes').append(tools);
+  const preRollLabel = section.querySelector(':scope > label');
+  if (preRollLabel) tools.querySelector('#listening').append(preRollLabel);
+  const find = id => tools.querySelector('#' + id), feedback = section.querySelector('.feedback');
+  const bar = section.querySelector('.quickbar');
+  function panelButton(id, title, onOpen) {
+    const button = document.createElement('button');
+    button.textContent = title;
+    button.setAttribute('aria-controls', id);
+    button.setAttribute('aria-expanded', 'false');
+    button.onclick = () => {
+      const open = find(id).hidden;
+      for (const pane of tools.querySelectorAll('.pane')) pane.hidden = true;
+      for (const control of bar.querySelectorAll('[aria-expanded]')) control.setAttribute('aria-expanded', 'false');
+      if (open) {
+        find(id).hidden = false;
+        button.setAttribute('aria-expanded', 'true');
+        onOpen?.();
+      }
+    };
+    bar.append(button);
+    return button;
+  }
+  const listeningButton = panelButton('listening', '精听');
+  panelButton('history', '历史', () => refresh());
   let a = null, b = null, boundVideo = null, marks = [], limit = 50;
-  const clear = () => { a = b = null; find('loop').textContent = '未启用循环'; };
+  function drawLoop() {
+    find('b').disabled = a == null;
+    find('clear').disabled = a == null;
+    listeningButton.textContent = b == null ? '精听' : '精听 ↻';
+    find('loop').textContent = a == null ? '未启用循环' : b == null
+      ? `A ${a.toFixed(1)} 秒 · 等待 B`
+      : `A ${a.toFixed(1)} → B ${b.toFixed(1)} 秒`;
+  }
+  const clear = () => { a = b = null; drawLoop(); };
   const video = () => {
     const element = document.querySelector('video');
     if (!element || element.readyState < 2 || !Number.isFinite(element.duration) || document.querySelector('.ad-showing, .ad-interrupting, .ytp-live')) throw new Error('视频未就绪或当前不支持精听');
     if (boundVideo !== element) {
       boundVideo = element; clear();
-      element.addEventListener('timeupdate', () => { if (a != null && b != null && element.currentTime >= b) element.currentTime = a; });
+      element.addEventListener('timeupdate', () => {
+        if (boundVideo === element && a != null && b != null && element.currentTime >= b) element.currentTime = a;
+      });
     }
     return element;
   };
   function act(action) { try { action(); } catch (error) { feedback.textContent = error.message; } }
-  for (const seconds of [-3, -2, -1, 1, 2, 3]) {
+  for (const seconds of [-3, -1, 1, 3]) {
     const button = document.createElement('button'); button.textContent = `${seconds > 0 ? '+' : ''}${seconds} 秒`;
     button.addEventListener('click', () => act(() => {
       const element = video(), target = Math.max(0, Math.min(element.duration, element.currentTime + seconds));
@@ -35,8 +71,8 @@
       element.currentTime = target;
     })); find('adjust').append(button);
   }
-  find('a').onclick = () => act(() => { a = video().currentTime; b = null; find('loop').textContent = `A = ${a.toFixed(1)} 秒，请设置 B`; });
-  find('b').onclick = () => act(() => { const element = video(); if (a == null || element.currentTime <= a) throw new Error('B 必须晚于 A'); b = element.currentTime; element.currentTime = a; find('loop').textContent = `循环 ${a.toFixed(1)}–${b.toFixed(1)} 秒`; });
+  find('a').onclick = () => act(() => { a = video().currentTime; b = null; drawLoop(); });
+  find('b').onclick = () => act(() => { const element = video(); if (a == null || element.currentTime <= a) throw new Error('B 必须晚于 A'); b = element.currentTime; element.currentTime = a; drawLoop(); });
   find('clear').onclick = clear;
   document.addEventListener('yt-navigate-start', clear);
   async function request(message) {
@@ -60,9 +96,10 @@
     find('count').textContent = `${rows.length} 条，已显示 ${Math.min(limit, rows.length)} 条`; find('rows').replaceChildren();
     find('more').hidden = rows.length <= limit;
     for (const mark of rows.slice(0, limit)) {
-      const row = document.createElement('div'); row.style.cssText = 'border-top:1px solid #567;padding:8px 0';
+      const row = document.createElement('div'); row.className = 'history-row';
       const text = document.createElement('p'); text.textContent = `${mark.title} · ${mark.seconds} 秒${mark.note ? '\n' + mark.note : ''}`; row.append(text);
-      function button(label, action) { const button = document.createElement('button'); button.textContent = label; button.onclick = async () => { try { await action(); } catch (error) { feedback.textContent = error.message; } }; row.append(button); }
+      const actions = document.createElement('div'); actions.className = 'history-actions'; row.append(actions);
+      function button(label, action) { const button = document.createElement('button'); button.textContent = label; button.onclick = async () => { try { await action(); } catch (error) { feedback.textContent = error.message; } }; actions.append(button); }
       button('回看', () => { clear(); if (mark.videoID === id) video().currentTime = mark.seconds; else location.assign(`https://www.youtube.com/watch?v=${mark.videoID}&t=${mark.seconds}s`); });
       button('备注', async () => { const note = prompt('书签备注', mark.note ?? ''); if (note !== null) { await request({ action: 'annotateMark', id: mark.id, note }); await refresh(); } });
       button('复制链接', async () => { await navigator.clipboard.writeText(`https://www.youtube.com/watch?v=${mark.videoID}&t=${mark.seconds}s`); feedback.textContent = '已复制出处链接'; });
@@ -70,7 +107,6 @@
       find('rows').append(row);
     }
   }
-  find('history').addEventListener('toggle', () => { if (find('history').open) refresh(); });
   find('refresh').onclick = refresh;
   find('search').oninput = () => { limit = 50; render(); };
   find('current').onchange = () => { limit = 50; render(); };
@@ -93,6 +129,6 @@
     if (settings.youtubeEnabled === false) { root.host.hidden = true; return; }
     if ([12, 14, 16, 18].includes(settings.fontSize)) section.style.fontSize = `${settings.fontSize}px`;
     if (settings.buttonSide === 'left') { root.host.style.left = '12px'; root.host.style.right = 'auto'; }
-    tools.open = settings.collapsed === false;
+    if (settings.collapsed === false && find('listening').hidden) listeningButton.click();
   }).catch(() => {});
 })();

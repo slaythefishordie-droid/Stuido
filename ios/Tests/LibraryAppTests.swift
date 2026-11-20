@@ -88,6 +88,37 @@ final class LibraryAppTests: XCTestCase {
             locator.rectangles, decoded.rectangles, "Page-space geometry must not be rewritten after rotation"
         )
     }
+    func testEPUBFontSliderConvertsPercentToReadiumScale() {
+        XCTAssertEqual(EPUBSession.fontScale(for: 110), 1.1, accuracy: 0.001)
+        XCTAssertEqual(EPUBSession.fontScale(for: 80), 0.8, accuracy: 0.001)
+        XCTAssertEqual(EPUBSession.fontScale(for: 180), 1.8, accuracy: 0.001)
+    }
+
+    func testWordAndKeywordFromInboxRetainAnchorAndProjectOnSave() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let model = StudioModel(root: root)
+        let source = LibrarySource(kind: .pdf, title: "Paper")
+        let locator = ReadingLocator(kind: "pdf", page: 2)
+        let mark = LibraryMark(sourceID: source.id, locator: locator, excerpt: "tea")
+        var project = LibraryProject(title: "Reading")
+        project.sourceIDs = [source.id]
+        try model.commit {
+            $0.sources = [source]
+            $0.projects = [project]
+            $0.marks = [mark]
+        }
+        for kind in [CardKind.word, .keyword] {
+            let card = model.card(from: mark, type: kind)
+            XCTAssertEqual(card.title, mark.excerpt)
+            XCTAssertEqual(card.sourceRefs.first?.locator, locator)
+            model.saveCard(card, projects: [project.id])
+            XCTAssertNil(model.message)
+            XCTAssertTrue(model.state.projects[0].cardIDs.contains(card.id))
+            XCTAssertEqual(model.state.cards.last?.markIDs, [mark.id])
+        }
+    }
+
     func testEPUBSelectionLocatorRoundTripPreservesTextContext() throws {
         let json: [String: Any] = [
             "href": "chapter.xhtml", "type": "application/xhtml+xml",
@@ -209,7 +240,7 @@ final class LibraryAppTests: XCTestCase {
         try JSONEncoder().encode(snapshot).write(to: root.appendingPathComponent("before-restore-test.json"))
         let orphan = assets.appendingPathComponent("orphan.pdf")
         try Data("unused".utf8).write(to: orphan)
-        model.cleanUnusedAssets()
+        model.cleanUnusedAssets([orphan])
         XCTAssertTrue(FileManager.default.fileExists(atPath: referenced.path))
         XCTAssertFalse(FileManager.default.fileExists(atPath: orphan.path))
     }

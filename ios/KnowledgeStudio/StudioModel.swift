@@ -56,7 +56,7 @@ final class StudioModel: ObservableObject {
         do { try commit(action) }
         catch { message = error.localizedDescription }
     }
-    func saveCard(_ card: LibraryCard, project: UUID? = nil) {
+    func saveCard(_ card: LibraryCard, projects: Set<UUID>? = nil) {
         change { state in
             if let index = state.cards.firstIndex(where: { $0.id == card.id }) {
                 var edited = card
@@ -65,15 +65,21 @@ final class StudioModel: ObservableObject {
             } else {
                 state.cards.append(card)
             }
-            if let project, let index = state.projects.firstIndex(where: { $0.id == project }),
-                !state.projects[index].cardIDs.contains(card.id)
-            {
-                state.projects[index].cardIDs.append(card.id)
+            if let projects {
+                for index in state.projects.indices where state.projects[index].deletedAt == nil {
+                    if projects.contains(state.projects[index].id) {
+                        if !state.projects[index].cardIDs.contains(card.id) {
+                            state.projects[index].cardIDs.append(card.id)
+                        }
+                    } else {
+                        state.projects[index].cardIDs.removeAll { $0 == card.id }
+                    }
+                }
             }
         }
     }
     func card(from mark: LibraryMark, type: CardKind) -> LibraryCard {
-        let field = type == .word ? "example_en" : LibraryCard.fields(for: type)[0]
+        let field = LibraryCard.fields(for: type)[0]
         var card = LibraryCard(type: type, content: [field: mark.excerpt])
         let ref = CardReference(sourceID: mark.sourceID, locator: mark.locator)
         card.sourceRefs = [ref]
@@ -112,8 +118,11 @@ final class StudioModel: ObservableObject {
         guard let hash = source.assetHash, let ext = source.assetExtension else { return nil }
         return root.appendingPathComponent("assets/\(hash).\(ext)")
     }
-    func importFile(_ url: URL, replacing sourceID: UUID? = nil) async {
-        guard !isImporting else { return }
+    func importFile(_ url: URL, replacing sourceID: UUID? = nil, projectID: UUID? = nil) async {
+        guard !isImporting else {
+            message = "正在导入另一份资料，请稍后重试。"
+            return
+        }
         isImporting = true
         defer { isImporting = false }
         let scope = url.startAccessingSecurityScopedResource()
@@ -138,10 +147,17 @@ final class StudioModel: ObservableObject {
                     }
                     state.sources[index].assetHash = imported.assetHash
                     state.sources[index].assetExtension = imported.assetExtension
-                } else if !state.sources.contains(where: {
-                    $0.assetHash == imported.assetHash && $0.deletedAt == nil
-                }) {
-                    state.sources.append(imported)
+                } else {
+                    let existing = state.sources.first {
+                        $0.assetHash == imported.assetHash && $0.deletedAt == nil
+                    }
+                    let id = existing?.id ?? imported.id
+                    if existing == nil { state.sources.append(imported) }
+                    if let projectID, let index = state.projects.firstIndex(where: {
+                        $0.id == projectID && $0.deletedAt == nil
+                    }), !state.projects[index].sourceIDs.contains(id) {
+                        state.projects[index].sourceIDs.append(id)
+                    }
                 }
             }
         } catch { message = error.localizedDescription }
@@ -197,17 +213,25 @@ final class StudioModel: ObservableObject {
         while let chunk = try handle.read(upToCount: 1_048_576), !chunk.isEmpty { digest.update(data: chunk) }
         return digest.finalize().map { String(format: "%02x", $0) }.joined()
     }
-    func stageImport(_ text: String) {
-        perform {
-            let preview = try ImportService.preview(text, existing: state)
-            try repository!.update { state in
-                guard !state.pending.contains(where: { $0.packageID == preview.packageID }) else {
-                    throw LibraryError.invalid("该批次已在导入箱")
+    func stageImport(_ text: String) async {
+        do {
+            let snapshot = state
+            let preview = try await Task.detached(priority: .userInitiated) {
+                try ImportService.preview(text, existing: snapshot)
+            }.value
+            try commit { state in
+                if state.pending.contains(where: { $0.packageID == preview.packageID && $0.json != text }) {
+                    throw LibraryError.invalid("导入箱已有同编号的不同批次")
+                }
+                guard !state.pending.contains(where: { $0.packageID == preview.packageID }) else { return }
+                guard state.importedPackages[preview.packageID] == nil else {
+                    throw LibraryError.invalid("该批次已导入")
                 }
                 state.pending.append(
                     PendingImport(packageID: preview.packageID, title: preview.title, json: text))
             }
-        }
+            message = nil
+        } catch { message = error.localizedDescription }
     }
     func unusedAssets() throws -> [URL] {
         var protected = Set(state.sources.compactMap { assetURL($0)?.lastPathComponent })
@@ -227,8 +251,15 @@ final class StudioModel: ObservableObject {
                 && !protected.contains(file.lastPathComponent)
         }
     }
-    func cleanUnusedAssets() {
-        perform { for file in try unusedAssets() { try FileManager.default.removeItem(at: file) } }
+    func cleanUnusedAssets(_ selected: Set<URL>) {
+        guard !isImporting else { message = "资料正在导入，请在导入完成后清理。"; return }
+        perform {
+            let stillUnused = Set(try unusedAssets())
+            guard selected.isSubset(of: stillUnused) else {
+                throw LibraryError.invalid("部分文件的引用已经变化，请重新检查清理项。")
+            }
+            for file in selected { try FileManager.default.removeItem(at: file) }
+        }
     }
 
     func setMarkNote(id: UUID, note: String) {

@@ -59,6 +59,10 @@ public struct HighlightRect: Codable, Equatable, Sendable {
         self.height = height
     }
 }
+public enum SourceCoverMode: String, Codable, CaseIterable, Sendable {
+    case custom, original, generated
+}
+
 public struct LibrarySource: Codable, Identifiable, Equatable, Sendable {
     public var id: UUID = UUID()
     public var kind: SourceKind
@@ -71,6 +75,10 @@ public struct LibrarySource: Codable, Identifiable, Equatable, Sendable {
     public var lastLocation: ReadingLocator?
     public var lastReadAt: Date?
     public var coverImage: Data?
+    public var coverMode: SourceCoverMode?
+    public var coverVariation: Int?
+    public var isFavorite: Bool?
+    public var resolvedCoverMode: SourceCoverMode { coverMode ?? (coverImage == nil ? .original : .custom) }
     public var pdfPageInk: [PDFPageInk]?
     public var deletedAt: Date?
     public init(
@@ -280,11 +288,9 @@ public struct LibraryState: Codable, Equatable, Sendable {
         for card in cards {
             try card.schedule?.validate()
             let allowed = LibraryCard.fields(for: card.type)
-            let required = card.type == .word ? allowed : [allowed[0]]
-            guard
-                required.allSatisfy({
-                    !(card.content[$0]?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ?? true)
-                }), Set(card.content.keys).isSubset(of: Set(allowed))
+            guard let primary = card.content[allowed[0]],
+                !primary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                Set(card.content.keys).isSubset(of: Set(allowed))
             else { throw LibraryError.invalid("卡片必填内容或类型无效") }
             guard Set(card.markIDs).isSubset(of: markIDs) else { throw LibraryError.invalid("卡片 Mark 引用缺失") }
             try unique(card.sourceRefs.map(\.id))

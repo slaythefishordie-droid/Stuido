@@ -8,6 +8,7 @@ struct AIInboxView: View {
     @State private var importing = false
     @State private var pending: PendingImport?
     @State private var editingJSON = false
+    @State private var staging = false
     var body: some View {
         NavigationStack {
             List {
@@ -23,7 +24,18 @@ struct AIInboxView: View {
                     DisclosureGroup("查看或粘贴 JSON", isExpanded: $editingJSON) {
                         TextEditor(text: $text).frame(minHeight: 126).font(.system(.body, design: .monospaced))
                     }
-                    Button("校验并放入导入箱") { model.stageImport(text) }.disabled(text.isEmpty)
+                    Button {
+                        let input = text
+                        staging = true
+                        Task {
+                            await model.stageImport(input)
+                            if model.message == nil && text == input { text = "" }
+                            staging = false
+                        }
+                    } label: {
+                        if staging { ProgressView().accessibilityLabel("正在校验卡片包") }
+                        else { Text("校验并放入导入箱") }
+                    }.disabled(text.isEmpty || staging)
                 }
                 Section("待确认批次") {
                     if model.state.pending.isEmpty {
@@ -63,17 +75,9 @@ struct ImportReviewView: View {
     @State private var project: UUID?
     @State private var matches: [String: UUID] = [:]
     @State private var confirm = false
-    var rawSources: [[String: String]] {
-        guard let root = try? JSONSerialization.jsonObject(with: Data(pending.json.utf8)) as? [String: Any],
-            let sources = root["sources"] as? [[String: Any]]
-        else { return [] }
-        return sources.map {
-            [
-                "id": $0["id"] as? String ?? "", "title": $0["title"] as? String ?? "",
-                "kind": $0["kind"] as? String ?? "",
-            ]
-        }
-    }
+    @State private var loading = false
+    @State private var rawSources: [[String: String]] = []
+
     var body: some View {
         NavigationStack {
             Form {
@@ -96,7 +100,8 @@ struct ImportReviewView: View {
                             ) { Text($0.title).tag(Optional($0.id)) }
                         }
                     }
-                    Button("生成预览") { load() }
+                    if loading { ProgressView("正在校验…") }
+                    else { Button("生成预览") { Task { await load() } } }
                 }
                 if let preview {
                     Section("候选卡片（\(selected.count)/\(preview.cards.count)）") {
@@ -137,7 +142,19 @@ struct ImportReviewView: View {
                     Button("确认导入所选卡片") { confirm = true }.disabled(selected.isEmpty)
                 }
             }.studySurface().navigationTitle(pending.title).toolbar { Button("关闭") { dismiss() } }
-        }.onAppear { load() }
+        }.task {
+            let json = pending.json
+            rawSources = await Task.detached {
+                guard let root = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
+                    let sources = root["sources"] as? [[String: Any]]
+                else { return [[String: String]]() }
+                return sources.map {
+                    ["id": $0["id"] as? String ?? "", "title": $0["title"] as? String ?? "",
+                        "kind": $0["kind"] as? String ?? ""]
+                }
+            }.value
+            await load()
+        }
             .confirmationDialog("将所选候选写入知识库？", isPresented: $confirm, titleVisibility: .visible) {
                 Button("导入") {
                     guard let preview, let repository = model.repository else { return }
@@ -151,9 +168,18 @@ struct ImportReviewView: View {
                 }
             }
     }
-    private func load() {
+    private func load() async {
+        guard !loading else { return }
+        loading = true
+        defer { loading = false }
+        let json = pending.json
+        let snapshot = model.state
+        let selections = matches
         do {
-            let value = try ImportService.preview(pending.json, existing: model.state, sourceMatches: matches)
+            let value = try await Task.detached(priority: .userInitiated) {
+                try ImportService.preview(json, existing: snapshot, sourceMatches: selections)
+            }.value
+            guard selections == matches, !Task.isCancelled else { return }
             preview = value
             selected = Set(value.cards.map(\.id)).subtracting(value.duplicateCardIDs)
         } catch {
@@ -170,14 +196,30 @@ struct LibraryView: View {
     @State private var projectTitle = ""
     @State private var selectedProject: UUID?
     @State private var coverSourceID: UUID?
-    @State private var coverLayout = true
-    @State private var coverRevisions: [UUID: Int] = [:]
+    @AppStorage("libraryCoverLayout") private var coverLayout = true
+    @State private var collection = "全部"
     @State private var selecting = false
     @State private var selected: Set<UUID> = []
     private var sources: [LibrarySource] {
-        model.state.sources.filter {
-            $0.deletedAt == nil && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search))
+        let projects = model.state.projects.filter { $0.deletedAt == nil }
+        let classified = collection == "未分类" ? Set(projects.flatMap(\.sourceIDs)) : []
+        let results = model.state.sources.filter { source in
+            source.deletedAt == nil
+                && (search.isEmpty || source.title.localizedCaseInsensitiveContains(search))
+                && (collection != "收藏" || source.isFavorite == true)
+                && (collection != "未分类" || !classified.contains(source.id))
+                && (collection != "最近" || source.lastReadAt != nil)
         }
+        return collection == "最近" ? results.sorted {
+            ($0.lastReadAt ?? .distantPast) > ($1.lastReadAt ?? .distantPast)
+        } : results
+    }
+
+    private var collectionPicker: some View {
+        Picker("资料集合", selection: $collection) {
+            ForEach(["全部", "最近", "未分类", "收藏"], id: \.self) { Text($0) }
+        }.pickerStyle(.segmented)
+            .onChange(of: collection) { _, _ in selected.removeAll() }
     }
     var body: some View {
         NavigationStack {
@@ -256,33 +298,61 @@ struct LibraryView: View {
                 throw LibraryError.invalid("资料已不可用")
             }
             state.sources[index].coverImage = data
+            state.sources[index].coverMode = .custom
         }
     }
 
     @ViewBuilder private func sourceActionMenu(_ source: LibrarySource) -> some View {
-        Button("更换封面") {
-            coverSourceID = source.id
-            importing = true
+        Menu("封面") {
+            Button(source.coverImage == nil ? "选择自定义图片" : "更换自定义图片") {
+                coverSourceID = source.id
+                importing = true
+            }
+            if source.coverImage != nil {
+                Button("使用自定义封面") { setCoverMode(.custom, source: source) }
+            }
+            Button("使用原始封面") {
+                Task {
+                    guard let asset = model.assetURL(source),
+                        await StudyThumbnails.artwork(asset, kind: source.kind).image != nil else {
+                        model.message = "此资料没有可用的原始封面，当前封面已保留。"
+                        return
+                    }
+                    setCoverMode(.original, source: source)
+                }
+            }
+            Button("使用自动封面") { setCoverMode(.generated, source: source) }
+            Button("重新生成自动封面") { setCoverMode(.generated, source: source, regenerate: true) }
         }
-        if source.coverImage != nil {
-            Button("恢复自动封面") { saveSourceCover(nil, id: source.id) }
-        } else if let asset = model.assetURL(source) {
-            Button("重新生成缩略图") {
-                do {
-                    try StudyThumbnails.invalidate(asset)
-                    coverRevisions[source.id, default: 0] += 1
-                } catch { model.message = "缩略图未重建：\(error.localizedDescription)" }
+        Button(source.isFavorite == true ? "取消收藏" : "收藏") {
+            model.change { state in
+                guard let index = state.sources.firstIndex(where: { $0.id == source.id && $0.deletedAt == nil }) else {
+                    throw LibraryError.invalid("资料已不可用")
+                }
+                state.sources[index].isFavorite = state.sources[index].isFavorite != true
             }
         }
         Button("移入回收站", role: .destructive) { model.delete([source.id]) }
+    }
+
+    private func setCoverMode(_ mode: SourceCoverMode, source: LibrarySource, regenerate: Bool = false) {
+        model.change { state in
+            guard let index = state.sources.firstIndex(where: { $0.id == source.id && $0.deletedAt == nil }) else {
+                throw LibraryError.invalid("资料已不可用")
+            }
+            state.sources[index].coverMode = mode
+            if regenerate {
+                let previous = max(0, state.sources[index].coverVariation ?? 0)
+                state.sources[index].coverVariation = (previous % 6 + 1) % 6
+            }
+        }
     }
 
     private func sourceLink(_ source: LibrarySource, compact: Bool) -> some View {
         NavigationLink {
             SourceReaderView(source: source, location: source.lastLocation)
         } label: {
-            StudySourceTile(source: source, asset: model.assetURL(source), compact: compact,
-                revision: coverRevisions[source.id, default: 0])
+            StudySourceTile(source: source, asset: model.assetURL(source), compact: compact)
         }.contextMenu { sourceActionMenu(source) }
     }
 
@@ -315,16 +385,23 @@ struct LibraryView: View {
         }
     }
     @ViewBuilder private func sourceList(includeProjects: Bool) -> some View {
-        if coverLayout && !selecting {
+        if coverLayout {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     if includeProjects {
                         VStack(alignment: .leading, spacing: 10) { projectTree(wide: false) }.studyPanel()
                     }
                     StudyHeading(title: "资料")
+                    collectionPicker
                     emptySources
                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 138), spacing: 13)], spacing: 17) {
-                        ForEach(sources) { sourceLink($0, compact: false).buttonStyle(.plain) }
+                        ForEach(sources) { source in
+                            if selecting {
+                                ObjectSelectionRow(isSelected: selectedSource(source.id)) {
+                                    StudySourceTile(source: source, asset: model.assetURL(source), compact: false)
+                                }
+                            } else { sourceLink(source, compact: false).buttonStyle(.plain) }
+                        }
                     }
                 }.padding(18)
             }.studySurface()
@@ -332,15 +409,11 @@ struct LibraryView: View {
             List {
                 if includeProjects { projectTree(wide: false) }
                 Section("资料") {
+                    collectionPicker
                     emptySources
                     ForEach(sources) { source in
                         if selecting {
-                            ObjectSelectionRow(isSelected: Binding(
-                                get: { selected.contains(source.id) },
-                                set: { enabled in
-                                    if enabled { selected.insert(source.id) }
-                                    else { selected.remove(source.id) }
-                                })) {
+                            ObjectSelectionRow(isSelected: selectedSource(source.id)) {
                                 StudySourceTile(source: source, asset: model.assetURL(source), compact: true)
                             }
                         } else { sourceLink(source, compact: true) }
@@ -348,6 +421,13 @@ struct LibraryView: View {
                 }
             }.studySurface()
         }
+    }
+
+    private func selectedSource(_ id: UUID) -> Binding<Bool> {
+        Binding(get: { selected.contains(id) }, set: { enabled in
+            if enabled { selected.insert(id) }
+            else { selected.remove(id) }
+        })
     }
 
     @ViewBuilder private var emptySources: some View {
@@ -363,6 +443,7 @@ struct ProjectView: View {
     let projectID: UUID
     private enum SectionKind: String, CaseIterable { case sources = "资料", cards = "卡片", maps = "地图", relations = "关系" }
     @State private var section = SectionKind.sources
+    @State private var showProjectCovers = true
     @State private var managingLinks = false
     @State private var title = ""
     @State private var note = ""
@@ -428,12 +509,34 @@ struct ProjectView: View {
                     }
                 }
             }
+            let sources = projectSources(project.sourceIDs)
+            let recent = sources.filter { $0.lastReadAt != nil }.sorted {
+                ($0.lastReadAt ?? .distantPast) > ($1.lastReadAt ?? .distantPast)
+            }.prefix(3)
+            if !recent.isEmpty {
+                DisclosureGroup("最近打开") { ForEach(recent) { sourceRow($0) } }
+            }
             Section("全部项目资料") {
-                ForEach(projectSources(project.sourceIDs)) { sourceRow($0) }
+                Toggle("封面视图", isOn: $showProjectCovers)
+                if showProjectCovers {
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 130), spacing: 12)], spacing: 14) {
+                        ForEach(sources) { source in
+                            NavigationLink {
+                                SourceReaderView(source: source, location: source.lastLocation)
+                            } label: {
+                                StudySourceTile(source: source, asset: model.assetURL(source))
+                            }.buttonStyle(.plain)
+                        }
+                    }.listRowBackground(Color.clear)
+                } else {
+                    ForEach(sources) { sourceRow($0) }
+                }
             }
         case .cards:
             Section("项目卡片") {
-                ForEach(model.state.cards.filter { $0.deletedAt == nil && project.cardIDs.contains($0.id) }) { card in
+                let linked = Set(project.cardIDs)
+                ForEach(model.state.cards.filter { $0.deletedAt == nil && linked.contains($0.id) }
+                    .sorted { $0.updatedAt > $1.updatedAt }) { card in
                     NavigationLink { CardDetailView(cardID: card.id) } label: { StudyCardFace(card: card) }
                         .listRowBackground(Color.clear).listRowSeparator(.hidden)
                 }
@@ -557,6 +660,23 @@ struct DataManagerView: View {
     @State private var restoring = false
     @State private var busy = false
     @State private var confirmCleanup = false
+    @State private var showCleanup = false
+    @State private var confirmCacheCleanup = false
+    @State private var orphanFiles: [URL] = []
+    @State private var selectedFiles: Set<URL> = []
+    @State private var fileSizes: [URL: Int64] = [:]
+    @State private var cacheBytes: Int64 = 0
+    @State private var sort = "类型"
+    @State private var refreshStorage = UUID()
+
+    private struct StorageKey: Equatable {
+        let files: Set<URL>
+        let refresh: UUID
+    }
+
+    private var storageKey: StorageKey {
+        StorageKey(files: Set(model.state.sources.compactMap { model.assetURL($0) }), refresh: refreshStorage)
+    }
     @State private var validated: BackupService.Validated?
     @State private var confirmRestore = false
     struct Row: Identifiable {
@@ -588,11 +708,14 @@ struct DataManagerView: View {
                 id: $0.id, title: "\($0.rating) · \($0.reviewedAt.formatted())", kind: "复习记录",
                 deleted: $0.deletedAt != nil)
         }
-        return all.filter {
+        let filtered = all.filter {
             $0.deleted == trash && (kind == "全部" || $0.kind == kind)
                 && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search))
         }
+        if sort == "名称" { return filtered.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending } }
+        return filtered
     }
+
     var body: some View {
         NavigationStack {
             List(selection: $selected) {
@@ -603,6 +726,7 @@ struct DataManagerView: View {
                             .font(.subheadline).foregroundStyle(.secondary)
                     }.studyPanel()
                 }.listRowBackground(Color.clear)
+                storageSummary
                 DisclosureGroup("备份与恢复") {
                     Button(busy ? "正在处理…" : "生成完整备份 ZIP") {
                         busy = true
@@ -614,9 +738,7 @@ struct DataManagerView: View {
                         }
                     }.disabled(busy)
                     if let backup { ShareLink("导出备份", item: backup) }
-                    Button("清理未被引用的资料文件", role: .destructive) { confirmCleanup = true }
                     Button("选择备份并校验") { restoring = true }.disabled(busy)
-                    Text("包含知识库和已存在的本地资料；在线资料仅备份链接。恢复替换当前知识库，确认前校验路径、大小、摘要和引用，并保留恢复前快照。").font(.caption)
                 }
                 Picker("内容范围", selection: $trash) {
                     Text("知识库").tag(false)
@@ -624,6 +746,10 @@ struct DataManagerView: View {
                 }.pickerStyle(.segmented).onChange(of: trash) { _, _ in selected = [] }
                 Picker("类型", selection: $kind) {
                     ForEach(["全部", "资料", "标记", "卡片", "项目", "关系", "复习记录"], id: \.self) { Text($0) }
+                }
+                Picker("排序", selection: $sort) {
+                    Text("按类型").tag("类型")
+                    Text("按名称").tag("名称")
                 }
                 Section("对象") {
                     ForEach(rows) { row in
@@ -688,13 +814,17 @@ struct DataManagerView: View {
         ) {
             Button(permanent ? "永久清理" : "移入回收站", role: .destructive) {
                 model.delete(selected, permanently: permanent)
-                selected = []
+                if model.message == nil { selected = [] }
             }
-        }.confirmationDialog(
-            "清理未被当前知识库、回收站或恢复前快照引用的文件？", isPresented: $confirmCleanup, titleVisibility: .visible
-        ) {
-            Button("确认清理", role: .destructive) { model.cleanUnusedAssets() }
-        }.fileImporter(isPresented: $restoring, allowedContentTypes: [.zip]) { result in
+        }.confirmationDialog("清除可重新生成的缩略图缓存？", isPresented: $confirmCacheCleanup) {
+            Button("清理缓存", role: .destructive) {
+                do { try StudyThumbnails.clearCache(); refreshStorage = UUID() }
+                catch { model.message = error.localizedDescription }
+            }
+        }.sheet(isPresented: $showCleanup) { cleanupSheet }
+        .task(id: storageKey.refresh) { await readStorage() }
+        .onChange(of: storageKey.files) { _, _ in refreshStorage = UUID() }
+        .fileImporter(isPresented: $restoring, allowedContentTypes: [.zip]) { result in
             busy = true
             Task {
                 do {
@@ -725,6 +855,90 @@ struct DataManagerView: View {
             }
         }
     }
+    private var storageSummary: some View {
+        let sources = fileSizes.values.reduce(0, +)
+        let total = max(1, sources + cacheBytes)
+        return Section("本地文件") {
+            VStack(alignment: .leading, spacing: 8) {
+                GeometryReader { geometry in
+                    HStack(spacing: 0) {
+                        Rectangle().fill(StudyTheme.ink).frame(width: geometry.size.width * Double(sources) / Double(total))
+                        Rectangle().fill(StudyTheme.copper).frame(width: geometry.size.width * Double(cacheBytes) / Double(total))
+                    }
+                }.frame(height: 7).background(StudyTheme.rule).clipShape(Capsule()).accessibilityHidden(true)
+                LabeledContent("资料文件（去重）", value: ByteCountFormatter.string(fromByteCount: sources, countStyle: .file))
+                LabeledContent("缩略图缓存", value: ByteCountFormatter.string(fromByteCount: cacheBytes, countStyle: .file))
+            }
+            Button("检查未引用的文件") {
+                do {
+                    orphanFiles = try model.unusedAssets().sorted { $0.lastPathComponent < $1.lastPathComponent }
+                    selectedFiles.removeAll()
+                    showCleanup = true
+                } catch { model.message = error.localizedDescription }
+            }.disabled(model.isImporting || busy)
+            Button("清理缩略图缓存") { confirmCacheCleanup = true }.disabled(cacheBytes == 0)
+        }
+    }
+
+    private var cleanupSheet: some View {
+        NavigationStack {
+            List {
+                if orphanFiles.isEmpty {
+                    ContentUnavailableView("没有可清理文件", systemImage: "checkmark.circle")
+                }
+                ForEach(orphanFiles, id: \.self) { file in
+                    ObjectSelectionRow(isSelected: Binding(get: { selectedFiles.contains(file) }, set: {
+                        if $0 { selectedFiles.insert(file) } else { selectedFiles.remove(file) }
+                    })) {
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(file.lastPathComponent).lineLimit(1).truncationMode(.middle)
+                            Text("知识库、回收站和恢复快照均无引用").font(.caption).foregroundStyle(.secondary)
+                            if let bytes = try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize {
+                                Text(ByteCountFormatter.string(fromByteCount: Int64(bytes), countStyle: .file)).font(.caption)
+                            }
+                        }
+                    }
+                }
+            }.studySurface().navigationTitle("清理未引用文件")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) { Button("关闭") { showCleanup = false } }
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("删除所选", role: .destructive) { confirmCleanup = true }.disabled(selectedFiles.isEmpty)
+                    }
+                }
+                .confirmationDialog("永久删除所选的 \(selectedFiles.count) 个文件？", isPresented: $confirmCleanup) {
+                    Button("确认清理", role: .destructive) {
+                        model.cleanUnusedAssets(selectedFiles)
+                        if model.message == nil { showCleanup = false }
+                        refreshStorage = UUID()
+                    }
+                }
+        }
+    }
+
+    private func readStorage() async {
+        let urls = storageKey.files
+        let cache = StudyThumbnails.cacheDirectory
+        let result = await Task.detached(priority: .utility) {
+            var sizes: [URL: Int64] = [:]
+            for url in urls {
+                if let metadata = try? url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey]),
+                    metadata.isRegularFile == true, metadata.isSymbolicLink != true {
+                    sizes[url] = Int64(metadata.fileSize ?? 0)
+                }
+            }
+            let files = cache.flatMap { try? FileManager.default.contentsOfDirectory(at: $0,
+                includingPropertiesForKeys: [.fileSizeKey]) } ?? []
+            let cached = files.reduce(Int64(0)) { total, file in
+                total + Int64((try? file.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0)
+            }
+            return (sizes, cached)
+        }.value
+        guard !Task.isCancelled else { return }
+        fileSizes = result.0
+        cacheBytes = result.1
+    }
+
     @ViewBuilder private func managedContent(_ row: Row) -> some View {
         if row.deleted {
             VStack(spacing: 16) {
