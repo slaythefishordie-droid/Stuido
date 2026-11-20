@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knowledge Studio · 页边书房 Moodboard</title>
+<link rel="stylesheet" href="studio.css">
+<style>
+  body { background: #eae0d5; }
+  .board { max-width: 1440px; margin: auto; padding: 30px 54px 34px; }
+  .board-header { display: flex; justify-content: space-between; align-items: end; border-bottom: 1px solid #ac8d7f; padding-bottom: 16px; margin-bottom: 18px; }
+  .board-header h1 { font-size: clamp(38px, 6vw, 75px); line-height: 1.05; letter-spacing: -.085em; margin: 8px 0 0 -.06em; }
+  .board-header > p { color: var(--accent); font: italic 23px Georgia, serif; }
+  .specimens { display: grid; grid-template-columns: 1.43fr 1fr .95fr; gap: 15px; }
+  .specimens > * { min-height: 303px; }
+  .material { position: relative; background-position: 50% 61%; }
+  .material span { position: absolute; bottom: 12px; left: 12px; background: var(--plum); color: var(--light-ink); padding: 6px 9px; font-size: 11px; }
+  .type-specimen { padding: 18px 22px 15px; background: var(--leaf); display: flex; flex-direction: column; }
+  .type-specimen h2 { font-size: clamp(28px, 3.2vw, 47px); line-height: 1.25; letter-spacing: -.062em; margin: 12px 0; }
+  .type-specimen .english { color: var(--accent); font: italic 24px Georgia, serif; }
+  .type-specimen .sample { margin: auto 0 0; border-left: 2px solid var(--green); padding-left: 10px; font: 17px/1.65 var(--serif); }
+  .type-specimen small { color: var(--muted); display: block; margin-top: 9px; }
+  .palette { background: var(--plum); color: var(--light-ink); padding: 19px 19px 14px; }
+  .palette .kicker { color: #ddb49b; }
+  .swatches { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 7px; margin: 11px 0; }
+  .swatches div { border: 1px solid #9d7c714d; min-height: 51px; padding: 6px 8px; background: var(--bg); color: var(--fg, var(--ink)); font-size: 12px; }
+  .swatches small { display: block; font: 10px/1.3 Georgia, serif; }
+  .semantic { display: flex; flex-wrap: wrap; gap: 5px; }
+  .semantic span { padding: 3px 5px; background: var(--bg); color: var(--fg); font-size: 10px; font-weight: 650; }
+  .directions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 12px; }
+  .direction { padding: 12px 12px 11px; border: 1px solid #c7b6aa; }
+  .direction.chosen { background: var(--leaf); border-color: var(--accent); }
+  .direction h3 { margin: 8px 0 1px; font: 700 20px var(--serif); }
+  .direction p { color: var(--muted); font-size: 12px; }
+  .board > h2 { margin-top: 16px; font-size: 22px; }
+  .mini { height: 85px; display: grid; padding: 10px; gap: 7px; }
+  .mini span { display: block; }
+  .mini.editorial { background: #f8eee0; grid-template-columns: 1.9fr .75fr; grid-template-rows: 1fr .45fr; }
+  .editorial span:nth-child(1) { font: 26px/.97 Georgia, serif; padding-top: 5px; color: #45302e; }
+  .editorial span:nth-child(2) { background: #a66e56; grid-row: span 2; }
+  .editorial span:nth-child(3) { background: repeating-linear-gradient(#9f7d72 0 1px,transparent 1px 5px); height: 10px; margin-top: 4px; max-width: 76%; }
+  .mini.gallery { background: #e1e6e0; grid-template-columns: repeat(4, 1fr); align-items: center; }
+  .gallery span { background: #5f7164; height: 56px; box-shadow: inset 4px 0 #0002; }
+  .gallery span:nth-child(2) { background: #a9af9c; height: 48px; }
+  .gallery span:nth-child(3) { background: #546875; height: 61px; }
+  .gallery span:nth-child(4) { background: #caaa8c; height: 52px; }
+  .mini.margin { background: #f5eadc; grid-template-columns: .35fr 1fr .83fr; }
+  .margin span:nth-child(1) { background: var(--plum); }
+  .margin span:nth-child(2) { background: #fff9f0; border-left: 2px solid var(--green); padding: 7px; font: 16px/1.32 var(--serif); }
+  .margin span:nth-child(3) { align-self: end; height: 37px; padding: 5px; background: var(--green-wash); border-left: 2px solid var(--green); font-size: 10px; }
+  .sources { display: flex; flex-wrap: wrap; gap: 7px 24px; margin-top: 14px; padding-top: 11px; border-top: 1px solid #ac8d7f; color: var(--muted); font-size: 11px; }
+  .sources a { text-decoration: underline; text-underline-offset: 3px; }
+  @media(max-width: 800px) {
+    .board { padding-inline: 20px; }
+    .specimens { grid-template-columns: repeat(2,minmax(0,1fr)); }
+    .material { grid-column: 1 / -1; }
+  }
+  @media(max-width: 520px) {
+    .specimens, .directions { grid-template-columns: 1fr; }
+    .board-header > p { display: none; }
+  }
+</style>
+</head>
+<body>
+<main class="board">
+  <header class="board-header"><div><p class="kicker">KNOWLEDGE STUDIO / MOODBOARD</p><h1>页边书房</h1></div><p>Light, linen &amp; marginalia</p></header>
+  <section class="specimens" aria-label="光影、字体与色彩">
+    <div class="material" role="img" aria-label="窗光下的梅色布面与纸页"><span>布面 · 暖纸 · 窗光</span></div>
+    <div class="type-specimen"><p class="kicker">编辑式排版</p><h2>留在页边的<br>一句话</h2><p class="english">A line worth keeping.</p><p class="sample">重新走过一条街，才知道记忆也有自己的路径。</p><small>宋体承载书名和引文 · 无衬线承载操作</small></div>
+    <div class="palette">
+      <p class="kicker">纸、墨与批注色</p>
+      <div class="swatches">
+        <div style="--bg:#f6f1e8">纸面 <small>#F6F1E8</small></div><div style="--bg:#fffbf4">书页 <small>#FFFBF4</small></div>
+        <div style="--bg:#eee5d7">衬纸 <small>#EEE5D7</small></div><div style="--bg:#2e262a;--fg:#f8e7d2">墨色 <small>#2E262A</small></div>
+        <div style="--bg:#3c2637;--fg:#f8e7d2">深梅 <small>#3C2637</small></div><div style="--bg:#7d463b;--fg:#fff4e4">赭铜 <small>#7D463B</small></div>
+      </div>
+      <div class="semantic"><span style="--bg:var(--blue-wash);--fg:var(--blue)">单词</span><span style="--bg:var(--yellow-wash);--fg:var(--yellow)">语料</span><span style="--bg:var(--purple-wash);--fg:var(--purple)">关键词</span><span style="--bg:var(--green-wash);--fg:var(--green)">关键句</span></div>
+    </div>
+  </section>
+  <h2>三个视觉方向</h2>
+  <section class="directions">
+    <article class="direction"><div class="mini editorial" aria-hidden="true"><span>The<br>Reading Desk</span><span></span><span></span></div><h3>文学月刊</h3><p>用刊首和分栏组织书桌，突出每次继续阅读。</p></article>
+    <article class="direction"><div class="mini gallery" aria-hidden="true"><span></span><span></span><span></span><span></span></div><h3>馆藏索引</h3><p>用封面、编组和展签组织书架，适合快速扫读。</p></article>
+    <article class="direction chosen"><div class="mini margin" aria-hidden="true"><span></span><span>留在页边<br>的一句话</span><span>关键句 · 回到出处 ↗</span></div><h3>页边书房 · 选定</h3><p>让出处和批注以同一条页边线相认。</p></article>
+  </section>
+  <footer class="sources">
+    <a href="https://alexhunting.studio/blogs/projects/kinfolk">Kinfolk · 字体与版心</a>
+    <a href="https://www.penguin.co.uk/discover/articles/clothbound-classics-little-history-making-of">Penguin · 布面与系列封面</a>
+    <a href="https://www.walkerart.org/reader/andrea-buttner-the-making-of-a-visual-identity/">Walker Art Center · 贯穿版面的线条</a>
+    <a href="https://support.apple.com/zh-mo/guide/ipad/ipadc8494b6b/ipados">Apple Books · 阅读控制</a>
+  </footer>
+</main>
+</body>
+</html>

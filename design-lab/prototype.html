@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Knowledge Studio · 书桌</title>
+<link rel="stylesheet" href="studio.css">
+</head>
+<body>
+<div class="shell">
+  <aside class="rail">
+    <a class="brand" href="#home"><i class="brand-mark" aria-hidden="true"></i><span>Knowledge<br>Studio</span></a>
+    <nav aria-label="原型导航">
+      <a href="#home" data-nav="home"><span data-icon="home"></span>书桌</a>
+      <a href="#library" data-nav="library"><span data-icon="books"></span>资料库</a>
+      <a href="#reader" data-nav="reader"><span data-icon="book"></span>阅读器</a>
+    </nav>
+    <div class="rail-foot"><span class="dot"></span>视觉原型</div>
+  </aside>
+  <main id="main">
+    <section data-view="home" aria-labelledby="home-title">
+      <header class="masthead"><div><h1 id="home-title">书桌</h1></div><a class="plain top-action" href="#library">浏览资料库 <span aria-hidden="true">↗</span></a></header>
+      <div class="home-grid">
+        <section class="hero">
+          <div class="hero-copy">
+            <p class="kicker">继续阅读</p>
+            <h2>岛屿的<br>另一种读法</h2>
+            <p class="hero-by">林屿 <span>·</span> EPUB</p>
+            <a href="#reader" class="action">读到上次位置 <span aria-hidden="true">↗</span></a>
+            <div class="progress"><span class="track"><i></i></span><span>38%</span></div>
+          </div>
+          <div class="hero-art" role="img" aria-label="窗光下的深梅色布面书和纸页"></div>
+        </section>
+        <div class="desk-side">
+          <section class="project">
+            <p class="kicker">研究项目</p>
+            <h2>城市与记忆</h2>
+            <p>建筑、街道与日常如何保存记忆。</p>
+            <a href="#library/城市与记忆" class="plain">查看项目资料 <span aria-hidden="true">↗</span></a>
+            <i class="project-glyph" aria-hidden="true"></i>
+          </section>
+          <details class="today">
+            <summary><span data-icon="time"></span><span>今日复习 <small>5 张到期</small></span></summary>
+            <p>示例队列 · 2 张关键词卡、3 张关键句卡。</p>
+          </details>
+        </div>
+        <section class="recent">
+          <header class="section-head"><h2>最近打开</h2><a class="plain" href="#library">全部资料 <span aria-hidden="true">→</span></a></header>
+          <div class="shelf" id="recent-books"></div>
+        </section>
+        <section class="last-mark">
+          <header class="section-head"><h2>最近摘录</h2></header>
+          <article class="excerpt">
+            <span class="type-label green">关键句卡</span>
+            <blockquote>重新走过一条街，才知道记忆也有自己的路径。</blockquote>
+            <a href="#reader/anchor" class="source-link">岛屿的另一种读法 <small>第二章 · 第 3 段 <span aria-hidden="true">↗</span></small></a>
+          </article>
+        </section>
+      </div>
+    </section>
+    <section data-view="library" aria-labelledby="library-title" hidden>
+      <header class="masthead"><div><h1 id="library-title">资料库</h1></div><a class="plain top-action" href="#home">回到书桌 <span aria-hidden="true">↗</span></a></header>
+      <div class="library-grid">
+        <nav class="project-nav" aria-label="项目筛选">
+          <h2>研究项目</h2>
+          <a href="#library">全部资料</a>
+          <a href="#library/城市与记忆">城市与记忆</a>
+          <a href="#library/阅读笔记">阅读笔记</a>
+        </nav>
+        <section class="collection">
+          <header class="section-head"><h2 id="collection-title">全部资料</h2><label class="search"><span data-icon="search"></span><input id="search" type="search" placeholder="搜索书名或作者" aria-label="搜索书名或作者"></label></header>
+          <div class="filters" aria-label="资料类型"><button data-filter="all" aria-pressed="true">全部</button><button data-filter="epub" aria-pressed="false">EPUB</button><button data-filter="pdf" aria-pressed="false">PDF</button><button data-filter="video" aria-pressed="false">视频</button></div>
+          <div id="collection-books" class="shelf"></div>
+          <p id="library-status" class="library-status" role="status"></p>
+        </section>
+      </div>
+    </section>
+    <section data-view="reader" aria-labelledby="reader-title" hidden>
+      <div class="reader-toolbar">
+        <a class="plain" href="#library"><span aria-hidden="true">←</span> 资料库</a>
+        <span id="reader-book">岛屿的另一种读法</span>
+        <button id="toggle-notes" aria-expanded="true" aria-controls="marginalia"><span data-icon="note"></span> 批注</button>
+      </div>
+      <div class="reader-grid" id="reader-grid">
+        <article class="paper">
+          <p class="kicker">第二章</p>
+          <h1 id="reader-title">步行者的地图</h1>
+          <p class="body-text lead">午后，我沿着港口慢慢往回走。潮水把细碎的光推到石阶上，昨日还陌生的路口，今天已经能叫出名字。</p>
+          <p class="body-text">地图记录我们经过的地方，却很少记录我们在那里停了多久。我开始留意被省略的片刻，一处宽阔的门廊，一扇朝海开的窗。</p>
+          <p class="body-text passage" id="passage" tabindex="-1"><mark>重新走过一条街，才知道记忆也有自己的路径。</mark>它常从没画在地图上的地方开始。</p>
+          <p class="body-text">回程时，纸上的直线被步伐填满。岛屿仍是原来的岛屿，读它的人已经有了新的尺度。</p>
+          <footer class="page-foot">第二章 <span>38%</span></footer>
+        </article>
+        <aside class="marginalia" id="marginalia">
+          <header class="section-head"><h2>页边批注</h2></header>
+          <article class="excerpt">
+            <span class="type-label green">关键句卡</span>
+            <blockquote>重新走过一条街，才知道记忆也有自己的路径。</blockquote>
+            <p>对照项目里关于「地方记忆」的研究笔记。</p>
+            <button class="source-link" id="jump">回到原文 <small>第二章 · 第 3 段 <span aria-hidden="true">↗</span></small></button>
+          </article>
+        </aside>
+      </div>
+    </section>
+  </main>
+</div>
+<dialog id="source-dialog" aria-labelledby="source-title"><form method="dialog"><button class="plain close" aria-label="关闭">×</button></form><p class="kicker" id="source-kind"></p><h2 id="source-title"></h2><p id="source-by"></p><p>此资料仅展示封面与资料信息。</p></dialog>
+<script src="studio.js"></script>
+</body>
+</html>
