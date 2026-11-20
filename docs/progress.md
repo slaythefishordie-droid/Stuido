@@ -24,6 +24,7 @@
 ### 集成分支验证
 
 - 首次 Xcode 检查 `15e3213` 的原生依赖与核心 31/31 通过。App 模块编译时，PDFKit 的 overlay delegate 协议缺少主线程标注，Swift 6 拒绝主 actor 的实现。后续提交将兼容边界限定在该旧协议，所有 UIKit 与笔迹状态仍由主 actor 管理。归档与 IPA 均由无打包配置跳过。[首次原生运行](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44708867255)
+- 原生候选 `32d96702e6091b2508f39f1d3b6ba27c0424b0ca` 经 Xcode 26.2 编译，核心 31/31、iPad 模拟器 48/48。通过用例包括窗口分页规则、带封面和墨迹的备份回滚／恢复、原资料字节校验、锚点及笔迹持久化。2026-11-20 北京时间约 17:41 完成，归档、IPA 打包和上传均跳过。Linux Swift 6.2.4 核心复核也为 31/31。模拟器共享容器仍出现未签名提示，AltStore 和真实 Safari 双向共享继续单独验收。[原生复验](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44710511106/job/136200708617)
 - 本地协议与 Safari 用例 43/43。对实际扩展设置弹出面板进行了浅色、深色与诊断展开渲染检查。iPad 屏幕和真实 Pencil 输入仍以实机验收为准。
 
 ### 图标
