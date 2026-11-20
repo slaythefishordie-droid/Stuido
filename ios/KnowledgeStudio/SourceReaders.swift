@@ -15,7 +15,7 @@ struct SourceReaderView: View {
     @Environment(\.studyReaderPresentation) private var readerPresentation
     private var immersive: Bool { [.pdf, .epub, .local_video].contains(source.kind) }
     var body: some View {
-        let live = model.state.sources.first { $0.id == source.id }
+        let live = model.state.sources.first { $0.id == self.source.id }
         let source = live ?? self.source
         return Group {
             if live == nil || source.deletedAt != nil {
