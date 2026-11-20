@@ -32,31 +32,18 @@ struct StudioView: View {
                     }
                     detail
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .overlay(alignment: .topTrailing) {
-                            if immersive && !railRevealed {
-                                Button {
-                                    railRevealed = true
-                                } label: {
-                                    Image(systemName: "sidebar.leading")
-                                        .frame(width: 44, height: 44)
-                                        .background(.regularMaterial, in: Circle())
-                                }.accessibilityLabel("显示书房导航")
-                                    .padding(.trailing, 6)
-                                    .padding(.top, 52)
-                            }
-                        }
                 }
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: sideVisible)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: expanded)
         }
         .environment(\.studyNavigation, StudyNavigation { select($0) })
-        .environment(\.studyReaderPresentation, StudyReaderPresentation { id, visible in
+        .environment(\.studyReaderPresentation, StudyReaderPresentation(setActive: { id, visible in
             if visible {
                 if activeReaders.isEmpty { railRevealed = false }
                 activeReaders.insert(id)
             } else { activeReaders.remove(id) }
-        })
+        }, toggleNavigation: { railRevealed.toggle() }))
         .background(StudyTheme.paper)
         .tint(StudyTheme.ink)
         .environment(\.defaultMinListRowHeight, compactDisplay ? 44 : 60)
@@ -219,12 +206,17 @@ struct InboxView: View {
         VStack(alignment: .leading, spacing: 10) {
             Label(mark.highlightKind.title, systemImage: "circle.fill").font(.caption).foregroundStyle(
                 mark.highlightKind.color)
-            if !mark.excerpt.isEmpty { Text(mark.excerpt).lineLimit(5) }
+            if !mark.excerpt.isEmpty {
+                Text(mark.excerpt).font(.system(.title3, design: .serif)).lineLimit(5)
+            }
             if !mark.note.isEmpty { Text(mark.note).foregroundStyle(.secondary) }
             Text(locationLabel(mark.locator)).font(.caption)
             ScrollView(.horizontal, showsIndicators: false) { markActions(mark, source: source) }
             NavigationLink("备注与详情") { MarkDetailView(markID: mark.id) }
-        }.padding(.vertical, 4).contextMenu {
+        }.studyPanel()
+            .overlay(alignment: .leading) { Rectangle().fill(mark.highlightKind.color).frame(width: 2) }
+            .listRowBackground(Color.clear).listRowSeparator(.hidden)
+            .contextMenu {
             Button("移入回收站", role: .destructive) { model.delete([mark.id]) }
         }
     }

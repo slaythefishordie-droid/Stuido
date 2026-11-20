@@ -235,7 +235,7 @@ public struct LibraryState: Codable, Equatable, Sendable {
             }
             var pageKeys: Set<String> = []
             for item in drawings {
-                guard item.page >= 1, item.page <= 1_000_000,
+                guard item.coordinateVersion == 1, item.page >= 1, item.page <= 1_000_000,
                     item.fingerprint.range(of: "^[a-f0-9]{64}$", options: .regularExpression) != nil,
                     pageKeys.insert(item.fingerprint + ":" + String(item.page)).inserted,
                     !item.drawing.isEmpty, item.drawing.count <= 1_048_576

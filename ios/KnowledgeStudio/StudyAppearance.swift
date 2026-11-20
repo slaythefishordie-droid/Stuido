@@ -207,7 +207,9 @@ struct StudyCardFace: View {
 
 struct StudyReaderPresentation: Sendable {
     let setActive: @MainActor @Sendable (UUID, Bool) -> Void
-    static let neutral = StudyReaderPresentation { _, _ in }
+    let toggleNavigation: @MainActor @Sendable () -> Void
+    static let neutral = StudyReaderPresentation(setActive: { _, _ in }, toggleNavigation: {})
+
 }
 
 private struct StudyReaderPresentationKey: EnvironmentKey {

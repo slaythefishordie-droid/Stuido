@@ -10,6 +10,14 @@ import XCTest
 
 @MainActor
 final class LibraryAppTests: XCTestCase {
+    func testReadingSpreadsRespectTheActualWindow() {
+        XCTAssertTrue(StudyPageLayout.automatic.usesSpread(in: CGSize(width: 1024, height: 680)))
+        XCTAssertFalse(StudyPageLayout.automatic.usesSpread(in: CGSize(width: 820, height: 1050)))
+        XCTAssertTrue(StudyPageLayout.spread.usesSpread(in: CGSize(width: 820, height: 1050)))
+        XCTAssertFalse(StudyPageLayout.spread.usesSpread(in: CGSize(width: 620, height: 550)))
+        XCTAssertFalse(StudyPageLayout.single.usesSpread(in: CGSize(width: 1220, height: 680)))
+    }
+
     func testReadingResumeRecordsActualRecencyWithoutDuplicateWrites() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -98,8 +106,15 @@ final class LibraryAppTests: XCTestCase {
         model.saveCard(card)
         model.change { state in
             state.cards[0].review = .active
+            state.sources[0].coverImage = Data([1, 2, 3])
+            if let fingerprint = source.assetHash {
+                state.sources[0].pdfPageInk = [
+                    PDFPageInk(fingerprint: fingerprint, page: 1, drawing: Data([4, 5, 6]))
+                ]
+            }
             var project = LibraryProject(title: "Study")
             project.sourceIDs = [source.id]
+            project.boardCoverImage = Data([7, 8, 9])
             project.sourceNotes = [source.id.uuidString: "Project context"]
             var group = ProjectGroup(title: "Reading")
             group.cardIDs = [card.id]

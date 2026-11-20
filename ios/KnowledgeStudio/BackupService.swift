@@ -17,6 +17,7 @@ struct ValidatedBackup: Sendable {
 
 @MainActor
 enum BackupService {
+    nonisolated private static let metadataLimit = 64 * 1024 * 1024
     static func export(model: StudioModel) async throws -> URL {
         guard let repository = model.repository else { throw LibraryError.invalid("知识库不可用") }
         let snapshot = try repository.read()
@@ -30,7 +31,11 @@ enum BackupService {
         try FileManager.default.createDirectory(at: stage, withIntermediateDirectories: true)
         defer { try? FileManager.default.removeItem(at: stage) }
         let library = stage.appendingPathComponent("library.json")
-        try JSONEncoder().encode(snapshot).write(to: library, options: .atomic)
+        let payload = try JSONEncoder().encode(snapshot)
+        guard payload.count <= metadataLimit else {
+            throw LibraryError.invalid("知识库元数据超过备份上限，未生成不完整备份")
+        }
+        try payload.write(to: library, options: .atomic)
         var files = ["library.json": try StudioModel.hash(library)]
         var missing: [String] = []
         for source in snapshot.sources {
@@ -88,7 +93,7 @@ enum BackupService {
                 else { throw LibraryError.invalid("备份包含非法路径、链接或过大文件") }
                 total += entry.uncompressedSize
                 guard total <= 8_589_934_592,
-                    path.hasPrefix("assets/") || entry.uncompressedSize <= 67_108_864
+                    path.hasPrefix("assets/") || entry.uncompressedSize <= UInt64(metadataLimit)
                 else { throw LibraryError.invalid("备份解压大小超过限制") }
                 let sink = try BoundedBackupSink(
                     url: stage.appendingPathComponent(path), limit: entry.uncompressedSize)

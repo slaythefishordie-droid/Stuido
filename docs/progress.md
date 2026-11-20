@@ -2,6 +2,29 @@
 
 本文件是交付状态、版本变更和真机结果的唯一入口。操作规则见[工作流](workflow.md)，错误与待办见[工程问题](engineering-issues.md)。日期使用北京时间；实现、自动验证、真机验收分别记录。
 
+## 页边书房原生集成 · 2026-11-20
+
+独立开发分支 `feature/v2-reading-room` 从 `36d8d4aa2a26c42d64154ad593bb9b5fa55a12a7` 开始。美术基准为[第二版原型](https://github.com/slaythefishordie-droid/Stuido/blob/aaa9d4314ac9dce785cb3f94fc9ac7ece5b99518/design-lab/README.md)。既有冻结证据是原生编译成功、核心 30/30、模拟器 46/46，协议与 Safari 43/43。[既有原生运行](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44693478738) · [既有协议运行](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44693478678)
+
+| 功能范围 | 现有代码和本轮集成 | 逐模块验收 |
+| --- | --- | --- |
+| 导航与 Home | `StudioView` 统一深梅栏。固定展开、自动、紧凑，窄窗菜单与 Reader 沉浸切换。Home 使用真实卡片、最近阅读位置和项目 | 同一资料在 11/13 英寸 iPad 横竖屏和分屏中保持阅读导航，核对字号与 Reduce Motion |
+| Library 与 Source | 保留导入、搜索、列表、多选和直接打开。加入出版式封面、Readium 内嵌 EPUB 封面、系统本地缩略图及手动更换／恢复／重建 | 无源图资料使用可复现模板，拒绝无效图片。网页与 YouTube 走已有来源数据，缺图可自选；共享资料的封面跨项目一致 |
+| Project | 资料、卡片、地图、语义关系分别进入。资料分组可展开，项目资料笔记编辑仍由 `ProjectSourceNoteView` 处理 | 同一 Source 加入两个项目，核对项目笔记独立、关联解绑无损。语义关系来自已关联的导入内容，与白板布局连线分开 |
+| Cards | 四类卡片共用有语义色的版式，类别、搜索、编辑、来源、并排原文、词典、发音、复习仍可进入 | 现有卡片字段、标记及复习历史读写无损，来源跳转仍传既有 locator |
+| PDF | 原版式、单双页、连续滚动、封面和 RTL 偏好，自适应窗口，恢复 PDF 当前页坐标。保留文字锚点、高亮、区域和 OCR，并加入 PencilKit 覆盖层和浮动导航 | 核对黑底扫描页、非零 CropBox、四种页旋转、单双页和精确回跳。Pencil 2 延迟、手掌、双指缩放、翻页和系统双击须实机 |
+| EPUB | Readium 重排、字号、边距、主题和窗口分页。四类选文 Mark 保持完整 Locator，独立页边手写面由原 Mark 定位 | 中文/英文、重复选文、换页和更改字号后验证原文与笔记，固定版式单独看。Pencil 与系统选文手柄须实机 |
+| 视频／外链 | 本地 `VideoPlayer` 保留系统时间轴、字幕选择和播放，Mark 与可展开历史置于画面下方。YouTube、网页、播客继续通过原 Safari 位置打开 | 真机核对字幕、时间跳转、后台和 Safari ↔ App 冷启动闭环 |
+| My Inbox／AI Inbox | 原 Native Messaging/App Groups 交接和去重。标记按资料分组，有书房卡面。AI 批次、JSON 校验、匹配、预览、确认事务和关系导入均保留 | 同 ID 重试、重复卡筛选、批量归档及导入时的关系完整性 |
+| Knowledge Map | 项目仍使用现有单白板数据，保留节点、连线、编辑、移除、撤销及辅助移动。由实际节点生成封面，可覆盖为用户图片 | 空白板、真实白板和自定义图都可从项目打开。验证拖动、连接与原对象引用。白板 Pencil 自由绘制尚未纳入本轮 |
+| Review / FSRS | 当前、稍后、自评和历史继续使用原 FSRS-6 和事务。主题、到期卡片和设置接入视觉系统 | 复习排期、退出及暂停历史兼容，四类卡视图稳定 |
+| Data Manager / Trash / Backup | 独立维护入口、筛选、确认和保护原数据的恢复流程。自定义封面、PDF Ink 及 EPUB 手写作为可选数据进入同一份备份；派生缩略图留在缓存 | 旧快照缺少新字段可解码。恢复前验证、失败回滚、项目和复习关系以及原始 PDF 字节须保持 |
+| Safari / QuickMark / 词典／发音 | SwiftUI 设置分离常用选项与共享诊断，扩展沿用原 JS 的精听、回溯、标记、重送和旧备份。扩展弹层使用共享配色。词典、许可真人录音与 TTS 服务路径保持 | 自动用例与真实 Safari 权限分别记录。真机验证网页适配器、A–B、资料交接、词典弹窗、离线及实际音源 |
+
+### 图标
+
+[图标提案与小尺寸对比](../design-lab/app-icon/icon-concepts.png)。A「页边书签」将暖纸拱页与古铜页签叠在深梅底推荐为主图标。B「打开的书」突出跨页阅读，C「一页批注」突出阅读转为自己的笔记。可分别查看 [A](../design-lab/app-icon/icon-a.png)、[B](../design-lab/app-icon/icon-b.png)、[C](../design-lab/app-icon/icon-c.png) 的 1024 × 1024 sRGB 不透明方形母版。操作系统应用主屏遮罩。选定后再接 AppIcon asset catalog 并检查 iPad 主屏及系统外观。[Apple App Icon 资产规范](https://developer.apple.com/documentation/xcode/configuring-your-app-icon)
+
 ## V2 当前开发基线 · 2026-11-20
 
 **最新交付约束：本轮全部开发完成后仍不构建 IPA、不安装真机，等待用户新的安排。** 继续自动推进已有目标，不在每个小阶段等待再次催促。CI 保留签名与打包配置，但仅明确手动 `package_ipa=true` 才能归档打包；本轮不触发它。原 v1.0.0 标签与数据保留，当前版本目标 2.0.0/build 6，为 V2 开发候选，不认定稳定版。

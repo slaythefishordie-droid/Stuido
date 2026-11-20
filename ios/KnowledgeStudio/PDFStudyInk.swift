@@ -26,11 +26,18 @@ enum PDFInkTool: String, CaseIterable {
 }
 
 @MainActor
+final class StudyInkCanvas: PKCanvasView {
+    private let history = UndoManager()
+    override var undoManager: UndoManager? { history }
+}
+
+@MainActor
 final class StudyInkPage: UIView {
     let page: PDFPage
-    let canvas = PKCanvasView()
+    let canvas = StudyInkCanvas()
     var transformToOverlay: CGAffineTransform?
     var saved: Data?
+    var lastObservedDrawing: PKDrawing?
     var dirty = false
     var active = false
     var changingLayout = false
@@ -183,7 +190,9 @@ final class PDFStudyInk: NSObject, ObservableObject, PDFPageOverlayViewProvider,
             let canonical = try overlay.saved.map { try PKDrawing(data: $0) } ?? PKDrawing()
             overlay.changingLayout = true
             overlay.transformToOverlay = transform
-            overlay.canvas.drawing = canonical.transformed(using: transform)
+            let visible = canonical.transformed(using: transform)
+            overlay.lastObservedDrawing = visible
+            overlay.canvas.drawing = visible
             overlay.changingLayout = false
             applyTool(to: overlay)
         } catch {
@@ -201,11 +210,14 @@ final class PDFStudyInk: NSObject, ObservableObject, PDFPageOverlayViewProvider,
         guard let overlay = overlay(for: canvasView) else { return }
         overlay.active = false
         scheduleSave(overlay)
+        overlay.setNeedsLayout()
         refreshUndo()
     }
 
     func canvasViewDrawingDidChange(_ canvasView: PKCanvasView) {
-        guard let overlay = overlay(for: canvasView), !overlay.changingLayout, overlay.isValid else { return }
+        guard let overlay = overlay(for: canvasView), !overlay.changingLayout, overlay.isValid,
+            canvasView.drawing != overlay.lastObservedDrawing else { return }
+        overlay.lastObservedDrawing = canvasView.drawing
         overlay.dirty = true
         if !overlay.active { scheduleSave(overlay) }
         refreshUndo()

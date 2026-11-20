@@ -22,11 +22,8 @@ struct TodayView: View {
                             NavigationLink {
                                 CardDetailView(cardID: card.id, reviewMode: true)
                             } label: {
-                                VStack(alignment: .leading) {
-                                    Text(card.title)
-                                    Text(card.type.title).font(.caption).foregroundStyle(card.type.color)
-                                }
-                            }
+                                StudyCardFace(card: card)
+                            }.listRowBackground(Color.clear).listRowSeparator(.hidden)
                         }
                     }
                     Section("今天稍后") {

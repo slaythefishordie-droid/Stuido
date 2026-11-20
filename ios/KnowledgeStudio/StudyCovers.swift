@@ -1,6 +1,7 @@
 import ImageIO
 import KnowledgeCore
-import QuickLookThumbnailing
+import PDFKit
+@preconcurrency import QuickLookThumbnailing
 @preconcurrency import ReadiumShared
 @preconcurrency import ReadiumStreamer
 import SwiftUI
@@ -10,17 +11,18 @@ struct StudySourceTile: View {
     let source: LibrarySource
     let asset: URL?
     var compact = false
+    var revision = 0
 
     var body: some View {
         if compact {
             HStack(spacing: 12) {
-                StudySourceCover(source: source, asset: asset).frame(width: 47, height: 60)
+                StudySourceCover(source: source, asset: asset, revision: revision).frame(width: 47, height: 60)
                 caption
                 Spacer(minLength: 4)
             }
         } else {
             VStack(alignment: .leading, spacing: 8) {
-                StudySourceCover(source: source, asset: asset).aspectRatio(1.06, contentMode: .fit)
+                StudySourceCover(source: source, asset: asset, revision: revision).aspectRatio(1.06, contentMode: .fit)
                 caption
             }
         }
@@ -38,7 +40,15 @@ struct StudySourceTile: View {
 struct StudySourceCover: View {
     let source: LibrarySource
     let asset: URL?
+    var revision = 0
     @State private var thumbnail: UIImage?
+    @State private var author: String?
+
+    private struct RequestKey: Hashable {
+        let asset: URL?
+        let custom: Bool
+        let revision: Int
+    }
 
     private var variant: Int {
         source.id.uuidString.utf8.reduce(0) { ($0 * 31 + Int($1)) % 6 }
@@ -78,11 +88,15 @@ struct StudySourceCover: View {
                 }
             }
         }.accessibilityHidden(true)
-            .task(id: asset) {
+            .task(id: RequestKey(asset: asset, custom: source.coverImage != nil, revision: revision)) {
                 thumbnail = nil
+                author = nil
                 guard let asset, source.coverImage == nil else { return }
-                let result = await StudyThumbnails.image(asset, kind: source.kind)
-                if !Task.isCancelled { thumbnail = result }
+                let artwork = await StudyThumbnails.artwork(asset, kind: source.kind)
+                if !Task.isCancelled {
+                    thumbnail = artwork.image
+                    author = artwork.author
+                }
             }
     }
 
@@ -125,7 +139,7 @@ struct StudySourceCover: View {
                 VStack(alignment: .leading, spacing: 3) {
                     Text(source.title).font(.system(.headline, design: .serif)).lineLimit(3)
                     Spacer(minLength: 0)
-                    Text(source.url.flatMap { URL(string: $0)?.host } ?? studioLabel(source.kind.rawValue))
+                    Text(author ?? source.url.flatMap { URL(string: $0)?.host } ?? studioLabel(source.kind.rawValue))
                         .font(.caption2.weight(.semibold)).lineLimit(1)
                 }.foregroundStyle(lettering).padding(9)
             } else if isWide {
@@ -137,49 +151,84 @@ struct StudySourceCover: View {
 }
 
 @MainActor
-private enum StudyThumbnails {
-    private static let memory = NSCache<NSURL, UIImage>()
-
-    static func image(_ asset: URL, kind: SourceKind) async -> UIImage? {
-        if let cached = memory.object(forKey: asset as NSURL) { return cached }
-        let directory = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
-            .appendingPathComponent("StudyCovers-v1", isDirectory: true)
-        let file = directory?.appendingPathComponent(asset.lastPathComponent + ".jpg")
-        if let file, let image = UIImage(contentsOfFile: file.path) {
-            memory.setObject(image, forKey: asset as NSURL)
-            return image
+enum StudyThumbnails {
+    final class Artwork {
+        let image: UIImage?
+        let author: String?
+        init(image: UIImage? = nil, author: String? = nil) {
+            self.image = image
+            let value = author?.trimmingCharacters(in: .whitespacesAndNewlines)
+            self.author = value.flatMap { $0.isEmpty ? nil : String($0.prefix(120)) }
         }
-        let original = kind == .epub ? await epubCover(asset) : nil
-        let image: UIImage
-        if let original {
-            image = original
+    }
+
+    private static let memory = NSCache<NSURL, Artwork>()
+
+    private static func cacheFile(_ asset: URL) -> URL? {
+        FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
+            .appendingPathComponent("StudyCovers-v2", isDirectory: true)
+            .appendingPathComponent(asset.lastPathComponent + ".jpg")
+    }
+
+    static func invalidate(_ asset: URL) throws {
+        memory.removeObject(forKey: asset as NSURL)
+        if let file = cacheFile(asset) {
+            for target in [file, file.appendingPathExtension("author")] where FileManager.default.fileExists(atPath: target.path) {
+                try FileManager.default.removeItem(at: target)
+            }
+        }
+    }
+
+    static func artwork(_ asset: URL, kind: SourceKind) async -> Artwork {
+        if let cached = memory.object(forKey: asset as NSURL) { return cached }
+        let file = cacheFile(asset)
+        if let file, let image = UIImage(contentsOfFile: file.path) {
+            let author = try? String(contentsOf: file.appendingPathExtension("author"), encoding: .utf8)
+            let cached = Artwork(image: image, author: author)
+            memory.setObject(cached, forKey: asset as NSURL)
+            return cached
+        }
+
+        let original: Artwork
+        switch kind {
+        case .epub: original = await epubCover(asset)
+        case .pdf:
+            original = Artwork(author: PDFKit.PDFDocument(url: asset)?
+                .documentAttributes?[PDFDocumentAttribute.authorAttribute] as? String)
+        default: original = Artwork()
+        }
+        let resolved: Artwork
+        if original.image != nil {
+            resolved = original
         } else {
             let request = QLThumbnailGenerator.Request(
                 fileAt: asset, size: CGSize(width: 320, height: 420), scale: 1, representationTypes: .thumbnail)
-            guard let result = try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request)
-            else { return nil }
-            image = result.uiImage
+            let image = (try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request))?.uiImage
+            resolved = Artwork(image: image, author: original.author)
         }
-        guard !Task.isCancelled else { return nil }
+        guard !Task.isCancelled else { return resolved }
         memory.countLimit = 96
-        memory.setObject(image, forKey: asset as NSURL)
-        if let directory, let file, let data = image.jpegData(compressionQuality: 0.76) {
-            try? FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        memory.setObject(resolved, forKey: asset as NSURL)
+        if let file, let data = resolved.image?.jpegData(compressionQuality: 0.76) {
+            try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
+            if let author = resolved.author {
+                try? author.write(to: file.appendingPathExtension("author"), atomically: true, encoding: .utf8)
+            }
             try? data.write(to: file, options: .atomic)
         }
-        return image
+        return resolved
     }
 
-    private static func epubCover(_ url: URL) async -> UIImage? {
-        guard let file = FileURL(url: url) else { return nil }
+    private static func epubCover(_ url: URL) async -> Artwork {
+        guard let file = FileURL(url: url) else { return Artwork() }
         let retriever = AssetRetriever(httpClient: DefaultHTTPClient())
         guard let asset = try? await retriever.retrieve(url: file).get(),
             let publication = try? await PublicationOpener(parser: EPUBParser()).open(
                 asset: asset, allowUserInteraction: false).get()
-        else { return nil }
-        return try? await publication.coverFitting(maxSize: CGSize(width: 320, height: 420)).get()
+        else { return Artwork() }
+        let image = try? await publication.coverFitting(maxSize: CGSize(width: 320, height: 420)).get()
+        return Artwork(image: image, author: publication.metadata.authors.first?.name)
     }
-
 }
 
 struct StudyBoardCover: View {
@@ -230,10 +279,13 @@ enum StudyCoverImport {
     static func read(_ url: URL) throws -> Data {
         let started = url.startAccessingSecurityScopedResource()
         defer { if started { url.stopAccessingSecurityScopedResource() } }
-        let options: [CFString: Any] = [
-            kCGImageSourceCreateThumbnailFromImageAlways: true,
-            kCGImageSourceCreateThumbnailWithTransform: true,
-            kCGImageSourceThumbnailMaxPixelSize: 420,
+        if let size = try url.resourceValues(forKeys: [.fileSizeKey]).fileSize, size > 32 * 1024 * 1024 {
+            throw LibraryError.invalid("请选择不超过 32 MiB 的封面图片")
+        }
+        let options: [String: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways as String: true,
+            kCGImageSourceCreateThumbnailWithTransform as String: true,
+            kCGImageSourceThumbnailMaxPixelSize as String: 420,
         ]
         guard let input = CGImageSourceCreateWithURL(url as CFURL, nil),
             let preview = CGImageSourceCreateThumbnailAtIndex(input, 0, options as CFDictionary),

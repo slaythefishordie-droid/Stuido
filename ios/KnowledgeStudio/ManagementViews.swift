@@ -7,23 +7,36 @@ struct AIInboxView: View {
     @State private var text = ""
     @State private var importing = false
     @State private var pending: PendingImport?
+    @State private var editingJSON = false
     var body: some View {
         NavigationStack {
             List {
-                Section("JSON 导入") {
-                    TextEditor(text: $text).frame(minHeight: 150).font(.system(.body, design: .monospaced))
-                    Button("选择 JSON 文件") { importing = true }
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        StudyHeading(title: "导入卡片包")
+                        Text("先校验内容，再匹配资料和选择候选卡片。")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }.studyPanel()
+                }.listRowBackground(Color.clear)
+                Section("准备卡片包") {
+                    Button("选择 JSON 文件", systemImage: "doc.badge.plus") { importing = true }
+                    DisclosureGroup("查看或粘贴 JSON", isExpanded: $editingJSON) {
+                        TextEditor(text: $text).frame(minHeight: 126).font(.system(.body, design: .monospaced))
+                    }
                     Button("校验并放入导入箱") { model.stageImport(text) }.disabled(text.isEmpty)
-                    Text("这里只创建待确认候选。预览、匹配资料并确认后才会加入卡片库。").font(.caption)
                 }
                 Section("待确认批次") {
+                    if model.state.pending.isEmpty {
+                        Label("暂无待确认批次", systemImage: "tray").foregroundStyle(.secondary)
+                    }
                     ForEach(model.state.pending) { item in
                         Button {
                             pending = item
                         } label: {
-                            VStack(alignment: .leading) {
-                                Text(item.title)
-                                Text(item.packageID).font(.caption)
+                            VStack(alignment: .leading, spacing: 5) {
+                                Text(item.title).font(.system(.headline, design: .serif))
+                                Text(item.createdAt.formatted(date: .abbreviated, time: .shortened))
+                                    .font(.caption).foregroundStyle(.secondary)
                             }
                         }
                     }
@@ -158,6 +171,7 @@ struct LibraryView: View {
     @State private var selectedProject: UUID?
     @State private var coverSourceID: UUID?
     @State private var coverLayout = true
+    @State private var coverRevisions: [UUID: Int] = [:]
     @State private var selecting = false
     @State private var selected: Set<UUID> = []
     private var sources: [LibrarySource] {
@@ -252,6 +266,13 @@ struct LibraryView: View {
         }
         if source.coverImage != nil {
             Button("恢复自动封面") { saveSourceCover(nil, id: source.id) }
+        } else if let asset = model.assetURL(source) {
+            Button("重新生成缩略图") {
+                do {
+                    try StudyThumbnails.invalidate(asset)
+                    coverRevisions[source.id, default: 0] += 1
+                } catch { model.message = "缩略图未重建：\(error.localizedDescription)" }
+            }
         }
         Button("移入回收站", role: .destructive) { model.delete([source.id]) }
     }
@@ -260,7 +281,8 @@ struct LibraryView: View {
         NavigationLink {
             SourceReaderView(source: source, location: source.lastLocation)
         } label: {
-            StudySourceTile(source: source, asset: model.assetURL(source), compact: compact)
+            StudySourceTile(source: source, asset: model.assetURL(source), compact: compact,
+                revision: coverRevisions[source.id, default: 0])
         }.contextMenu { sourceActionMenu(source) }
     }
 
@@ -574,6 +596,13 @@ struct DataManagerView: View {
     var body: some View {
         NavigationStack {
             List(selection: $selected) {
+                Section {
+                    VStack(alignment: .leading, spacing: 8) {
+                        StudyHeading(title: trash ? "回收站" : "知识库维护")
+                        Label("\(rows.count) 个对象", systemImage: trash ? "trash" : "externaldrive")
+                            .font(.subheadline).foregroundStyle(.secondary)
+                    }.studyPanel()
+                }.listRowBackground(Color.clear)
                 DisclosureGroup("备份与恢复") {
                     Button(busy ? "正在处理…" : "生成完整备份 ZIP") {
                         busy = true

@@ -13,6 +13,7 @@ struct SourceReaderView: View {
     @State private var attach = false
     @State private var readerID = UUID()
     @Environment(\.studyReaderPresentation) private var readerPresentation
+    private var immersive: Bool { [.pdf, .epub, .local_video].contains(source.kind) }
     var body: some View {
         Group {
             if let url = model.assetURL(source), FileManager.default.fileExists(atPath: url.path) {
@@ -39,8 +40,13 @@ struct SourceReaderView: View {
             }
         }.studySurface().navigationTitle(source.title).navigationBarTitleDisplayMode(.inline)
             .onAppear {
-                if [.pdf, .epub, .local_video].contains(source.kind) { readerPresentation.setActive(readerID, true) }
+                if immersive { readerPresentation.setActive(readerID, true) }
             }.onDisappear { readerPresentation.setActive(readerID, false) }
+            .toolbar {
+                if immersive {
+                    Button("书房导航", systemImage: "sidebar.leading") { readerPresentation.toggleNavigation() }
+                }
+            }
             .fileImporter(isPresented: $attach, allowedContentTypes: [.pdf, .movie, .data]) { result in
                 Task {
                     do { await model.importFile(try result.get(), replacing: source.id) } catch {
@@ -140,7 +146,9 @@ final class PDFSession: ObservableObject {
         view.displaysRTL = rtl
         view.autoScales = true
         view.layoutDocumentView()
-        if let destination { view.go(to: destination) }
+        if let destination, let page = destination.page {
+            view.go(to: PDFDestination(page: page, at: destination.point))
+        }
         else if let originalPage { view.go(to: originalPage) }
         if let selection { view.setCurrentSelection(selection, animate: false) }
     }
@@ -279,6 +287,8 @@ struct PDFStudyView: View {
                 marks: model.state.marks.filter { $0.sourceID == source.id && $0.deletedAt == nil },
                 regionMode: regionMode && session.verifiedFingerprint != nil && session.ink.tool == .select,
                 fingerprint: session.verifiedFingerprint,
+                marksInteractive: session.ink.tool == .select && !regionMode,
+                onMark: { id in selectedMark = model.state.marks.first { $0.id == id && $0.deletedAt == nil } },
                 onRegion: { rect in
                     var locator = ReadingLocator(kind: "pdf", page: rect.page)
                     locator.rectangles = [rect]
@@ -372,6 +382,8 @@ struct PDFHost: UIViewRepresentable {
     let marks: [LibraryMark]
     var regionMode = false
     var fingerprint: String?
+    var marksInteractive = true
+    var onMark: ((UUID) -> Void)?
     var onRegion: ((HighlightRect) -> Void)?
     func makeUIView(context: Context) -> PDFView {
         let gesture = UILongPressGestureRecognizer(
@@ -380,10 +392,17 @@ struct PDFHost: UIViewRepresentable {
         gesture.isEnabled = regionMode
         view.addGestureRecognizer(gesture)
         context.coordinator.gesture = gesture
+        let tap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.openMark(_:)))
+        tap.cancelsTouchesInView = false
+        tap.delegate = context.coordinator
+        view.addGestureRecognizer(tap)
+        context.coordinator.tap = tap
         return view
     }
     func updateUIView(_ view: PDFView, context: Context) {
         context.coordinator.onRegion = onRegion
+        context.coordinator.onMark = onMark
+        context.coordinator.tap?.isEnabled = marksInteractive
         context.coordinator.gesture?.isEnabled = regionMode
         guard let document = view.document else { return }
         let ids = marks.filter {
@@ -400,7 +419,7 @@ struct PDFHost: UIViewRepresentable {
             }
         }
         for mark in ids {
-            for rect in mark.locator.rectangles {
+            for (index, rect) in mark.locator.rectangles.enumerated() {
                 guard rect.isValid, rect.page <= document.pageCount,
                     let page = document.page(at: rect.page - 1)
                 else { continue }
@@ -408,19 +427,49 @@ struct PDFHost: UIViewRepresentable {
                     bounds: CGRect(x: rect.x, y: rect.y, width: rect.width, height: rect.height),
                     forType: .highlight, withProperties: nil)
                 annotation.color = mark.highlightKind.highlightColor.withAlphaComponent(0.4)
+                if let quads = mark.locator.pdfTextQuads, quads.indices.contains(index),
+                    quads[index].page == rect.page, quads[index].points.count == 4,
+                    quads[index].points.allSatisfy({
+                        $0.x.isFinite && $0.y.isFinite && (rect.x...(rect.x + rect.width)).contains($0.x)
+                            && (rect.y...(rect.y + rect.height)).contains($0.y)
+                    })
+                {
+                    annotation.quadrilateralPoints = quads[index].points.map {
+                        NSValue(cgPoint: CGPoint(x: $0.x - rect.x, y: $0.y - rect.y))
+                    }
+                }
                 annotation.contents = "KnowledgeStudio:" + mark.id.uuidString
                 page.addAnnotation(annotation)
             }
         }
     }
     func makeCoordinator() -> Coordinator { Coordinator() }
-    @MainActor final class Coordinator: NSObject {
+    @MainActor final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         var ids: [LibraryMark] = []
         var gesture: UILongPressGestureRecognizer?
+        var tap: UITapGestureRecognizer?
+        var onMark: ((UUID) -> Void)?
         var onRegion: ((HighlightRect) -> Void)?
         private var start: CGPoint?
         private var page: PDFPage?
         private let outline = CAShapeLayer()
+        func gestureRecognizer(_ gestureRecognizer: UIGestureRecognizer,
+            shouldRecognizeSimultaneouslyWith otherGestureRecognizer: UIGestureRecognizer) -> Bool
+        {
+            gestureRecognizer === tap || otherGestureRecognizer === tap
+        }
+
+        @objc func openMark(_ gesture: UITapGestureRecognizer) {
+            guard let view = gesture.view as? PDFView, view.currentSelection?.string?.isEmpty != false else { return }
+            let location = gesture.location(in: view)
+            let prefix = "KnowledgeStudio:"
+            guard let page = view.page(for: location, nearest: false),
+                let value = page.annotation(at: view.convert(location, to: page))?.contents,
+                value.hasPrefix(prefix), let id = UUID(uuidString: String(value.dropFirst(prefix.count)))
+            else { return }
+            onMark?(id)
+        }
+
         @objc func capture(_ gesture: UILongPressGestureRecognizer) {
             guard let view = gesture.view as? PDFView else { return }
             let point = gesture.location(in: view)
@@ -545,6 +594,12 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
             nativeJSON: try locator.jsonString())
     }
     @Published var navigator: EPUBNavigatorViewController?
+    private var preferences: EPUBPreferences?
+    func submit(_ value: EPUBPreferences) {
+        guard let navigator, value != preferences else { return }
+        preferences = value
+        navigator.submitPreferences(value)
+    }
     @Published var error: String?
     @Published var locationWarning: String?
     func open(url: URL, location: ReadingLocator?) async {
@@ -756,7 +811,7 @@ struct EPUBStudyView: View {
     private func applyPreferences() {
         let mode: StudyPageLayout = columnMode == "two" ? .spread :
             columnMode == "one" || (columnMode == "legacy" && !legacyColumns) ? .single : .automatic
-        session.navigator?.submitPreferences(
+        session.submit(
             EPUBPreferences(
                 columnCount: mode.usesSpread(in: readerSize) ? .two : .one,
                 fontFamily: font == "serif" ? .serif : .sansSerif,
