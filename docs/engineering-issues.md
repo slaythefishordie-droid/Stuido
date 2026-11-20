@@ -149,3 +149,8 @@ V2-01 网络证据补充：2026-11-20 通过网页检索核对公开录音与许
 ## BUILD-09 · 备份测试夹具误插入
 
 首批 V2 运行 44680990806：依赖锁和核心测试通过，App 源码编译通过；测试目标编译因 LibraryAppTests 的恶意 ZIP 测试误插入另一测试的 source/card 夹具而失败。原因是批量文本替换匹配了两处 `let original`，已只移除误插入块，保留正常备份测试的新数据覆盖。修复后与本轮收尾代码集中验证。后续结构性改动限定函数边界，parse 不能发现作用域错误。归档和 IPA 步骤均跳过。
+
+
+## BUILD-10 · 白板 SwiftUI 类型推断超时
+
+运行 44681986690（e6a2bd2）：锁文件、核心 30 项通过；白板 body 加入拖动和可访问性操作后，Xcode 报 `unable to type-check this expression in reasonable time`，模拟器测试未执行。将大 body 拆为 controls/canvas/node/menu/sheets，并合并重复连线逻辑；不删除功能、不改持久化。此为该问题第一次修复，待原生复验。归档与 IPA 均跳过。
