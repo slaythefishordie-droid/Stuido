@@ -688,17 +688,10 @@ struct DataManagerView: View {
     @State private var orphanBytes: Int64 = 0
     @State private var databaseBytes: Int64 = 0
     @State private var recoveryBytes: Int64 = 0
+    @State private var objectBytes: [String: Int64] = [:]
     @State private var sort = "类型"
     @State private var refreshStorage = UUID()
 
-    private struct StorageKey: Equatable {
-        let files: Set<URL>
-        let refresh: UUID
-    }
-
-    private var storageKey: StorageKey {
-        StorageKey(files: Set(model.state.sources.compactMap { model.assetURL($0) }), refresh: refreshStorage)
-    }
     @State private var validated: BackupService.Validated?
     @State private var confirmRestore = false
     struct Row: Identifiable {
@@ -769,8 +762,8 @@ struct DataManagerView: View {
                 catch { model.message = error.localizedDescription }
             }
         }.sheet(isPresented: $showCleanup) { cleanupSheet }
-        .task(id: storageKey.refresh) { await readStorage() }
-        .onChange(of: storageKey.files) { _, _ in refreshStorage = UUID() }
+        .task(id: refreshStorage) { await readStorage() }
+        .onReceive(model.$state.dropFirst()) { _ in refreshStorage = UUID() }
         .fileImporter(isPresented: $restoring, allowedContentTypes: [.zip]) { result in
             busy = true
             Task {
@@ -912,6 +905,10 @@ struct DataManagerView: View {
             ForEach(counts, id: \.0) { name, count in
                 VStack(alignment: .leading, spacing: 5) {
                     LabeledContent(name, value: "\(count)")
+                    if let bytes = objectBytes[name] {
+                        Text(ByteCountFormatter.string(fromByteCount: bytes, countStyle: .file) + " 数据库内容")
+                            .font(.caption2).foregroundStyle(.secondary)
+                    }
                     ProgressView(value: Double(count), total: Double(peak))
                         .tint(StudyTheme.copper).accessibilityHidden(true)
                 }
@@ -996,9 +993,11 @@ struct DataManagerView: View {
     }
 
     private func readStorage() async {
-        let urls = storageKey.files
+        let urls = Set(model.state.sources.compactMap { model.assetURL($0) })
+        let snapshot = model.state
         let cache = StudyThumbnails.cacheDirectory
         let root = model.root
+        do { try await Task.sleep(for: .milliseconds(180)) } catch { return }
         let result = await Task.detached(priority: .utility) {
             func size(_ url: URL) -> Int64? {
                 let metadata = try? url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey])
@@ -1020,10 +1019,23 @@ struct DataManagerView: View {
             let db = rootFiles.filter { $0.lastPathComponent.hasPrefix("library.sqlite") }.compactMap(size).reduce(0, +)
             let recovery = rootFiles.filter { $0.lastPathComponent.hasPrefix("before-restore-") }
                 .compactMap(size).reduce(0, +)
-            return (known, untracked, cached, db, recovery)
+            let encoder = JSONEncoder()
+            func contentSize<T: Encodable>(_ items: [T]) -> Int64 {
+                guard let data = try? encoder.encode(items) else { return 0 }
+                return Int64(max(0, data.count - 2))
+            }
+            let records = [
+                "资料": contentSize(snapshot.sources.filter { $0.deletedAt == nil }),
+                "标记": contentSize(snapshot.marks.filter { $0.deletedAt == nil }),
+                "卡片": contentSize(snapshot.cards.filter { $0.deletedAt == nil }),
+                "项目": contentSize(snapshot.projects.filter { $0.deletedAt == nil }),
+                "关系": contentSize(snapshot.relations.filter { $0.deletedAt == nil }),
+                "复习记录": contentSize(snapshot.reviewRecords.filter { $0.deletedAt == nil }),
+            ]
+            return (known, untracked, cached, db, recovery, records)
         }.value
         guard !Task.isCancelled else { return }
-        (fileSizes, orphanBytes, cacheBytes, databaseBytes, recoveryBytes) = result
+        (fileSizes, orphanBytes, cacheBytes, databaseBytes, recoveryBytes, objectBytes) = result
     }
 
     @ViewBuilder private func managedContent(_ row: Row) -> some View {
