@@ -2,6 +2,10 @@
 
 本文件是交付状态、版本变更和真机结果的唯一入口。操作规则见[工作流](workflow.md)，错误与待办见[工程问题](engineering-issues.md)。日期使用北京时间；实现、自动验证、真机验收分别记录。
 
+## 原型定稿与 Apple Pencil 2 实施规划 · 2026-11-20
+
+`design-lab/pencil-final-v2` 从上一版「页边书房」延伸，原生冻结 SHA 沿用下方 `36d8d4a`。已渲染书桌、思想卡展开、资料封面、PDF 勾画和 EPUB 页边注，浏览器验证回跳、选文、封面替换和笔迹演示。原生集成等待原型和方案确认。本轮未启动原生构建或 IPA。Pencil 2 真机输入和页坐标稳定性列入后续验收。[定稿](../design-lab/README.md) · [原生方案](../design-lab/pencil-plan.md)
+
 ## V2 冻结交接与 CI 复核 · 2026-11-20
 
 - GitHub 仓库为 `slaythefishordie-droid/Stuido`。草稿 [PR #1](https://github.com/slaythefishordie-droid/Stuido/pull/1) 的开发分支为 `feature/safari-extension`，冻结候选为 [`36d8d4aa2a26c42d64154ad593bb9b5fa55a12a7`](https://github.com/slaythefishordie-droid/Stuido/commit/36d8d4aa2a26c42d64154ad593bb9b5fa55a12a7)，版本 2.0.0 / build 6。远端默认 `main` 和初始本地 `work` 检出均为旧提交 `e164d88`，本轮从冻结 SHA 单独建立 `design-lab/marginalia-v2`。
