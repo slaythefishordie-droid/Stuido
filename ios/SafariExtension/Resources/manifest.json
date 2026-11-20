@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "Knowledge Studio",
+  "version": "1.0.1",
+  "description": "在 Safari YouTube 页面保存标记到本机收集箱。",
+  "permissions": [
+    "nativeMessaging",
+    "storage",
+    "scripting",
+    "activeTab"
+  ],
+  "action": {
+    "default_title": "Knowledge Studio",
+    "default_popup": "popup.html"
+  },
+  "host_permissions": [
+    "https://www.youtube.com/*",
+    "https://m.youtube.com/*",
+    "https://youtube.com/*"
+  ],
+  "background": {
+    "scripts": [
+      "legacy.js",
+      "background.js"
+    ],
+    "persistent": false
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.youtube.com/*",
+        "https://m.youtube.com/*",
+        "https://youtube.com/*"
+      ],
+      "js": [
+        "capture.js",
+        "legacy.js",
+        "content.js",
+        "quickmark-tools.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "optional_host_permissions": [
+    "https://*/*"
+  ]
+}

@@ -2,10 +2,10 @@ name: Import protocol
 on:
   push:
     branches: [main]
-    paths: ['schemas/**', 'examples/**', 'tools/**', 'package.json', 'package-lock.json', '.github/workflows/protocol.yml']
+    paths: ['schemas/**', 'examples/**', 'tools/**', 'ios/SafariExtension/Resources/**', 'package.json', 'package-lock.json', '.github/workflows/protocol.yml']
   pull_request:
     branches: [main]
-    paths: ['schemas/**', 'examples/**', 'tools/**', 'package.json', 'package-lock.json', '.github/workflows/protocol.yml']
+    paths: ['schemas/**', 'examples/**', 'tools/**', 'ios/SafariExtension/Resources/**', 'package.json', 'package-lock.json', '.github/workflows/protocol.yml']
   workflow_dispatch:
 permissions:
   contents: read
@@ -25,7 +25,7 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci --ignore-scripts --no-audit --no-fund
-      - name: Validate schema, fixtures and duplicate preview
+      - name: Validate schema, duplicate preview and Safari message recovery
         shell: bash
         run: |
           set -euo pipefail

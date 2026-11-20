@@ -1,0 +1,22 @@
+{
+  "run_id": 44475088781,
+  "head_sha": "0c70210ae966a0f6518db66ebda32268afcec381",
+  "url": "https://github.com/slaythefishordie-droid/Stuido/actions/runs/44475088781",
+  "packages": "success",
+  "core": "success",
+  "simulator": "build_failed_tests_not_run",
+  "archive": "skipped",
+  "ipa": "skipped",
+  "errors": [
+    "/Users/runner/work/Stuido/Stuido/ios/KnowledgeStudio/ManagementViews.swift:109:5: error: property wrapper can only apply to a single variable",
+    "/Users/runner/work/Stuido/Stuido/ios/KnowledgeStudio/ManagementViews.swift:129:5: error: property wrapper can only apply to a single variable",
+    "/Users/runner/work/Stuido/Stuido/ios/KnowledgeStudio/ManagementViews.swift:130:5: error: property wrapper can only apply to a single variable",
+    "/Users/runner/work/Stuido/Stuido/ios/KnowledgeStudio/ManagementViews.swift:131:5: error: property wrapper can only apply to a single variable",
+    "/Users/runner/work/Stuido/Stuido/ios/KnowledgeStudio/ManagementViews.swift:132:5: error: property wrapper can only apply to a single variable",
+    "/Users/runner/work/Stuido/Stuido/ios/KnowledgeStudio/ManagementViews.swift:7:5: error: property wrapper can only apply to a single variable",
+    "/Users/runner/work/Stuido/Stuido/ios/KnowledgeStudio/ManagementViews.swift:86:5: error: property wrapper can only apply to a single variable",
+    "/Users/runner/work/Stuido/Stuido/ios/KnowledgeStudio/StudioView.swift:84:5: error: property wrapper can only apply to a single variable"
+  ],
+  "fix": "648a631 splits SwiftUI State declarations; follow-up native run 44482131742 pending",
+  "physical_device": "not_tested_for_0.3"
+}

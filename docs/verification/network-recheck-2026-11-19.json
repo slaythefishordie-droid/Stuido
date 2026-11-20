@@ -1,0 +1,23 @@
+{
+  "checked_at": "2026-11-19T00:52:40.641Z",
+  "source": "Current environment status plus GitHub run 44309054436 download attempts",
+  "observations_current": true,
+  "runtime_phase": "running",
+  "reported_network_state": "unknown",
+  "reported_custom_hosts": [
+    "api.github.com",
+    "developer.android.com",
+    "developer.apple.com",
+    "developers.google.com",
+    "docs.swift.org",
+    "productionresultssa4.blob.core.windows.net",
+    "productionresultssa5.blob.core.windows.net",
+    "results-receiver.actions.githubusercontent.com"
+  ],
+  "actual_downloads": {
+    "logs": "success",
+    "test_artifact": "denied by proxy",
+    "test_artifact_host": "productionresultssa17.blob.core.windows.net"
+  },
+  "scope": "Network state is reported as unknown; only the tested operations establish reachability. No policy was changed."
+}

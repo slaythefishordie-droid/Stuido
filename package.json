@@ -6,7 +6,7 @@
   "description": "Knowledge Studio import protocol verification tools; not a web app",
   "engines": { "node": ">=22" },
   "scripts": {
-    "test": "node --test tools/protocol/*.test.mjs",
+    "test": "node --test tools/protocol/*.test.mjs tools/safari/*.test.mjs",
     "validate": "node tools/protocol/cli.mjs"
   },
   "devDependencies": { "ajv": "8.17.1", "ajv-formats": "3.0.1", "jsonc-parser": "3.3.1" }

@@ -1,0 +1,81 @@
+{
+  "checked_at": "2026-11-18T20:59:11.664147+08:00",
+  "source": "GitHub run log ZIPs downloaded through existing HTTPS proxy",
+  "logs": [
+    {
+      "run_id": 44245690553,
+      "logs_download": "success",
+      "logs_zip_sha256": "f2025a96d0b3f54b9d72e9e817c7a21cebc8c4b5266b5580e5d811b4b217d9ab",
+      "logs_zip_crc": "passed",
+      "relevant_lines": [
+        "2026-11-18T05:40:04.7637620Z \t Executed 8 tests, with 0 failures (0 unexpected) in 0.029 (0.031) seconds",
+        "2026-11-18T05:40:04.7639530Z \t Executed 8 tests, with 0 failures (0 unexpected) in 0.029 (0.031) seconds",
+        "2026-11-18T05:40:04.7640850Z \t Executed 8 tests, with 0 failures (0 unexpected) in 0.029 (0.036) seconds",
+        "2026-11-18T05:43:33.1302940Z \t Executed 8 tests, with 0 failures (0 unexpected) in 0.045 (0.611) seconds",
+        "2026-11-18T05:43:33.2899390Z \t Executed 12 tests, with 0 failures (0 unexpected) in 0.069 (0.751) seconds",
+        "2026-11-18T05:43:33.6309370Z \t Executed 12 tests, with 0 failures (0 unexpected) in 0.069 (0.752) seconds",
+        "2026-11-18T05:43:49.7867950Z ** TEST SUCCEEDED **",
+        "2026-11-18T05:44:37.0664400Z ** ARCHIVE SUCCEEDED **",
+        "2026-11-18T05:44:39.2166070Z warning: Specifying ':' in the path is deprecated and will not work in a future release",
+        "2026-11-18T05:44:39.2366980Z warning: Specifying ':' in the path is deprecated and will not work in a future release"
+      ]
+    },
+    {
+      "run_id": 44244882996,
+      "logs_download": "success",
+      "logs_zip_sha256": "7f2dadb19d288448148a99b2d2796a9ec58ab30aaf8c3973fe96ee6dfe76d0fb",
+      "logs_zip_crc": "passed",
+      "relevant_lines": [
+        "2026-11-18T05:32:32.4099340Z \t Executed 8 tests, with 0 failures (0 unexpected) in 0.015 (0.016) seconds",
+        "2026-11-18T05:32:32.4100330Z \t Executed 8 tests, with 0 failures (0 unexpected) in 0.015 (0.016) seconds",
+        "2026-11-18T05:32:32.4101240Z \t Executed 8 tests, with 0 failures (0 unexpected) in 0.015 (0.020) seconds",
+        "2026-11-18T05:32:56.8343410Z error: Couldn't load Info dictionary for <DVTFilePath:0xc20a074f0:'/Users/runner/work/Stuido/Stuido/.build/DerivedData/Build/Products/Debug-iphonesimulator/KnowledgeStudio.app/PlugIns/SafariExtension.appex'>"
+      ]
+    }
+  ],
+  "artifact_downloads": [
+    {
+      "name": "safari-m1-logs",
+      "exit": 0,
+      "bytes": 70531,
+      "zip_valid": true,
+      "redirect_hosts": [],
+      "forbidden": false
+    },
+    {
+      "name": "safari-m1-ipa",
+      "exit": 1,
+      "bytes": 0,
+      "zip_valid": false,
+      "redirect_hosts": [
+        "productionresultssa18.blob.core.windows.net"
+      ],
+      "forbidden": true
+    },
+    {
+      "name": "safari-m1-tests",
+      "exit": 1,
+      "bytes": 0,
+      "zip_valid": false,
+      "redirect_hosts": [
+        "productionresultssa18.blob.core.windows.net"
+      ],
+      "forbidden": true
+    },
+    {
+      "name": "previous-failure-logs",
+      "exit": 0,
+      "bytes": 37891,
+      "zip_valid": true,
+      "redirect_hosts": [],
+      "forbidden": false
+    }
+  ],
+  "native_review_attempt_1": {
+    "run_id": 44292208343,
+    "job_id": 134759988947,
+    "classification": "runner_not_acquired",
+    "annotation": "The job was not acquired by Runner of type hosted even after multiple attempts"
+  },
+  "scope": "Downloaded logs confirm historical tests and archive, but not IPA contents or physical iPad behavior."
+}

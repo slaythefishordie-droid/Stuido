@@ -110,10 +110,15 @@ const canonical = value => {
   return typeof value === 'string' ? value.normalize('NFC') : value;
 };
 const hash = value => createHash('sha256').update(JSON.stringify(canonical(value))).digest('hex');
-const sorted = values => values.sort((a, b) => {
-  const left = JSON.stringify(canonical(a)), right = JSON.stringify(canonical(b));
-  return left < right ? -1 : left > right ? 1 : 0;
-});
+// Compute the canonical sort key once per value instead of once per comparison.
+const sorted = values => values
+  .map(value => ({ value, key: JSON.stringify(canonical(value)) }))
+  .sort((left, right) => {
+    if (left.key < right.key) return -1;
+    if (left.key > right.key) return 1;
+    return 0;
+  })
+  .map(entry => entry.value);
 
 /** Content duplicates are suggestions, never automatic overwrite/merge instructions. */
 export function contentFingerprint(card) {

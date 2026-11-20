@@ -8,6 +8,7 @@ on:
       - 'Tests/**'
       - 'ios/**'
       - 'Package.swift'
+      - 'Package.resolved'
       - 'scripts/**'
       - 'THIRD_PARTY_NOTICES.md'
       - '.github/workflows/ipados.yml'
@@ -18,10 +19,23 @@ on:
       - 'Tests/**'
       - 'ios/**'
       - 'Package.swift'
+      - 'Package.resolved'
       - 'scripts/**'
       - 'THIRD_PARTY_NOTICES.md'
       - '.github/workflows/ipados.yml'
   workflow_dispatch:
+    inputs:
+      package_ipa:
+        description: 'Explicit delivery stage: archive and package IPA'
+        type: boolean
+        default: false
+      runner:
+        description: 'Standard macOS runner (Intel preferred while ARM64 capacity is constrained)'
+        type: choice
+        default: macos-15-intel
+        options:
+          - macos-15-intel
+          - macos-26
 
 permissions:
   contents: read
@@ -33,7 +47,7 @@ concurrency:
 jobs:
   build:
     name: Xcode 26.2 · iPadOS
-    runs-on: macos-26
+    runs-on: ${{ inputs.runner || 'macos-15-intel' }}
     timeout-minutes: 25
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
@@ -50,7 +64,7 @@ jobs:
           set -euo pipefail
           mkdir -p artifacts/logs
           test -d "$DEVELOPER_DIR"
-          { sw_vers; xcodebuild -version; xcrun swift --version; xcodebuild -showsdks; } | tee artifacts/logs/toolchain.log
+          { sw_vers; uname -m; xcodebuild -version; xcrun swift --version; xcodebuild -showsdks; } | tee artifacts/logs/toolchain.log
       - name: Generate project with verified XcodeGen 2.44.1
         run: |
           set -euo pipefail
@@ -88,11 +102,27 @@ jobs:
           python3 - <<'PY'
           import json
           result = json.load(open('artifacts/simulator-summary.json'))
-          assert result['totalTestCount'] >= 10, 'Expected core and App tests to actually run'
+          assert result['totalTestCount'] >= 32, 'Expected core and App tests to actually run'
           assert result['failedTests'] == 0, 'Simulator tests failed'
           PY
+      - name: Surface simulator build errors
+        if: failure()
+        run: |
+          python3 - <<'PYERROR'
+          from pathlib import Path
+          log = Path('artifacts/logs/simulator-tests.log')
+          if log.exists():
+              for line in log.read_text(errors='replace').splitlines():
+                  if any(word in line for word in ['error:', 'failed', 'Testing failed', 'ProcessInfoPlistFile', 'SafariExtension.appex', 'ValidateEmbeddedBinary']):
+                      escaped = line.replace('%', '%25').replace('\r', '%0D')
+                      print('::error::' + escaped[:2000])
+          import plistlib
+          for path in Path('.build/DerivedData/Build/Products').glob('**/SafariExtension.appex/Info.plist'):
+              print('::error::Extension Info ' + str(path) + ' ' + str(plistlib.loads(path.read_bytes())))
+          PYERROR
       - name: Archive the actual iPadOS device App without signing
         id: archive
+        if: github.event_name == 'workflow_dispatch' && inputs.package_ipa
         run: |
           set -euo pipefail
           xcodebuild archive -project ios/KnowledgeStudio.xcodeproj -scheme KnowledgeStudio \
@@ -101,8 +131,9 @@ jobs:
             -clonedSourcePackagesDirPath .build/SourcePackages -disableAutomaticPackageResolution \
             -onlyUsePackageVersionsFromResolvedFile CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' \
             2>&1 | tee artifacts/logs/archive.log
-      - name: Package and verify unsigned IPA candidate
+      - name: Package and verify re-signable IPA candidate
         id: ipa
+        if: github.event_name == 'workflow_dispatch' && inputs.package_ipa
         run: |
           set -euo pipefail
           bash scripts/package-unsigned-ipa.sh 2>&1 | tee artifacts/logs/package.log
@@ -124,16 +155,16 @@ jobs:
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
               summary.write('| Check | Result |\n|---|---|\n')
               for name, value in results.items(): summary.write(f'| {name} | {value} |\n')
-              summary.write('\nUnsigned IPA requires AltStore re-signing. CI does not verify installation or real YouTube playback.\n')
+              summary.write('\nAd-hoc IPA requires AltStore re-signing. CI does not verify installation or real YouTube playback.\n')
           PY
-      - name: Upload unsigned IPA candidate
+      - name: Upload re-signable IPA candidate
         if: steps.ipa.outcome == 'success'
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: KnowledgeStudio-unsigned-ipa-${{ github.run_number }}
+          name: KnowledgeStudio-resignable-ipa-${{ github.run_number }}
           path: |
-            artifacts/KnowledgeStudio-unsigned.ipa
-            artifacts/KnowledgeStudio-unsigned.ipa.sha256
+            artifacts/KnowledgeStudio-resignable.ipa
+            artifacts/KnowledgeStudio-resignable.ipa.sha256
             artifacts/package-report.json
           if-no-files-found: error
           retention-days: 7

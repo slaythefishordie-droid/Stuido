@@ -68,3 +68,21 @@ test('instructions inside content are inert strings', () => {
   assert.equal(result.valid, true);
   assert.equal(result.data.cards[1].content.text, pkg.cards[1].content.text);
 });
+
+test("fingerprints remain compatible with existing valid packages", () => {
+  const expected = {
+  "boundary-empty": "9b0a585d732752f0d827ce46a8fe0a6c1d081a0df549683004fc3e6a464bba87",
+  "boundary-epub-chapter": "ff303db0d50c088389071056c2fafd790ab175a3e3cd3355536fa97a22fbb689",
+  "boundary-missing-locator": "29a1c190020be16761eaf0d34b72dff05ece45c96cca7218944aac4577345925",
+  "boundary-zero-seconds": "b6c8741a1a9d7d0936961545db97dafe20cff805aea615114e3be0565cbd9cbd",
+  "duplicate-new-package-id": "433664a0e60617a5a1d4989f3c3368fa36a3b78ffefa4e53656fddd6a4bbe1d6",
+  "valid-expression": "7acf1004acc19bd0f59eec8b6de5d4a166b1d0c8eae41e3a654da295dd294e07",
+  "valid-four-types": "433664a0e60617a5a1d4989f3c3368fa36a3b78ffefa4e53656fddd6a4bbe1d6",
+  "valid-key_sentence": "b5f403d2d3f5652adea0eb57f85c5b0d8e5aa375654d7aa539e681f09d50b1c5",
+  "valid-keyword": "1719e6dd39bf6a7c6230d140b219234add5b35cb6355fe6238090c294b88dbae",
+  "valid-word": "c2fe7858e6ad232bafe6c239cde6f20d1b85c7529572bd37b19ae547e6b3b8e4"
+};
+  for (const [name, fingerprint] of Object.entries(expected)) {
+    assert.equal(packageFingerprint(JSON.parse(read(name))), fingerprint);
+  }
+});

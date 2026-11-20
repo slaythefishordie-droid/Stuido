@@ -1,6 +1,6 @@
 # 数据模型与技术决定
 
-现行设计覆盖 Safari 网页采集和主 App 的本地知识库。第一版实现了视频 Source/Mark 原型存储；Safari 扩展、共享交接、正式数据库及导入事务仍待实现。
+现行设计覆盖 Safari 网页采集和主 App 的本地知识库。第一版保留视频 Source/Mark 原型；0.3 开发代码已接入 Safari 交接、SQLite 事务知识库与确认导入，验证范围见项目状态。
 
 ## 独立维度
 
@@ -46,4 +46,46 @@ SwiftUI View → 应用服务（capture/import/review/backup）→ 领域对象�
 - keyword：正面 term，背面已有 explanation 和出处。
 - key_sentence：正面原句，背面已有 explanation 和出处。
 
-展示策略独立于内容数据，待用户实际体验后调整。进入 Review 必须用户主动选择，收藏不会自动入队。FSRS 适配层持有算法版本、参数与时区决定，调度状态和 ReviewRecord 分开事务保存。未实现正反面或每日任务，不把提案当作验收结果。
+展示策略独立于内容数据，待用户实际体验后调整。进入 Review 必须用户主动选择，收藏不会自动入队。FSRS 适配层持有算法版本、参数与时区决定，调度状态和 ReviewRecord 在同一事务保存。当前 Today 打开原卡并记录自评，不实现本节题型提案；用户明确暂不新增或重设计题型。
+
+
+### 里程碑 1 验证实现
+
+主 App 激活时和 Safari 扩展面板请求时读取共享目录。当前只保存双向诊断记录，各端写自己的 JSON 文件并原子替换，用 UUID 核对来源与重启恢复。此诊断格式独立于未来 Mark 交接协议。Safari 的 UI 页面调用 native messaging，原生 SafariServices 处理器执行读写。
+
+分发时以 ad-hoc 签名保存请求的 App Groups 权限，AltStore 重签后优先解析其 ALTAppGroups 元数据。需要用真机确认该版本 AltStore 的实际行为。
+
+## 里程碑 2 交接实现
+
+`WebMark` v1 是不可变交接记录，独立于 ChatGPT Schema、旧原型和未来数据库。共享组中 `WebMarks-v1/<UUID>.json` 同时供扩展写入、My Inbox 读取；以 `videoID` 推导规范 HTTPS 出处，正式 Source 表尚未迁入。`capturedSeconds` 是原始秒数，`seconds = max(0, floor(capturedSeconds - preRoll))` 是新 QuickMark 回溯定位；`createdAt` 使用 Unix 毫秒。现有原型不重新套用回溯。
+
+扩展先将完整记录写入 `browser.storage.local` 的 `pendingMark:<UUID>`，再通过 Native Messaging 发出 `saveMark`。只有原生原子落盘并回传匹配 UUID 才清除待发。重复 ID 内容必须相同；不同内容或损坏文件拒绝覆盖。原生使用共享目录内 `.lock` 的跨进程 flock 序列化访问。后台每次启动重试待发，网页超时后保留同一条记录供用户重试。主 App 不消费删除队列，启动/前台直接读同一份记录，因此不会出现“已确认但未入 Inbox”的交接窗口。
+
+此格式是最小采集底座，不提供数据库事务迁移、删除/编辑或备份功能。共享权限异常不回退到私有目录，读取异常展示错误并保留原数据。网页 DOM 识别仍需真机回归。
+
+## 0.3 SQLite 与应用服务
+
+`LibraryRepository` 使用 GRDB DatabaseMigrator 建立 library-v1。当前以一个版本化聚合快照 BLOB 保存正式 Source/Mark/Card/Project/Relation、待确认批次、复习历史和独立复习状态；每次写入在 SQLite 事务中读取、变更、校验所有稳定 ID 与引用后提交。此阶段选择小规模本地库的显式原子性，不宣称已经实现关系表索引或大规模查询优化。未来分表迁移须保留当前对象 ID，不能清库重建。
+
+My Inbox 和卡片/Dictionary/Corpus 都查询该库。Safari 原始交接文件仍不可破坏，已接收 UUID 单独保留以防永久清理后被重送复活；历史备注与软删除通过更新修订同步。旧 prototype-v1 事务迁入后只标记完成，不删除原文件。
+
+备份使用一致的事务读取快照和内容摘要命名的本地资料，逐文件 SHA-256 清单，ZIP CRC、文件集合、路径/类型/大小和对象引用验证后才能确认恢复。恢复前先写入本地快照，先复制不可变资料再以事务替换库；失败时原库不变，多复制的无引用文件可后续清理。网络资料仅保存出处，不备份在线视频。
+
+## 设计章程的待实施模型约束 · 2026-11-19
+
+同一 Source 跨 Project 默认共享原文件、高亮与 Mark；项目研究笔记、解释和工作语境独立，未来可选独立副本。这是用户已确定的产品语义，现已通过下方 V2 可选字段增量实现；备份恢复与删除关联纳入验证。自由白板允许混合对象，但不扩展四类 Card，也不将移除节点当作删除内容。实施待办统一见工程问题 UX-01。
+
+## V2 增量候选 · 2026-11-20
+
+ReadingLocator 新增可选 fileFingerprint / anchorText / pdfTextAnchors / pdfTextQuads，保留旧 page/rectangles/nativeJSON。PDF 精度依赖当前文件指纹、合法页序/区域及实际文字核验；缺失信息降级，不猜测匹配。旧快照缺字段可解码。
+
+LibraryProject 新增可选 ProjectBoard（节点与连线）；节点类型为 source/card/concept/note，自由概念与笔记不是新增一级 Card。source/card 指向既有 UUID，连线仅引用白板节点；聚合状态校验拒绝缺失引用、重复 ID、无效坐标/端点。移除节点仅清理布局及其连线；删除原对象若仍被引用则事务失败。备份自动包含聚合数据；旧项目 board=nil，无清库迁移。
+
+
+LibraryProject 的 `groups` 是项目内命名的 Source/Card 引用集合；`sourceNotes` 以 Source UUID 字符串为键保存独立研究笔记。移除分组不删对象；分组/笔记/白板仍参与永久删除保护。Project.sourceIDs 与 groups 可以分别关联来源，避免移除主列表关联导致分组数据丢失。
+
+LibraryCard 可选 `schedule` 保存 FSRS-6 调度版本、修订号、due、原生状态和参数 JSON。LibraryReviewRecord 可选 before/after/log/parameters 保留完整轨迹。同一个 eventID 幂等，expectedRevision 拒绝并发旧评分；卡片编辑保存沿用库中最新 schedule。改变保持率不直接重写 due。旧卡 schedule=nil 可首次初始化；有历史但无状态时拒绝猜测迁移。所有新字段可选，旧库直接读取，不清库、不改稳定 UUID。
+
+当前聚合快照仍为版本 1 的可选字段增量；**不可将 V2 数据交给旧 App 写回**，旧二进制不认识新字段。只保证从旧库升级到当前代码，不宣称安全降级。未来确需降级应另行制定导出/迁移方案。
+
+LibrarySource 可选 `lastReadAt` 用于书桌真实阅读排序，与资料编辑时间独立。相同位置 60 秒内的重复回调不写库；位置变化立即保存。

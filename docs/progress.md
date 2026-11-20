@@ -1,72 +1,103 @@
-# 开发进度与验证记录
+# 开发进度日志
 
-## 第一版交接与网页采集架构更新
+本文件是交付状态、版本变更和真机结果的唯一入口。操作规则见[工作流](workflow.md)，错误与待办见[工程问题](engineering-issues.md)。日期使用北京时间；实现、自动验证、真机验收分别记录。
 
-`v0.1.0` 的提交为 `7df6ef182b73131878a07e568cf6799fc543cf0c`。本地 Swift 核心测试 8 项通过，导入协议测试 26 项通过。该提交的 GitHub 原生构建、模拟器测试、设备归档及 IPA 校验成功，协议 CI 成功。原始 CI 产物包括 `KnowledgeStudio-build-evidence-6`、`KnowledgeStudio-unsigned-ipa-6` 和 `protocol-evidence-3`。[原生 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44227526926) · [协议 CI](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44227553771)
+## V2 当前开发基线 · 2026-11-20
 
-上述运行只覆盖旧主 App。现行开发从含 Safari 扩展的构建和免费签名可行性开始。新计划与真机证据分别维护；以下日期条目保留为旧原型历史记录，其中的“下一步”和待办仅反映当时状态。[当前路线图](web-capture-roadmap.md) · [验证记录](device-validation.md)
+**最新交付约束：本轮全部开发完成后仍不构建 IPA、不安装真机，等待用户新的安排。** 继续自动推进已有目标，不在每个小阶段等待再次催促。CI 保留签名与打包配置，但仅明确手动 `package_ipa=true` 才能归档打包；本轮不触发它。原 v1.0.0 标签与数据保留，当前版本目标 2.0.0/build 6，为 V2 开发候选，不认定稳定版。
 
-## 2026-11-18 · 阶段 0 草稿复核
+| 原计划 | 本轮实际实现 | 验收边界 |
+| --- | --- | --- |
+| 当前阅读完善 | PDF 文件指纹、跨行/页坐标、文字范围及上下文、矩形四边形、手动区域、单页 Vision OCR、四类选文高亮/批注/词典/发音；EPUB 改容器承载选文、显式单双页与页边距 | PDF 四边形来自 PDFKit 行包围框，不宣称复杂倾斜字形的逐字轮廓；OCR 永远按区域定位。重排、触控菜单、旋转、复杂文字层须真实资料验收 |
+| 阶段 5：知识组织 | 词汇库/语料库聚合、四类筛选与全文字段搜索；混合白板布局/连线/编辑/移除/撤销；项目分组及独立资料研究笔记；宽屏项目栏/直接打开/批量回收站 | 核心引用、笔记隔离、移除分组保留对象测试通过；手势与分屏待验。图谱连线是布局关系，不改知识对象语义 |
+| 阶段 6：复习与 Today | swift-fsrs 6.0.0 显式 FSRS-6 参数；今日到期/稍后、自评记录、调度与完整历史原子保存、参数/版本/修订号；目标保持率、暂停/退出保留历史 | 不新增题型。幂等、冲突、重开与退出通过核心测试；旧编辑防覆盖新增原生测试待执行；有旧历史而无调度状态时拒绝静默重排 |
+| 阶段 7：真机打磨与交付 | 备份兼容扩展、离线语音缓存/TTS、阅读与管理分屏、第三方及使用说明、无 IPA 原生检查 | 阶段原始目标见 product-spec 第 391 行附近；真实 iPad、大文件、异常退出、升级恢复验收延期，不能写为全部通过 |
 
-- 当前草稿基于 `7322edd`。另一个提交 `a37dce8` 的原生 CI 已通过 iPad 模拟器测试、设备归档、IPA 校验并上传 `KnowledgeStudio-unsigned-ipa-4`。该产物早于本轮代码修改。[GitHub Actions 运行](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44203023658)
-- 根据 YouTubePlayerKit 2.0.5 源码修正了 SwiftUI 播放器的视图标识，切换视频与重连都会替换显示用的 WKWebView。打开新视频只提交一次，恢复或重连当前视频可复用已保存的选择。视频 ID 改为全文匹配，拒绝尾随换行。
-- 修正导入校验器返回的字段出处错误路径，可定位到具体无效引用。新增缺少必填 `source_refs` 的样例。
-- 本轮验证使用 Linux Swift 6.2.1，核心 8 项通过，覆盖重启恢复、重复选择的文件修改时间、错误链接、零秒及过期会话。协议 26 项通过，四类联合样例经 CLI 校验为 4 张候选卡、0 条警告。
-- 本轮 SwiftUI 文件通过语法解析，仍需 macOS 编译及 iPad 安装后用实际学习视频检验播放、切换、Mark 和回跳。下一阶段为原型 Source 与 Mark 的事务迁移。
+### 发音实现与研究
 
-## 2026-11-17 · 阶段 0
+保留 Apple 系统词典。统一服务从维基词典文件引用查询 Commons，核对明确录音者/录制说明、允许的开放许可、实际口音和 HTTPS 来源；优先支持 Commons 提供的 MP3 转码。缓存包含音频、署名和许可，先离线命中，再联网；失败使用 AVSpeechSynthesizer，不将合成语音冒充真人。缓存有数量/体积限制，不进入知识库备份。开放录音覆盖不完整，同形异音词由来源录音决定，不能承诺全部词义/口音覆盖。
 
-起点：仓库 `a4c48fc26db834045e8bd9a681ff7aa95de96255` 只有 README，无工程、AGENTS.md 或现有依赖。选择 SwiftUI，最低 iPadOS 17，Swift 6 语言模式；当前用户设备 iPadOS 26.2。用户只有 Windows 和 iPad，使用免费 Apple 账户及 AltStore Classic。
+FSRS-7 的官方 TypeScript 文档已有相关实现与迁移说明；本轮固定经评估的 Swift FSRS-6 适配，不把其他语言的新版本直接当作已验证 Swift 升级。来源与许可证见 dependencies。
 
-完成内容：
+### 实际验证与接续
 
-- 保存原始需求、独立状态/对象模型、版本和事务约定、依赖评估、ChatGPT 提示词。
-- Draft 2020-12 Schema 与共享校验入口；四类内容、字段 provenance、Source/Relation 引用、具体错误、重复批次和内容预览；未实现正式导入事务或 AI Inbox UI。
-- SwiftUI YouTube 最小工程，固定 SPM 版本；原生 Mark/时间回跳/最近视频/原子原型存储/失败提示/超时/会话隔离。未扩展 PDF、EPUB、图谱等复杂界面。
-- 标准 macOS 26 ARM64 + Xcode 26.2 Actions，核心测试、iPad 模拟器测试、真实 iphoneos archive、未签名 IPA 结构校验、日志/xcresult/产物上传与独立结果记录。
-- 网络诊断：四个目标域名 HTTPS 200/TLS 校验通过；平台提供的当前白名单已含 API 和 Google 开发文档。没有关闭验证或改写代理。
+- 完整本地 Swift 核心 30/30 通过（提交 d8d4764）；其后非法 PDF 页序防护与阅读时间字段的 LibraryTests 12/12 通过。协议 CI 44680990864 成功。
+- 首批 V2 提交 d8d4764 已推送，原生检查 44680990806 的依赖、核心与 App 编译通过；测试目标夹具编译失败，已修复（BUILD-09）。归档/IPA 跳过。收尾提交 e6a2bd2 的运行 44681986690 核心 30 项通过，但白板类型推断超时（BUILD-10）；白板拆分后的 44691897830 继续定位到收集箱类型推断超时；收集箱也按职责拆分并减少重复过滤，等待最终复验。
+- 已通过修改 Swift 文件的语法解析及 `git diff --check`；这不等于 Xcode 类型检查。
+- 查明旧原生运行 44551316214 失败：Readium 子类没有可继承初始化器。本轮改为原生 navigator + 父容器响应链，见 BUILD-08。不能沿用旧日志中的“尚在执行”。
+- 新增 PDFKit 原生范围/上下文往返测试，并扩展备份恢复测试覆盖项目笔记、分组和复习状态；尚待原生执行。
+- 本轮收尾补充：导入/关联使用勾选行；白板拖动实时预览、松手持久化、可访问性移动动作和节点索引；发音完成后释放音频会话；书桌按 lastReadAt 排序，相同位置短时间不重复落盘。指南、模型和工作流同步，仍只维护三份日志。
+- 后续处理原生检查中的阻塞，保存最终提交与证据；不构建 IPA。设备交互统一标记待真机验证。
 
-## 当前验证证据
+以下为历史交付记录，不代表当前 V2 的验收结果。
 
-| 检查 | 结果 | 范围 |
-|---|---|---|
-| Swift 核心 | 8/8 通过 | Linux Swift 6.2.1，真实文件读写和异步竞态；非 iOS 运行验证 |
-| 导入协议 | 25/25 通过 | Node.js 24.22.1，Schema/语义/重复/错误/边界；没有写正式数据库 |
-| swift-fsrs v6.0.0 上游 | 105/105 通过，24 suites | Linux Swift Testing；App 尚未接入复习 |
-| 工作流静态检查 | actionlint 1.7.12 通过 | 不等于 GitHub Runner 已执行 |
-| Shell 语法 | bash -n 通过 | 不等于 macOS 打包成功 |
-| GitHub 协议 CI | 成功 | [run 44077240571](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44077240571)，commit `e9b42987189de313ec85f026c6b6b6acd4bf8b9c`，日志 Artifact 已上传 |
-| 原生 CI 的 SPM / 核心测试 | 成功 | [run 44203023658](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44203023658)，commit `a37dce8cf1ca47e8a70befa36808eb8f9f82632e`；标准 macos-26 ARM64 / Xcode 26.2 |
-| 原生 App 编译与模拟器测试 | 成功 | 同次 CI 的 simulator 步骤通过，强制断言至少 10 个测试、0 失败；工程包含 8 个核心和 2 个 App 测试。完整 xcresult 尚未下载到本云环境 |
-| device archive | 成功 | generic/platform=iOS Release archive 通过；后续确认 arm64 / iPhoneOS / iPad 设备族及未签名状态 |
-| unsigned IPA 打包校验 | **成功，已上传候选 IPA** | `KnowledgeStudio-unsigned-ipa-4`；Payload 结构、ZIP CRC 和 SHA-256 生成步骤通过；不等于 AltStore 安装成功 |
-| 日志与测试证据上传 | 成功 | `KnowledgeStudio-build-evidence-4`；本云环境下载仍被网络策略拒绝，当前记录依据 Actions API 的逐步结果与产物元数据 |
-| AltStore 重签安装 | 未执行 | 必须用用户实际设备验证 |
-| iPad 真实播放/Mark/回跳/恢复 | 未执行 | 见 device-validation.md |
+## 设计重构接续 · 2026-11-19
 
-工具链来源：官方 Swift 6.2.1 Ubuntu 24.04 tarball，在 Debian 13 可运行；GPG 验证通过，签名指纹 `52BB7E3DE28A71BE22EC05FFEF80A866B47A981F`，密钥从 swiftlang 官方仓库通过 TLS 获取。缓存通过脚本指定到可写 `.build`，未改 HOME 或系统 CA。
+历史要求是修复后重构再交付 IPA；已被 2026-11-20“完成本轮也不构建 IPA”覆盖。现有功能范围内接入书房侧栏、暖纸动态背景、紧凑/舒展、四类筛选、项目直接打开、长按快捷删除、明确批量选择、回收站范围切换和宽屏卡片/原文对照。未新增 Home 或图谱，不改对象关系与删除/恢复规则。候选版本 1.0.1/build 5，原 v1.0.0 标签保留。
 
-## 当前限制与下步
+本轮基于已知成熟交互模式进行原生实现，尚无真实界面截图/真机验收，不能仅凭语法解析认定布局通过。完成修复阶段 Xcode 检查后提交最终重构候选进行原生验证；最终结果在此补充。
 
-1. IPA 打包修复已通过实际 CI：旧脚本把输入文件放在 `lipo -verify_arch arm64` 之后；Apple cctools 参数解析源码确认这会把文件路径当作架构名称。已改为 `lipo <binary> -verify_arch arm64`，保留全部架构/平台/签名/ZIP 检查，并为失败增加 GitHub 原生错误注解。完整旧日志仍受网络限制，因此不追认这是旧运行的唯一失败原因。
-2. 当前生效白名单仍是原来的三个域名，草稿另有 `productionresultssa4.blob.core.windows.net`、`productionresultssa5.blob.core.windows.net` 和 `results-receiver.actions.githubusercontent.com`，**草稿未应用到运行实例**。新的 IPA 实际下载跳转到了 `productionresultssa5`，再次返回 Forbidden。待环境设置保存并发布后重试；用户 Windows 浏览器不受本云环境白名单影响。
-3. 阶段 0 只有 YouTube 纵向原型；没有虚构 Today/Library/Dictionary 等已实现页面。严格导入工具可执行，但原生 JSONSchema 适配层、Source 匹配 UI 与数据库事务仍属阶段 2。
-4. CI 已通过，请用户下载未签名 IPA 在 AltStore Classic 重签，并按真机清单记录实际结果；CI 不需要 Apple 密码、证书或签名密钥。当前只能确认未签名设备 App 的构建与打包，不宣称已验证 AltStore / iPadOS 26.2 安装兼容性。
-5. 原生构建流程确认后进入阶段 1：数据库迁移、原型 Mark 迁入、回收站、备份恢复与失败回滚。继续保留所有稳定 ID 与原始秒数，不清空原型文件。
-6. 待产品体验后决定复习正反面；提案在 data-model.md，可调整。FSRS 日界与用户时区差异在依赖评估中记录。
+## 阅读与体验修复开发 · 2026-11-19
 
-仓库实际为 Public，用户已明确授权推送和运行；未改变可见性。当前工作流不需要 Actions 管理接口的写权限，管理接口 403 不应被误判成网络不可达。
+依据用户真机反馈，先修 EPUB/高亮，再整理现有交互，不新增产品模块，不修改 v1.0.0 标签。
 
-首次 native run 44075633839 在 `macos-15` 队列中等待，后由并发策略取消。发现该标签目前对应 ARM64、先前核对的镜像清单对应 Intel，因此固定为官方标准 `macos-15-intel` 后实际运行成功进入编译。没有使用付费 larger runner；不把标签差异直接断言为排队根因。
+- 阶段一：Readium 选文菜单直接保存四类高亮；完整 locator（包含选文上下文）落盘，阅读位置在翻页及离开时保存，未显式指定出处时恢复 Source.lastLocation。缺少完整选文定位时只承诺章节/进度并提示。点已有高亮可编辑备注与颜色。可选 cardKind 字段兼容旧记录，旧高亮默认保持黄色；PDF/EPUB/标记/收集箱/卡片共用四类映射。
+- 阶段二：阅读设置持久保存字体、字号、行距、纸白/暖纸/夜读、自动宽屏双页；保留书籍固定版式限制。界面显示名集中转换为中文，协议字段不改。收集箱按 Source 分组并支持显式选择批量归档/回收站；项目内容直接打开，关联设置独立展开；管理选择使用勾选而非开关；QuickMark 回溯收进控制区，保留全部精听档位。
+- 实际检查：本地 LibraryTests 9/9，包含新字段与完整 EPUB 定位/备注重开及旧数据兼容；Node 43/43。新增原生 locator 上下文往返和颜色映射测试。最终候选 80d2adc 的协议运行 44551316178 成功；原生运行 44551316214 最终失败（Readium 子类初始化，见 BUILD-08）。前两候选因更新取消，不算原生通过。Swift 语法解析不替代 Xcode 类型检查。
+- 未验证：真实书籍的选文菜单、重复文本定位、跨章节/重开、笔记编辑、旋转/分屏双页、PDF 颜色和 Safari 控件。现有阅读器与管理页做局部改善，这条记录描述修复阶段；用户随后授权的侧栏/对照重构见上方接续条目。用户资料和现有功能保留。
+- 设计依据：采用已有 Apple Books 式书页/字号/行距、Finder 式直接打开、显式选择批量操作的知识，并核对锁定 Readium 3.11.1 源码接口；本轮未进行外部产品实机调研，不冒称浏览研究已完成。
 
-打包修复依据：[Apple cctools lipo.c](https://github.com/apple-oss-distributions/cctools/blob/e0d56624eca2a76c2ace4c21850df9e666de4ca5/misc/lipo.c#L444) 的 `verify_arch` 分支消费后续所有参数；[lipo 手册](https://github.com/apple-oss-distributions/cctools/blob/e0d56624eca2a76c2ace4c21850df9e666de4ca5/man/lipo.1) 明确 `lipo input_file command [option ...]`。
+## 设计方向更新 · 2026-11-19
 
-## 2026-11-18 · 构建调度与网络复查
+已融合用户 Product Design Charter，完整目标见[产品计划](product-spec.md)的设计章程，执行边界见[工作流](workflow.md)。此次仅更新规范和日志，未重构页面、变更数据模型或生成新 IPA；以下 v1.0.0 验证结果不构成新设计验收。
 
-修复提交 `7322edda9371f017acd5c76d0187e7937ed67783` 对应 [run 44081549150](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44081549150) 未执行任何步骤。GitHub 注解明确为 `The job was not acquired by Runner of type hosted even after multiple attempts`，是托管 Runner 调度失败，不能记为新代码编译失败或测试失败。改用经官方 ARM64 镜像清单核实的标准 `macos-26`，继续固定 Xcode 26.2 / iOS 26.2 模拟器；新 run `44203023658` 已全部成功，详见 [机器记录](verification/native-run-44203023658.json)。没有切换到付费 larger runner。
+后续 UI 工作以私人数字书房、内容优先和直接操作为基准：Home 书桌、Library 项目树、可进入的 Project、Reader 选文工具与并排对照、按 Source 分组的 Inbox、清晰四类卡片与自由白板、专业 Data Manager、克制的 QuickMark 常驻控件。紧凑/舒展及 iPad 多栏贯穿各模块。实现差距需在具体任务中核对，不因写入章程标为完成。
 
-云实例已恢复为 running。当前生效白名单仍为原来三项；本次绑定的新草稿 revision 1 没有自定义域名，旧草稿的两项追加没有出现在新草稿中。已经保留原有三项、重新加入两项旧下载域名，再根据本次实际跳转追加 `productionresultssa5.blob.core.windows.net`；当前草稿 revision 3 共六项。保存不等于发布，完整日志和 IPA 下载仍受限。见 [网络记录](verification/network-2026-11-18.json)。
+项目共享 Source 与独立研究语境、地图混合节点、直接回收站及 QuickMark 能力保留的实施边界见 UX-01。后续先针对用户选定的界面给简短方案，核心关系/迁移的重大调整按授权边界确认；本条不是自动开启全部界面重做。
 
-最新运行的 IPA Artifact 大小为 331,594 字节，证据 Artifact 为 152,314 字节；这是外层 Artifact ZIP 大小，API 返回的 digest 也仅属于外层 ZIP。IPA 本身的 SHA-256 在产物内的 `.ipa.sha256` 文件中，本云环境尚未取到文件，未伪造其摘要。两个 Artifact 均保留 7 天，下载入口见 [构建与安装](build-and-install.md)。
+## 当前基线 · 2026-11-19
 
-运行另有两个非失败注解：固定的 checkout / upload-artifact 版本声明 Node 20，GitHub 已用 Node 24 执行且步骤成功；标准 macOS ARM64 容量紧张可能导致排队。它们没有导致本次构建失败，不为消除提示重复触发 macOS 构建。
+- 主开发分支：`feature/safari-extension`；远端默认仍为 main（管理权限阻塞见 ADMIN-01）。
+- [v1.0.0 已公开发布](https://github.com/slaythefishordie-droid/Stuido/releases/tag/v1.0.0)，2026-11-19 21:15:51，非草稿、非预发布。标签提交 b82e4ed；功能提交 d0938a5；CI PR 合并提交 f7dae1954dd44b497806e0335962a824998af652。后续提交仅文档维护。
+- 版本 1.0.0 / build 4；原生运行 [44484104854](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44484104854)：核心 21/21、iPad 模拟器 32/32、设备归档、签名权限和 IPA 校验通过。协议/Safari 运行 44484104729：43/43。
+- 实包 8,005,262 字节；SHA-256 `c4de7372a639e8c9da5fa3dfc5ea3f5d8b78d81261163d207cf67ffe69749244`。下载后 ZIP、版本及 iPhoneOS 平台复核通过。
+- Release 安装包附件尚未上传（NET-02）；已通过对话文件与 [Actions Artifact](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44484104854/artifacts/14510239330) 交付，Artifact 到期日 2026-11-26。不要为上传重建 IPA。
+- [原生证据](verification/native-run-44484104854.json) · [发布证据](verification/release-v1.0.0.json) · [安装指南](build-and-install.md)
+
+## 两份计划阶段 1–4 的交付
+
+| 范围 | 已实现 | 验证边界 |
+| --- | --- | --- |
+| 产品阶段 1 | GRDB 事务快照、稳定 ID、非破坏迁移、Data Manager、回收站、ZIP 备份恢复 | 迁移、引用保护、恢复及恶意 ZIP 自动测试通过；真实资料恢复待验 |
+| 产品阶段 2 | 四类卡片、Quick Capture、双 Inbox、JSON 文件/粘贴、匹配/去重/预览/确认导入 | 协议与事务测试通过；完整触控流程待验 |
+| 产品阶段 3 | Library、Project、PDF 阅读、高亮、Mark 建卡与回跳 | 原生编译通过；真实 PDF 闭环待验 |
+| 产品阶段 4 | Readium EPUB、本地视频、位置恢复、词典外链 | 原生编译通过；真实书籍/视频待验 |
+| Safari 里程碑 1 | 扩展随 App 分发、双向共享诊断 | 用户报告真机编号自动传输对应成功；未提供型号/包摘要，不补造 |
+| Safari 里程碑 2 | QuickMark、持久待发、同 ID 重试、My Inbox | 存储与模拟消息测试通过；冷启动/真实 Safari 交接待验 |
+| Safari 里程碑 3 | 回溯、±1/2/3 秒、A–B、历史、备注/删除/备份、个性化 | 自动测试通过；真实旧备份与页面触控待验 |
+| Safari 里程碑 4 | 逐站授权、文章段落/选文与页面音频定位适配 | 模型/适配测试通过；Safari 权限与 DOM 变体待验 |
+
+已完成可读性与效率整理：新增 Swift 模块统一格式，交接/导入建立临时索引，无变化不写库，1 MiB 分块复制和摘要、ZIP 工作后台执行。不将本地合成测试宣称为真机性能提升。当时阶段 5–6 尚未实施；最新进展以顶部 V2 基线为准。
+
+## 下一步验收与优先级
+
+1. 发布附件永久归档、默认分支管理：处理 NET-02 / ADMIN-01，权限变化前不重复尝试。
+2. 真机记录型号、系统、包 SHA、AltStore 版本及结果：保留扩展安装 → Safari 识别 → 双向共享；继承用户已确认的里程碑 1 结果，不要求无理由重测。
+3. 新增闭环：App 关闭时 QuickMark → 冷启动 Inbox → 建卡 → 回跳；重复/中断重送仅一条 UUID。12.8 秒回溯 2 秒落在 10 秒，播放继续。
+4. 四类 JSON 导入与重复导入、PDF/EPUB/视频标记回跳、备份恢复、删除恢复；失败时保留原件与错误，不清库。
+5. Safari 横竖屏/分屏、桌面/移动 watch 页、同标签换视频、广告/直播/Shorts、A–B 与历史跳转、网站授权撤回、真实旧书签。系统全屏/PiP、无 audio 元素等边界按实测记录。
+
+## 精简历史
+
+| 时间/基线 | 结果与追溯 |
+| --- | --- |
+| v0.1.0 / 7df6ef1 | 旧 YouTube 播放、时间 Mark、回跳、本地原型与导入协议；无 Safari 扩展。原生运行 44227526926 成功，旧原型保留在标签 |
+| Safari 分发 / ea8ca26 | 44432216488 成功，核心 8、模拟器 14；随后用户确认里程碑 1 双向共享。见 verification 同名记录 |
+| QuickMark / 94841ea | 44437247550 成功，打通最小 Inbox；不能作为后续新增功能的验证证据 |
+| 阶段 1–4 / 0c70210、648a631 | 44475088781 因 SwiftUI 声明失败；44482131742 因 Readium 类型桥接失败；均保留 JSON，修复见 BUILD-05/06 |
+| v1.0.0 / d0938a5 | 44484104854 全部成功，以上当前基线取代历史“待构建”状态 |
+| 2026-11-19 日志整合 | 合并状态、更新、验收与旧发布清单；网络历史并入工程问题。保留三份维护日志与原始 JSON，文档改动只查链接和差异，不跑业务测试 |
+
+## 后续记录格式
+
+每个交付追加一条：日期 / 对应计划 / 功能与关键模块 / 实际检查及 SHA、运行链接 / 未验证项 / 下一步。失败尝试仅引用工程问题 ID，不复制整段日志；阶段结束更新顶部基线。旧全文可从整合前提交 362a3b5 的 Git 历史追溯。
