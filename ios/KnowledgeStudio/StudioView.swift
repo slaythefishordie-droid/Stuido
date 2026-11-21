@@ -438,11 +438,11 @@ private struct StudioSearchView: View {
 struct InboxView: View {
     @EnvironmentObject private var model: StudioModel
     @State private var search = ""
-    @State private var editor: LibraryCard?
     @State private var archived = false
     @State private var undoMark: UUID?
     @State private var editMode: EditMode = .inactive
     @State private var selected: Set<UUID> = []
+    private struct DraftRoute: Hashable { let markID: UUID }
     private struct SourceGroup: Identifiable {
         let id: UUID
         let source: LibrarySource?
@@ -462,8 +462,17 @@ struct InboxView: View {
     }
     var body: some View {
         NavigationStack {
-            inboxList.studySurface().navigationTitle("收集箱").searchable(text: $search, prompt: "搜索摘录").environment(\.editMode, $editMode)
+            inboxList.studySurface().navigationTitle("收集箱").searchable(text: $search, prompt: "搜索摘录")
                 .refreshable { await model.refreshAsync() }.toolbar { inboxToolbar }
+                .navigationDestination(for: DraftRoute.self) { route in
+                    if let mark = model.state.marks.first(where: { $0.id == route.markID && $0.deletedAt == nil }) {
+                        let draft = model.state.cards.first { $0.markIDs.contains(mark.id) && $0.deletedAt == nil }
+                            ?? model.card(from: mark, type: mark.highlightKind)
+                        CardEditor(card: draft, inboxMark: mark.id, ownNavigation: false) { undoMark = mark.id }
+                    } else {
+                        ContentUnavailableView("摘录不可用", systemImage: "tray")
+                    }
+                }
         }.safeAreaInset(edge: .bottom) {
             if let undoMark {
                 HStack {
@@ -481,63 +490,76 @@ struct InboxView: View {
             }
         }.task(id: undoMark) {
             if undoMark != nil {
-                do { try await Task.sleep(for: .seconds(7)) } catch { return }
+                do { try await Task.sleep(for: .seconds(12)) } catch { return }
                 undoMark = nil
             }
-        }.sheet(item: $editor) { card in
-            CardEditor(card: card, inboxMark: card.markIDs.first) { undoMark = card.markIDs.first }
-                .environmentObject(model)
         }
     }
     private var inboxList: some View {
         let groups = groups
-        return List(selection: $selected) {
-            if let warning = model.sharedWarning { Text(warning).foregroundStyle(.orange) }
-            if groups.isEmpty {
-                ContentUnavailableView(
-                    archived ? "归档为空" : "没有待整理标记", systemImage: "tray", description: Text("在 Safari、PDF、EPUB 或本地视频中保存标记。"))
-            }
-            ForEach(groups) { group in
-                Section(group.title) {
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 12) {
+                if let warning = model.sharedWarning { Text(warning).font(.callout).foregroundStyle(.orange) }
+                if groups.isEmpty {
+                    ContentUnavailableView(archived ? "归档为空" : "没有待整理标记", systemImage: "tray")
+                }
+                ForEach(groups) { group in
+                    Text(group.title).font(.headline).padding(.top, 10).accessibilityAddTraits(.isHeader)
                     ForEach(group.marks) { mark in
-                        markRow(mark, source: group.source).tag(mark.id)
+                        markRow(mark, source: group.source)
                     }
                 }
-            }
+            }.padding(20)
         }.studyChange(groups.reduce(0) { $0 + $1.marks.count })
     }
     private func markRow(_ mark: LibraryMark, source: LibrarySource?) -> some View {
         VStack(alignment: .leading, spacing: 10) {
+            if editMode.isEditing {
+                ObjectSelectionRow(isSelected: Binding(get: { selected.contains(mark.id) }, set: { checked in
+                    if checked { selected.insert(mark.id) } else { selected.remove(mark.id) }
+                })) { markExcerpt(mark) }
+            } else {
+                markExcerpt(mark)
+                ViewThatFits(in: .horizontal) {
+                    HStack(spacing: 12) { markActions(mark, source: source) }
+                    VStack(alignment: .leading, spacing: 4) { markActions(mark, source: source) }
+                }
+            }
+        }.frame(maxWidth: .infinity, alignment: .leading).studyPanel()
+            .overlay(alignment: .leading) { Rectangle().fill(mark.highlightKind.color).frame(width: 2).allowsHitTesting(false) }
+            .contextMenu {
+                Button("移入回收站", role: .destructive) { model.delete([mark.id]) }
+            }
+    }
+
+    private func markExcerpt(_ mark: LibraryMark) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
             Label(mark.highlightKind.title, systemImage: "circle.fill").font(.caption).foregroundStyle(
                 mark.highlightKind.color)
             if !mark.excerpt.isEmpty {
                 Text(mark.excerpt).font(.system(.title3, design: .serif)).lineLimit(5)
             }
             Text(locationLabel(mark.locator)).font(.caption)
-            ScrollView(.horizontal, showsIndicators: false) { markActions(mark, source: source) }
-        }.studyPanel()
-            .overlay(alignment: .leading) { Rectangle().fill(mark.highlightKind.color).frame(width: 2) }
-            .listRowBackground(Color.clear).listRowSeparator(.hidden)
-            .contextMenu {
-            Button("移入回收站", role: .destructive) { model.delete([mark.id]) }
         }
     }
-    private func markActions(_ mark: LibraryMark, source: LibrarySource?) -> some View {
-        HStack {
-            if !archived {
-                Button {
-                    guard editor == nil else { return }
-                    editor = model.state.cards.first { $0.markIDs.contains(mark.id) && $0.deletedAt == nil }
-                        ?? model.card(from: mark, type: mark.highlightKind)
-                } label: {
-                    Label("整理成卡片", systemImage: "rectangle.badge.plus")
-                }.buttonStyle(.bordered).accessibilityIdentifier("inbox.organize")
-            }
-            if let source, source.deletedAt == nil {
-                NavigationLink("回到出处") { SourceReaderView(source: source, location: mark.locator) }
-            }
-            if !archived { Button("归档") { archive([mark.id]) } }
-        }.buttonStyle(.borderless)
+    @ViewBuilder private func markActions(_ mark: LibraryMark, source: LibrarySource?) -> some View {
+        if !archived {
+            NavigationLink(value: DraftRoute(markID: mark.id)) {
+                Label("整理成卡片", systemImage: "rectangle.badge.plus")
+                    .padding(.horizontal, 12).frame(minHeight: 44)
+                    .background(StudyTheme.mat, in: Capsule()).contentShape(Capsule())
+            }.buttonStyle(.plain).accessibilityIdentifier("inbox.organize")
+        }
+        if let source, source.deletedAt == nil {
+            NavigationLink { SourceReaderView(source: source, location: mark.locator) } label: {
+                Text("回到出处").frame(minHeight: 44).contentShape(Rectangle())
+            }.buttonStyle(.plain)
+        }
+        if !archived {
+            Button { archive([mark.id]) } label: {
+                Text("归档").frame(minHeight: 44).contentShape(Rectangle())
+            }.buttonStyle(.plain)
+        }
     }
     private func archive(_ ids: Set<UUID>) {
         model.change { state in
@@ -669,6 +691,7 @@ struct CardEditor: View {
     @Environment(\.dismiss) private var dismiss
     @State var card: LibraryCard
     var inboxMark: UUID? = nil
+    var ownNavigation = true
     var onSaved: () -> Void = {}
     @State private var saving = false
     @State private var failure: String?
@@ -678,80 +701,85 @@ struct CardEditor: View {
     private var fields: [String] { LibraryCard.fields(for: card.type) }
 
     var body: some View {
-        NavigationStack {
-            Form {
-                if let failure { Text(failure).foregroundStyle(.red) }
-                if inboxMark != nil && !model.state.cards.contains(where: { $0.id == card.id }) {
-                    Picker("卡片类型", selection: Binding(get: { card.type }, set: { kind in
-                        guard let inboxMark, let mark = model.state.marks.first(where: { $0.id == inboxMark }) else { return }
-                        let previous = card.content[fields[0]]
-                        let wasEdited = card.provenance[fields[0]]?.kind == "user_input"
-                        var next = model.card(from: mark, type: kind)
-                        next.id = card.id
-                        next.review = card.review
-                        if wasEdited {
-                            let field = LibraryCard.fields(for: kind)[0]
-                            next.content[field] = previous
-                            next.provenance[field] = FieldOrigin(kind: "user_input")
-                        }
-                        card = next
-                    })) {
-                        ForEach(CardKind.allCases, id: \.self) { Text($0.title).tag($0) }
-                    }
-                }
-                Section {
-                    fieldEditor(fields[0]).accessibilityIdentifier("card.editor.main")
-                    if fields.count > 1 {
-                        DisclosureGroup("补充内容") {
-                            ForEach(fields.dropFirst(), id: \.self) { fieldEditor($0) }
-                        }
-                    }
-                } header: {
-                    Label(card.type.title, systemImage: "circle.fill").foregroundStyle(card.type.color)
-                }
-                if !card.sourceRefs.isEmpty {
-                    Section("出处") {
-                        ForEach(card.sourceRefs) { ref in
-                            if let source = model.state.sources.first(where: { $0.id == ref.sourceID }) {
-                                LabeledContent(source.title, value: ref.locator.map { locationLabel($0) } ?? "")
-                            }
-                        }
-                    }
-                }
-                if model.state.projects.contains(where: { $0.deletedAt == nil }) {
-                    DisclosureGroup("关联项目（\(projects.count)）") {
-                        ForEach(model.state.projects.filter { $0.deletedAt == nil }) { project in
-                            Toggle(project.title, isOn: Binding(
-                                get: { projects.contains(project.id) },
-                                set: { enabled in
-                                    if enabled { projects.insert(project.id) }
-                                    else { projects.remove(project.id) }
-                                }))
-                        }
-                    }
-                }
-                if model.state.cards.contains(where: { $0.id == card.id }) {
-                    DisclosureGroup("个人笔记") {
-                        TextField("个人笔记", text: $card.note, axis: .vertical)
-                    }
-                }
-                Toggle("加入复习", isOn: Binding(
-                    get: { card.review == .active },
-                    set: { card.review = $0 ? .active : (card.schedule == nil ? .not_enrolled : .paused) }))
-            }.disabled(saving).studySurface().navigationTitle("编辑卡片").navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(saving) }
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button(saving ? "正在保存…" : "保存") { save() }
-                            .disabled(saving || (card.content[fields[0]]?.trimmingCharacters(in: .whitespacesAndNewlines)
-                                .isEmpty ?? true))
-                    }
-                }
+        Group {
+            if ownNavigation { NavigationStack { form } }
+            else { form.navigationBarBackButtonHidden() }
         }.interactiveDismissDisabled(saving).onAppear {
             guard !initialized else { return }
             initialized = true
             projects = model.suggestedProjects(for: card)
         }
+    }
+
+    private var form: some View {
+        Form {
+            if let failure { Text(failure).foregroundStyle(.red) }
+            if inboxMark != nil && !model.state.cards.contains(where: { $0.id == card.id }) {
+                Picker("卡片类型", selection: Binding(get: { card.type }, set: { kind in
+                    guard let inboxMark, let mark = model.state.marks.first(where: { $0.id == inboxMark }) else { return }
+                    let previous = card.content[fields[0]]
+                    let wasEdited = card.provenance[fields[0]]?.kind == "user_input"
+                    var next = model.card(from: mark, type: kind)
+                    next.id = card.id
+                    next.review = card.review
+                    if wasEdited {
+                        let field = LibraryCard.fields(for: kind)[0]
+                        next.content[field] = previous
+                        next.provenance[field] = FieldOrigin(kind: "user_input")
+                    }
+                    card = next
+                })) {
+                    ForEach(CardKind.allCases, id: \.self) { Text($0.title).tag($0) }
+                }
+            }
+            Section {
+                fieldEditor(fields[0]).accessibilityIdentifier("card.editor.main")
+                if fields.count > 1 {
+                    DisclosureGroup("补充内容") {
+                        ForEach(fields.dropFirst(), id: \.self) { fieldEditor($0) }
+                    }
+                }
+            } header: {
+                Label(card.type.title, systemImage: "circle.fill").foregroundStyle(card.type.color)
+            }
+            if !card.sourceRefs.isEmpty {
+                Section("出处") {
+                    ForEach(card.sourceRefs) { ref in
+                        if let source = model.state.sources.first(where: { $0.id == ref.sourceID }) {
+                            LabeledContent(source.title, value: ref.locator.map { locationLabel($0) } ?? "")
+                        }
+                    }
+                }
+            }
+            if model.state.projects.contains(where: { $0.deletedAt == nil }) {
+                DisclosureGroup("关联项目（\(projects.count)）") {
+                    ForEach(model.state.projects.filter { $0.deletedAt == nil }) { project in
+                        Toggle(project.title, isOn: Binding(
+                            get: { projects.contains(project.id) },
+                            set: { enabled in
+                                if enabled { projects.insert(project.id) }
+                                else { projects.remove(project.id) }
+                            }))
+                    }
+                }
+            }
+            if model.state.cards.contains(where: { $0.id == card.id }) {
+                DisclosureGroup("个人笔记") {
+                    TextField("个人笔记", text: $card.note, axis: .vertical)
+                }
+            }
+            Toggle("加入复习", isOn: Binding(
+                get: { card.review == .active },
+                set: { card.review = $0 ? .active : (card.schedule == nil ? .not_enrolled : .paused) }))
+        }.disabled(saving).studySurface().navigationTitle("编辑卡片").navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(saving) }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button(saving ? "正在保存…" : "保存") { save() }
+                        .disabled(saving || (card.content[fields[0]]?.trimmingCharacters(in: .whitespacesAndNewlines)
+                            .isEmpty ?? true))
+                }
+            }
     }
 
     private func fieldEditor(_ field: String) -> some View {

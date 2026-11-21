@@ -19,6 +19,7 @@ final class StudyAcceptanceTests: XCTestCase {
         let organize = app.buttons["inbox.organize"]
         XCTAssertTrue(organize.waitForExistence(timeout: 5))
         organize.tap()
+        XCTAssertTrue(app.navigationBars["编辑卡片"].waitForExistence(timeout: 5))
         let body = app.descendants(matching: .any).matching(identifier: "card.editor.main").firstMatch
         XCTAssertTrue(body.waitForExistence(timeout: 4))
         XCTAssertEqual(body.value as? String, "模拟器摘录")
