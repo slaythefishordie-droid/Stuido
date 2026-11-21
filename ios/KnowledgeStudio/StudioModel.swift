@@ -413,100 +413,8 @@ final class StudioModel: ObservableObject {
                 }
             }
             try commit { state in
-                if permanently {
-                    let mapIDs = Set(state.projects.filter {
-                        $0.hasBoard && $0.boardTrashedAt != nil
-                    }.map(\.boardManagementID))
-                    let trashIDs = Set(
-                        state.sources.filter { $0.deletedAt != nil }.map(\.id) +
-                        state.marks.filter { $0.deletedAt != nil }.map(\.id) +
-                        state.cards.filter { $0.deletedAt != nil }.map(\.id) +
-                        state.projects.filter { $0.deletedAt != nil }.map(\.id) +
-                        state.relations.filter { $0.deletedAt != nil }.map(\.id) +
-                        state.reviewRecords.filter { $0.deletedAt != nil }.map(\.id))
-                    guard ids.isSubset(of: trashIDs.union(mapIDs)) else { throw LibraryError.invalid("请先移入回收站。") }
-                    for id in ids {
-                        let linked =
-                            state.reviewRecords.contains { !ids.contains($0.id) && ($0.cardID == id) }
-                            || state.marks.contains { !ids.contains($0.id) && ($0.sourceID == id) }
-                            || state.cards.contains {
-                                !ids.contains($0.id) && ($0.markIDs.contains(id) || $0.sourceRefs.contains { $0.sourceID == id })
-                            } || state.relations.contains { !ids.contains($0.id) && ($0.from == id || $0.to == id) }
-                            || state.projects.contains {
-                                !ids.contains($0.id) && $0.references(id, includingBoard: !ids.contains($0.boardManagementID))
-                            }
-                        guard !linked else { throw LibraryError.invalid("对象仍被引用，请先解除关联或清理引用对象") }
-                    }
-                    for index in state.projects.indices where ids.contains(state.projects[index].boardManagementID) {
-                        state.projects[index].board = nil
-                        state.projects[index].boardCoverImage = nil
-                        state.projects[index].boardTrashedAt = nil
-                    }
-                    state.reviewRecords.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
-                    state.sources.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
-                    state.marks.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
-                    state.cards.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
-                    state.projects.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
-                    state.relations.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
-                } else {
-                    let date: Date? = restore ? nil : Date()
-                    for index in state.sources.indices where ids.contains(state.sources[index].id) {
-                        state.sources[index].deletedAt = date
-                    }
-                    for index in state.marks.indices where ids.contains(state.marks[index].id) {
-                        if restore {
-                            guard
-                                state.sources.contains(where: {
-                                    $0.id == state.marks[index].sourceID && $0.deletedAt == nil
-                                })
-                            else { throw LibraryError.invalid("请先恢复标记的资料") }
-                        }
-                        state.marks[index].deletedAt = date
-                    }
-                    for index in state.cards.indices where ids.contains(state.cards[index].id) {
-                        if restore {
-                            guard
-                                state.cards[index].sourceRefs.allSatisfy({ ref in
-                                    state.sources.contains { $0.id == ref.sourceID && $0.deletedAt == nil }
-                                }),
-                                state.cards[index].markIDs.allSatisfy({ id in
-                                    state.marks.contains { $0.id == id && $0.deletedAt == nil }
-                                })
-                            else { throw LibraryError.invalid("请先恢复卡片出处") }
-                        }
-                        state.cards[index].deletedAt = date
-                    }
-                    for index in state.reviewRecords.indices where ids.contains(state.reviewRecords[index].id) {
-                        if restore {
-                            guard
-                                state.cards.contains(where: {
-                                    $0.id == state.reviewRecords[index].cardID && $0.deletedAt == nil
-                                })
-                            else { throw LibraryError.invalid("请先恢复复习记录所属卡片") }
-                        }
-                        state.reviewRecords[index].deletedAt = date
-                    }
-                    for index in state.relations.indices where ids.contains(state.relations[index].id) {
-                        if restore {
-                            guard
-                                [state.relations[index].from, state.relations[index].to].allSatisfy({ id in
-                                    state.cards.contains { $0.id == id && $0.deletedAt == nil }
-                                })
-                            else { throw LibraryError.invalid("请先恢复关系端点") }
-                        }
-                        state.relations[index].deletedAt = date
-                    }
-                    for index in state.projects.indices where ids.contains(state.projects[index].id) {
-                        state.projects[index].deletedAt = date
-                    }
-                    for index in state.projects.indices where state.projects[index].hasBoard &&
-                        ids.contains(state.projects[index].boardManagementID) {
-                        if restore && state.projects[index].deletedAt != nil {
-                            throw LibraryError.invalid("请先恢复白板所属项目。")
-                        }
-                        state.projects[index].boardTrashedAt = date
-                    }
-                }
+                if permanently { try Self.purge(ids, in: &state) }
+                else { try Self.setTrashed(ids, restored: restore, in: &state) }
             }
             if permanently { try finishAssetPurge() }
         } catch { message = error.localizedDescription }
@@ -518,4 +426,109 @@ final class StudioModel: ObservableObject {
             }
         }
     }
+
+    nonisolated private static func trashIDs(in state: LibraryState) -> Set<UUID> {
+        var ids = Set(state.sources.filter { $0.deletedAt != nil }.map(\.id))
+        ids.formUnion(state.marks.filter { $0.deletedAt != nil }.map(\.id))
+        ids.formUnion(state.cards.filter { $0.deletedAt != nil }.map(\.id))
+        ids.formUnion(state.projects.filter { $0.deletedAt != nil }.map(\.id))
+        ids.formUnion(state.relations.filter { $0.deletedAt != nil }.map(\.id))
+        ids.formUnion(state.reviewRecords.filter { $0.deletedAt != nil }.map(\.id))
+        ids.formUnion(state.projects.filter { $0.hasBoard && $0.boardTrashedAt != nil }.map(\.boardManagementID))
+        return ids
+    }
+
+    nonisolated private static func purge(_ ids: Set<UUID>, in state: inout LibraryState) throws {
+        guard ids.isSubset(of: trashIDs(in: state)) else { throw LibraryError.invalid("请先移入回收站。") }
+        for id in ids {
+            let linkedCards = state.cards.contains { card in
+                !ids.contains(card.id) && (card.markIDs.contains(id) || card.sourceRefs.contains { $0.sourceID == id })
+            }
+            let linkedProjects = state.projects.contains { project in
+                !ids.contains(project.id) && project.references(id, includingBoard: !ids.contains(project.boardManagementID))
+            }
+            let linkedMarks = state.marks.contains { !ids.contains($0.id) && $0.sourceID == id }
+            let linkedReviews = state.reviewRecords.contains { !ids.contains($0.id) && $0.cardID == id }
+            let linkedRelations = state.relations.contains { relation in
+                !ids.contains(relation.id) && (relation.from == id || relation.to == id)
+            }
+            if linkedCards || linkedProjects || linkedMarks || linkedReviews || linkedRelations {
+                throw LibraryError.invalid("对象仍被引用，请先解除关联或清理引用对象")
+            }
+        }
+        for index in state.projects.indices where ids.contains(state.projects[index].boardManagementID) {
+            state.projects[index].board = nil
+            state.projects[index].boardCoverImage = nil
+            state.projects[index].boardTrashedAt = nil
+        }
+        state.reviewRecords.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
+        state.sources.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
+        state.marks.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
+        state.cards.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
+        state.projects.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
+        state.relations.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
+    }
+
+    nonisolated private static func setTrashed(_ ids: Set<UUID>, restored restore: Bool,
+        in state: inout LibraryState) throws
+    {
+        let date: Date? = restore ? nil : Date()
+        for index in state.sources.indices where ids.contains(state.sources[index].id) {
+            state.sources[index].deletedAt = date
+        }
+        for index in state.marks.indices where ids.contains(state.marks[index].id) {
+            if restore {
+                guard
+                    state.sources.contains(where: {
+                        $0.id == state.marks[index].sourceID && $0.deletedAt == nil
+                    })
+                else { throw LibraryError.invalid("请先恢复标记的资料") }
+            }
+            state.marks[index].deletedAt = date
+        }
+        for index in state.cards.indices where ids.contains(state.cards[index].id) {
+            if restore {
+                guard
+                    state.cards[index].sourceRefs.allSatisfy({ ref in
+                        state.sources.contains { $0.id == ref.sourceID && $0.deletedAt == nil }
+                    }),
+                    state.cards[index].markIDs.allSatisfy({ id in
+                        state.marks.contains { $0.id == id && $0.deletedAt == nil }
+                    })
+                else { throw LibraryError.invalid("请先恢复卡片出处") }
+            }
+            state.cards[index].deletedAt = date
+        }
+        for index in state.reviewRecords.indices where ids.contains(state.reviewRecords[index].id) {
+            if restore {
+                guard
+                    state.cards.contains(where: {
+                        $0.id == state.reviewRecords[index].cardID && $0.deletedAt == nil
+                    })
+                else { throw LibraryError.invalid("请先恢复复习记录所属卡片") }
+            }
+            state.reviewRecords[index].deletedAt = date
+        }
+        for index in state.relations.indices where ids.contains(state.relations[index].id) {
+            if restore {
+                guard
+                    [state.relations[index].from, state.relations[index].to].allSatisfy({ id in
+                        state.cards.contains { $0.id == id && $0.deletedAt == nil }
+                    })
+                else { throw LibraryError.invalid("请先恢复关系端点") }
+            }
+            state.relations[index].deletedAt = date
+        }
+        for index in state.projects.indices where ids.contains(state.projects[index].id) {
+            state.projects[index].deletedAt = date
+        }
+        for index in state.projects.indices where state.projects[index].hasBoard &&
+            ids.contains(state.projects[index].boardManagementID) {
+            if restore && state.projects[index].deletedAt != nil {
+                throw LibraryError.invalid("请先恢复白板所属项目。")
+            }
+            state.projects[index].boardTrashedAt = date
+        }
+    }
+
 }
