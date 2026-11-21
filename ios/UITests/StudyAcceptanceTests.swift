@@ -42,10 +42,10 @@ final class StudyAcceptanceTests: XCTestCase {
         XCTAssertTrue(retained.exists)
 
         tap(app, "回收站")
-        XCTAssertTrue(removable.waitForExistence(timeout: 5))
-        removable.tap()
-        tap(app, "恢复")
-        XCTAssertTrue(removable.waitForNonExistence(timeout: 5))
+        let restore = app.buttons["storage.restore.可移除资料"]
+        XCTAssertTrue(restore.waitForExistence(timeout: 5))
+        restore.tap()
+        XCTAssertTrue(app.staticTexts["回收站为空"].waitForExistence(timeout: 5))
 
         tap(app, "知识库")
         XCTAssertTrue(removable.waitForExistence(timeout: 5))

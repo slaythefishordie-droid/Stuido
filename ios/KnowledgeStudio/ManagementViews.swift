@@ -968,9 +968,14 @@ struct DataManagerView: View {
                     .buttonStyle(.plain).accessibilityIdentifier("storage.row." + row.title)
             }
             if !selecting {
+                if row.deleted {
+                    Button { apply([row.id], restore: true) } label: {
+                        Label("恢复", systemImage: "arrow.uturn.backward")
+                            .font(.subheadline).frame(minHeight: 44).contentShape(Rectangle())
+                    }.buttonStyle(.plain).accessibilityIdentifier("storage.restore." + row.title)
+                }
                 Menu {
                     if row.deleted {
-                        Button("恢复", systemImage: "arrow.uturn.backward") { apply([row.id], restore: true) }
                         Button("永久删除", role: .destructive) { ask(.purge, ids: [row.id]) }
                     } else {
                         Button("移入回收站", role: .destructive) { ask(.trash, ids: [row.id]) }
@@ -979,7 +984,7 @@ struct DataManagerView: View {
                     .accessibilityLabel("对象操作").accessibilityIdentifier("storage.actions." + row.title)
             }
         }.padding(.horizontal, 12).background(StudyTheme.leaf)
-            .overlay(alignment: .bottom) { Rectangle().fill(StudyTheme.rule).frame(height: 1) }
+            .overlay(alignment: .bottom) { Rectangle().fill(StudyTheme.rule).frame(height: 1).allowsHitTesting(false) }
             .disabled(moving)
     }
 
