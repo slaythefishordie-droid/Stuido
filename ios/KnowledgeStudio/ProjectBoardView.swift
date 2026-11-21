@@ -136,7 +136,8 @@ struct ProjectBoardView: View {
             } label: {
                 Image(systemName: "magnifyingglass").frame(minWidth: 35, minHeight: 44)
             }.accessibilityLabel("缩放白板")
-        }.padding()
+        }.padding(12).background(StudyTheme.leaf)
+            .overlay(alignment: .bottom) { Rectangle().fill(StudyTheme.rule).frame(height: 1) }
     }
     private var canvas: some View {
         ZStack(alignment: .topLeading) {
@@ -152,6 +153,18 @@ struct ProjectBoardView: View {
             }
             ForEach(board.nodes) { node in nodeView(node) }
         }.frame(width: 1600, height: 1200).coordinateSpace(name: "board-canvas")
+            .background {
+                Canvas { context, size in
+                    var grid = Path()
+                    for x in stride(from: 20.0, to: size.width, by: 40) {
+                        grid.move(to: CGPoint(x: x, y: 0)); grid.addLine(to: CGPoint(x: x, y: size.height))
+                    }
+                    for y in stride(from: 20.0, to: size.height, by: 40) {
+                        grid.move(to: CGPoint(x: 0, y: y)); grid.addLine(to: CGPoint(x: size.width, y: y))
+                    }
+                    context.stroke(grid, with: .color(StudyTheme.rule.opacity(0.62)), lineWidth: 0.55)
+                }.background(StudyTheme.paper).allowsHitTesting(false).accessibilityHidden(true)
+            }
     }
     private func nodeView(_ node: BoardNode) -> some View {
         nodeButton(node)

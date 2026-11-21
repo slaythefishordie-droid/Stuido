@@ -5,7 +5,34 @@ import UIKit
 
 @MainActor
 struct StudioView: View {
-    @StateObject private var model = StudioModel()
+    @StateObject private var model: StudioModel
+
+    init() {
+        #if DEBUG
+        if let id = ProcessInfo.processInfo.environment["STUDIO_ACCEPTANCE_FIXTURE"], UUID(uuidString: id) != nil {
+            _model = StateObject(wrappedValue: Self.acceptanceModel(id))
+            return
+        }
+        #endif
+        _model = StateObject(wrappedValue: StudioModel())
+    }
+
+    #if DEBUG
+    private static func acceptanceModel(_ id: String) -> StudioModel {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("studio-acceptance-" + id)
+        let model = StudioModel(root: root)
+        let source = LibrarySource(kind: .pdf, title: "来源样本")
+        let disposable = LibrarySource(kind: .pdf, title: "可移除资料")
+        var mark = LibraryMark(sourceID: source.id, locator: ReadingLocator(kind: "pdf", page: 1), excerpt: "模拟器摘录")
+        mark.cardKind = .word
+        var first = LibraryCard(type: .word, content: ["word": "复习样本甲"])
+        var second = LibraryCard(type: .word, content: ["word": "复习样本乙"])
+        first.review = .active
+        second.review = .active
+        model.change { $0.sources = [source, disposable]; $0.marks = [mark]; $0.cards = [first, second] }
+        return model
+    }
+    #endif
     @ObservedObject private var lounge = LoungeHub.shared
     @State private var sceneID = UUID()
     @State private var sourcesReading: [(reader: UUID, source: UUID)] = []
@@ -65,6 +92,17 @@ struct StudioView: View {
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: railRevealed)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: sideVisible)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: expanded)
+            .overlay(alignment: .topTrailing) {
+                if model.isImporting {
+                    HStack(spacing: 12) {
+                        ProgressView().controlSize(.small)
+                        Text(model.importStatus ?? "正在导入资料…").font(.caption).lineLimit(2)
+                        if model.importCanCancel { Button("取消") { model.cancelImport() }.font(.caption) }
+                    }.padding(10).background(StudyTheme.leaf)
+                        .overlay { RoundedRectangle(cornerRadius: 5).strokeBorder(StudyTheme.rule).allowsHitTesting(false) }
+                        .padding(10).accessibilityIdentifier("studio.import-progress")
+                }
+            }
             .overlay(alignment: .bottomTrailing) { loungeCorner }
             .animation(reduceMotion ? nil : .smooth(duration: 0.24), value: lounge.reminder)
         }
@@ -164,11 +202,14 @@ struct StudioView: View {
         } message: {
             Text(model.message ?? "")
         }
-        .onChange(of: phase) { _, value in
+        .onChange(of: phase, initial: true) { _, value in
             updateLoungeActivity(promote: value == .active)
             if value == .active {
                 acceptNotificationRoute()
-                Task { await model.refreshAsync() }
+                Task {
+                    await model.reloadSharedDocuments()
+                    await model.refreshAsync()
+                }
             }
         }
     }
@@ -223,7 +264,7 @@ struct StudioView: View {
                     .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(StudyTheme.rule).allowsHitTesting(false) }
                     .transition(.opacity.combined(with: reduceMotion ? .identity : .offset(y: 8)))
             }
-            if selected != .lounge, !loungeOverlay, let track = lounge.track, lounge.player != nil {
+            if selected != .lounge, activeReaders.isEmpty, !loungeOverlay, let track = lounge.track, lounge.player != nil {
                 Menu {
                     Button(lounge.playing ? "暂停" : "播放") { lounge.togglePlayback() }
                     Button("上一首") { lounge.skip(-1) }
@@ -335,7 +376,7 @@ struct StudioView: View {
                     if selected == section { Rectangle().fill(StudyTheme.copper).frame(width: 2) }
                 }
                 .contentShape(Rectangle())
-        }.buttonStyle(.plain).accessibilityLabel(section.title)
+        }.buttonStyle(.plain).accessibilityLabel(section.title).accessibilityIdentifier("studio.nav." + section.rawValue)
             .accessibilityAddTraits(selected == section ? .isSelected : [])
     }
 
@@ -489,7 +530,7 @@ struct InboxView: View {
                         ?? model.card(from: mark, type: mark.highlightKind)
                 } label: {
                     Label("整理成卡片", systemImage: "rectangle.badge.plus")
-                }.buttonStyle(.bordered)
+                }.buttonStyle(.bordered).accessibilityIdentifier("inbox.organize")
             }
             if let source, source.deletedAt == nil {
                 NavigationLink("回到出处") { SourceReaderView(source: source, location: mark.locator) }
@@ -593,17 +634,28 @@ struct CardsView: View {
     }
     var body: some View {
         NavigationStack {
-            List {
-                Picker("视图", selection: $category) {
-                    ForEach(["全部", "词汇库", "语料库"] + CardKind.allCases.map(\.title), id: \.self) { Text($0) }
-                }.pickerStyle(.menu)
-                ForEach(cards) { card in
-                    StudyCardPreview(card: card).listRowBackground(Color.clear).listRowSeparator(.hidden).contextMenu {
-                        Button("编辑卡片") { editor = card }
-                        Button("移入回收站", role: .destructive) { model.delete([card.id]) }
+            ScrollView {
+                VStack(alignment: .leading, spacing: 18) {
+                    HStack(alignment: .firstTextBaseline) {
+                        Text("知识卡片").font(.system(.largeTitle, design: .serif, weight: .semibold))
+                            .accessibilityAddTraits(.isHeader)
+                        Spacer()
+                        Picker("卡片分类", selection: $category) {
+                            ForEach(["全部", "词汇库", "语料库"] + CardKind.allCases.map(\.title), id: \.self) { Text($0) }
+                        }.pickerStyle(.menu)
                     }
-                }
-            }.studySurface().navigationTitle("知识卡片").searchable(text: $search)
+                    let matching = cards
+                    if matching.isEmpty { ContentUnavailableView("没有匹配的卡片", systemImage: "rectangle.stack") }
+                    LazyVGrid(columns: [GridItem(.adaptive(minimum: 265, maximum: 490), spacing: 14)], spacing: 16) {
+                        ForEach(matching) { card in
+                            StudyCardPreview(card: card).contextMenu {
+                                Button("编辑卡片") { editor = card }
+                                Button("移入回收站", role: .destructive) { model.delete([card.id]) }
+                            }
+                        }
+                    }
+                }.padding(24).frame(maxWidth: 1180).frame(maxWidth: .infinity)
+            }.studySurface().navigationBarTitleDisplayMode(.inline).searchable(text: $search, prompt: "搜索卡片")
         }.sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
     }
 }
@@ -644,7 +696,7 @@ struct CardEditor: View {
                     }
                 }
                 Section {
-                    fieldEditor(fields[0])
+                    fieldEditor(fields[0]).accessibilityIdentifier("card.editor.main")
                     if fields.count > 1 {
                         DisclosureGroup("补充内容") {
                             ForEach(fields.dropFirst(), id: \.self) { fieldEditor($0) }
@@ -749,7 +801,7 @@ struct StudyCardPreview: View {
                     CardDetailView(cardID: card.id, initialComparison: ref)
                 } label: {
                     HStack {
-                        Text(source.title).lineLimit(1).foregroundStyle(.secondary)
+                        Text(StudioModel.importTitle(source.title)).lineLimit(1).foregroundStyle(.secondary)
                         Spacer(minLength: 8)
                         Label("原文对照", systemImage: "book.pages")
                     }.font(.caption).padding(.horizontal, 14).frame(minHeight: 44)
@@ -803,7 +855,7 @@ struct CardDetailView: View {
         NavigationStack {
             Group {
                 if let source = model.state.sources.first(where: { $0.id == ref.sourceID && $0.deletedAt == nil }) {
-                    SourceReaderView(source: source, location: ref.locator).id(ref.id)
+                    SourceReaderView(source: source, location: ref.locator, closeReader: { comparison = nil }).id(ref.id)
                 } else { ContentUnavailableView("原文不可用", systemImage: "book.closed") }
             }.toolbar { Button("结束对照") { comparison = nil } }
         }

@@ -35,6 +35,7 @@ document_types = {uti for item in info.get('CFBundleDocumentTypes', [])
 require({'com.adobe.pdf', 'org.idpf.epub-container', 'public.mpeg-4', 'com.apple.quicktime-movie'} <= document_types,
         'The device App is missing its Files document declarations')
 require(info.get('LSSupportsOpeningDocumentsInPlace') is True, 'Files opening is disabled')
+require('audio' in info.get('UIBackgroundModes', []), 'Background audio is missing')
 build = pathlib.Path('.build/device-platform.txt').read_text()
 require(re.search(r'platform\s+IOS\s*$', build, re.M), f'Mach-O is not built for iOS devices: {build[:500]}')
 require(not (app / 'embedded.mobileprovision').exists(), 'Unexpected provisioning profile')
@@ -60,9 +61,25 @@ manifest = json.loads((extension / 'manifest.json').read_text())
 for resource in manifest['background']['scripts'] + [name for script in manifest['content_scripts'] for name in script['js']]:
     assert (extension / resource).is_file(), f'Missing Safari script: {resource}'
 CHECK
+ks_share="$ks_app/PlugIns/ShareExtension.appex"
+test -d "$ks_share" || fail 'Share extension is missing from the device archive.'
+ks_share_binary="$ks_share/$(/usr/libexec/PlistBuddy -c 'Print CFBundleExecutable' "$ks_share/Info.plist")"
+xcrun lipo "$ks_share_binary" -verify_arch arm64
+python3 - "$ks_share" <<'CHECK'
+import pathlib, plistlib, sys
+share = pathlib.Path(sys.argv[1])
+info = plistlib.loads((share / 'Info.plist').read_bytes())
+app = plistlib.loads((share.parents[1] / 'Info.plist').read_bytes())
+assert info['NSExtension']['NSExtensionPointIdentifier'] == 'com.apple.share-services'
+assert info['CFBundleSupportedPlatforms'] == ['iPhoneOS']
+assert info['SharedAppGroup'] == app['SharedAppGroup']
+for key in ['CFBundleShortVersionString', 'CFBundleVersion']:
+    assert info[key] == app[key], f'Mismatched share extension {key}'
+CHECK
 # Ad-hoc signatures carry requested entitlements for the user's re-signing tool.
 # They do not provide an Apple provisioning profile or grant device permissions.
 codesign --force --sign - --generate-entitlement-der --entitlements ios/SafariExtension/SafariExtension.entitlements "$ks_extension"
+codesign --force --sign - --generate-entitlement-der --entitlements ios/ShareExtension/ShareExtension.entitlements "$ks_share"
 codesign --force --sign - --generate-entitlement-der --entitlements ios/KnowledgeStudio/KnowledgeStudio.entitlements "$ks_app"
 codesign --verify --deep --strict "$ks_app"
 # Keep the XML-only export syntax verified on our macOS 15/26 toolchains.
@@ -70,9 +87,10 @@ codesign --verify --deep --strict "$ks_app"
 # The ':' deprecation notice is non-fatal; do not drop it without testing the replacement.
 codesign -d --entitlements :- "$ks_app" > .build/app-entitlements.plist
 codesign -d --entitlements :- "$ks_extension" > .build/extension-entitlements.plist
+codesign -d --entitlements :- "$ks_share" > .build/share-entitlements.plist
 python3 - <<'CHECK'
 import plistlib, pathlib
-for name in ['app', 'extension']:
+for name in ['app', 'extension', 'share']:
     entitlements = plistlib.loads(pathlib.Path(f'.build/{name}-entitlements.plist').read_bytes())
     assert entitlements['com.apple.security.application-groups'] == ['group.org.knowledge-studio.prototype']
 CHECK
@@ -99,6 +117,8 @@ report = {
     'signed': True,
     'signing': 'ad-hoc; user provisioning required',
     'safari_extension_embedded': True,
+    'share_extension_embedded': True,
+    'background_audio_declared': True,
     'app_icon_asset_compiled': True,
     'files_document_types_verified': True,
     'requested_app_group': 'group.org.knowledge-studio.prototype',

@@ -39,6 +39,8 @@
 	<string>$(CURRENT_PROJECT_VERSION)</string>
 	<key>SharedAppGroup</key>
 	<string>group.org.knowledge-studio.prototype</string>
+	<key>UIBackgroundModes</key>
+	<array><string>audio</string></array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

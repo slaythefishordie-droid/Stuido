@@ -21,10 +21,22 @@ enum StudyPageLayout: String, CaseIterable {
     }
 }
 
+struct StudyReaderExit: EnvironmentKey {
+    static let defaultValue: (@MainActor () -> Void)? = nil
+}
+
+extension EnvironmentValues {
+    var studyReaderExit: (@MainActor () -> Void)? {
+        get { self[StudyReaderExit.self] }
+        set { self[StudyReaderExit.self] = newValue }
+    }
+}
+
 /// Keep reader tools in the upper margin, outside the document's touch and drawing area.
 struct StudyReaderDock<Content: View, Tools: View>: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.accessibilityVoiceOverEnabled) private var voiceOver
+    @Environment(\.studyReaderExit) private var exit
     @AppStorage("studyReaderToolsFade") private var fade = true
     @State private var hidden = false
     @State private var idle = false
@@ -43,25 +55,18 @@ struct StudyReaderDock<Content: View, Tools: View>: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            HStack(spacing: 1) {
-                Button {
-                    setHidden(!hidden)
-                } label: {
-                    Image(systemName: hidden ? "chevron.down" : "chevron.up")
-                        .font(.caption.weight(.semibold)).frame(width: 44, height: hidden ? 25 : 44)
-                }.buttonStyle(.plain)
-                    .accessibilityLabel(hidden ? "显示标记工具" : "隐藏标记工具")
-                if !hidden { tools }
-            }.padding(.horizontal, 4)
-                .background(.regularMaterial, in: Capsule())
-                .overlay { Capsule().strokeBorder(StudyTheme.rule, lineWidth: 1).allowsHitTesting(false) }
-                .opacity(fade && idle && !hidden && !voiceOver ? 0.58 : 1)
-                .padding(.vertical, 2)
-                .simultaneousGesture(DragGesture(minimumDistance: 15).onEnded { value in
-                    if value.translation.height < -20 { setHidden(true) }
-                    if value.translation.height > 20 { setHidden(false) }
-                })
-                .simultaneousGesture(TapGesture().onEnded { wake() })
+            HStack(spacing: 0) {
+                if let exit {
+                    Button(action: exit) {
+                        Image(systemName: "chevron.left").font(.caption.weight(.semibold))
+                            .frame(width: 44, height: 44)
+                    }.buttonStyle(.plain).accessibilityLabel("返回资料")
+                }
+                Spacer(minLength: 0)
+                toolShelf
+                Spacer(minLength: 0)
+                if exit != nil { Color.clear.frame(width: 44, height: 1).accessibilityHidden(true) }
+            }.background(alignment: .bottom) { Rectangle().fill(StudyTheme.rule.opacity(0.5)).frame(height: 1) }
             content.frame(maxWidth: .infinity, maxHeight: .infinity)
         }.background(StudyTheme.paper)
             .onChange(of: selectionActive) { _, selected in
@@ -73,6 +78,21 @@ struct StudyReaderDock<Content: View, Tools: View>: View {
                 do { try await Task.sleep(for: .seconds(8)) } catch { return }
                 withAnimation(reduceMotion ? nil : .easeOut(duration: 0.2)) { idle = true }
             }
+    }
+
+    private var toolShelf: some View {
+        HStack(spacing: 1) {
+            Button { setHidden(!hidden) } label: {
+                Image(systemName: hidden ? "chevron.down" : "chevron.up")
+                    .font(.caption.weight(.semibold)).frame(width: 40, height: 44)
+            }.buttonStyle(.plain).accessibilityLabel(hidden ? "显示标记工具" : "隐藏标记工具")
+            if !hidden { tools }
+        }.opacity(fade && idle && !hidden && !voiceOver ? 0.65 : 1)
+            .simultaneousGesture(DragGesture(minimumDistance: 15).onEnded { value in
+                if value.translation.height < -20 { setHidden(true) }
+                if value.translation.height > 20 { setHidden(false) }
+            })
+            .simultaneousGesture(TapGesture().onEnded { wake() })
     }
 
     private func wake() { idle = false; activity = UUID() }
@@ -141,32 +161,46 @@ struct PDFStudyDockControls<Options: View>: View {
 
     var body: some View {
         StudyMarkColors(selection: $selection, onPick: save).disabled(!enabled)
-        Button {
-            regionMode.toggle()
-        } label: {
+        Button { regionMode.toggle() } label: {
             Image(systemName: regionMode ? "viewfinder.circle.fill" : "viewfinder")
                 .frame(minWidth: 40, minHeight: 44)
         }.buttonStyle(.plain).accessibilityLabel("区域标记")
             .accessibilityAddTraits(regionMode ? .isSelected : []).disabled(!enabled)
-        historyButton("arrow.uturn.backward", label: "撤销笔迹", enabled: ink.canUndo, action: ink.undo)
-        historyButton("arrow.uturn.forward", label: "重做笔迹", enabled: ink.canRedo, action: ink.redo)
-        Menu {
-            ForEach(PDFInkTool.allCases, id: \.self) { tool in
-                Button {
-                    choose(tool)
-                } label: {
-                    Label(tool.title, systemImage: ink.tool == tool ? "checkmark" : tool.icon)
-                }.disabled(!enabled && tool != .select)
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 0) {
+                toolButton(.select)
+                toolButton(.pen)
+                toolButton(.marker)
+                toolButton(.eraser)
+                historyButton("arrow.uturn.backward", label: "撤销笔迹", enabled: ink.canUndo, action: ink.undo)
+                historyButton("arrow.uturn.forward", label: "重做笔迹", enabled: ink.canRedo, action: ink.redo)
             }
-            Divider()
+            Menu {
+                ForEach(PDFInkTool.allCases, id: \.self) { tool in toolButton(tool) }
+                Button("撤销笔迹", action: ink.undo).disabled(!ink.canUndo)
+                Button("重做笔迹", action: ink.redo).disabled(!ink.canRedo)
+            } label: {
+                Image(systemName: ink.tool.icon).frame(minWidth: 40, minHeight: 44)
+            }.accessibilityLabel("批注工具")
+        }
+        Menu {
             options
         } label: {
-            Image(systemName: ink.tool.icon).frame(minWidth: 44, minHeight: 44)
-        }.accessibilityLabel("批注工具，\(ink.tool.title)")
+            Image(systemName: "ellipsis").frame(minWidth: 40, minHeight: 44)
+        }.accessibilityLabel("更多阅读工具")
             .popover(isPresented: $ink.showPalette) {
                 StudyMarkColors(selection: $selection).padding()
                     .presentationCompactAdaptation(.popover)
             }
+    }
+
+    private func toolButton(_ tool: PDFInkTool) -> some View {
+        Button { choose(tool) } label: {
+            Label(tool.title, systemImage: tool.icon).labelStyle(.iconOnly)
+                .frame(minWidth: 34, minHeight: 44)
+                .background(ink.tool == tool ? StudyTheme.rule : .clear, in: RoundedRectangle(cornerRadius: 5))
+        }.buttonStyle(.plain).disabled(!enabled && tool != .select)
+            .accessibilityAddTraits(ink.tool == tool ? .isSelected : [])
     }
 
     private func historyButton(_ icon: String, label: String, enabled: Bool, action: @escaping () -> Void)

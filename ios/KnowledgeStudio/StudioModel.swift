@@ -9,6 +9,10 @@ final class StudioModel: ObservableObject {
     @Published var sharedWarning: String?
     @Published private(set) var isImporting = false
     @Published private(set) var importStatus: String?
+    @Published private(set) var importCanCancel = false
+    @Published private(set) var sharedDocuments: [SharedDocumentInbox.Entry] = []
+    private var importTask: Task<LibrarySource, Error>?
+    private var changingManagedData = false
     private var revision = 0
     let root: URL
     private(set) var repository: LibraryRepository?
@@ -202,22 +206,57 @@ final class StudioModel: ObservableObject {
         guard let hash = source.assetHash, let ext = source.assetExtension else { return nil }
         return root.appendingPathComponent("assets/\(hash).\(ext)")
     }
-    func importFile(_ url: URL, replacing sourceID: UUID? = nil, projectID: UUID? = nil) async {
-        guard !isImporting else {
-            message = "正在导入另一份资料，请稍后重试。"
-            return
+    func reloadSharedDocuments() async {
+        sharedDocuments = (try? await Task.detached(priority: .utility) {
+            try SharedDocumentInbox.configured().entries()
+        }.value) ?? []
+    }
+
+    func acceptSharedDocument(_ entry: SharedDocumentInbox.Entry) async {
+        guard !isImporting else { return }
+        do {
+            let inbox = try SharedDocumentInbox.configured()
+            let file = try inbox.file(entry)
+            if await importFile(file) {
+                try inbox.remove(entry)
+            }
+        } catch { message = error.localizedDescription }
+        await reloadSharedDocuments()
+    }
+
+    func cancelImport() {
+        importTask?.cancel()
+        importCanCancel = false
+    }
+
+    @discardableResult
+    func importFile(_ url: URL, replacing sourceID: UUID? = nil, projectID: UUID? = nil) async -> Bool {
+        guard !isImporting, !changingManagedData else {
+            message = "资料库正在处理另一项任务，请稍后重试。"
+            return false
         }
         isImporting = true
-        importStatus = nil
-        defer { isImporting = false }
+        importStatus = "正在接收「\(url.lastPathComponent)」"
+        message = nil
+        importCanCancel = true
+        defer { isImporting = false; importCanCancel = false; importTask = nil }
         let scope = url.startAccessingSecurityScopedResource()
         defer { if scope { url.stopAccessingSecurityScopedResource() } }
         do {
             guard repository != nil else { throw LibraryError.invalid("知识库不可用") }
             let root = self.root
-            let imported = try await Task.detached(priority: .userInitiated) {
+            let copy = Task.detached(priority: .userInitiated) {
                 try Self.prepareAsset(url: url, root: root)
-            }.value
+            }
+            importTask = copy
+            let imported = try await withTaskCancellationHandler {
+                try await copy.value
+            } onCancel: { copy.cancel() }
+            try Task.checkCancellation()
+            guard !copy.isCancelled else { throw CancellationError() }
+            importTask = nil
+            importCanCancel = false
+            importStatus = "正在写入资料库…"
             let wasExisting = state.sources.contains { $0.assetHash == imported.assetHash && $0.deletedAt == nil }
             try await commitAsync { state in
                 if let sourceID {
@@ -254,15 +293,24 @@ final class StudioModel: ObservableObject {
             }
             message = nil
             importStatus = wasExisting
-                    ? (projectID == nil ? "这份资料已在资料库。" : "已将现有资料关联到所选项目。")
-                    : "已导入「\(imported.title)」"
-        } catch { message = error.localizedDescription }
+                ? (projectID == nil ? "这份资料已在资料库。" : "已将现有资料关联到所选项目。")
+                : "已导入「\(imported.title)」"
+            return true
+        } catch is CancellationError {
+            importStatus = "导入已取消。"
+            return false
+        } catch {
+            importStatus = "资料未导入"
+            message = error.localizedDescription
+            return false
+        }
     }
 
     /// Copy and hash in bounded chunks off the UI actor, then publish an immutable asset.
     nonisolated private static func prepareAsset(url: URL, root: URL) throws -> LibrarySource {
+        try Task.checkCancellation()
         let ext = url.pathExtension.lowercased()
-        guard ["pdf", "epub", "mp4", "m4v", "mov"].contains(ext) else {
+        guard SharedDocumentInbox.extensions.contains(ext) else {
             throw LibraryError.invalid("请选择 PDF、EPUB 或本地视频文件")
         }
         let stage = root.appendingPathComponent("asset-import-" + UUID().uuidString)
@@ -278,10 +326,12 @@ final class StudioModel: ObservableObject {
         }
         var digest = SHA256()
         while let chunk = try input.read(upToCount: 1_048_576), !chunk.isEmpty {
+            try Task.checkCancellation()
             try output.write(contentsOf: chunk)
             digest.update(data: chunk)
         }
         try output.close()
+        try Task.checkCancellation()
         let hash = digest.finalize().map { String(format: "%02x", $0) }.joined()
         let destination = root.appendingPathComponent("assets/\(hash).\(ext)")
         try FileManager.default.createDirectory(
@@ -298,18 +348,29 @@ final class StudioModel: ObservableObject {
         }
         let kind: SourceKind = ext == "pdf" ? .pdf : ext == "epub" ? .epub : .local_video
         return LibrarySource(
-            kind: kind, title: url.deletingPathExtension().lastPathComponent, assetHash: hash,
+            kind: kind, title: Self.importTitle(url.deletingPathExtension().lastPathComponent), assetHash: hash,
             assetExtension: ext)
+    }
+
+    nonisolated static func importTitle(_ sourceName: String) -> String {
+        let cleaned = sourceName.replacingOccurrences(
+            of: #"\s*[\(（]\s*(?:z[- ]?library|1lib|b[- ]?ok|libgen|annas[- ]archive)\b[^()（）]*[\)）]\s*$"#,
+            with: "", options: [.regularExpression, .caseInsensitive]).trimmingCharacters(in: .whitespacesAndNewlines)
+        return cleaned.isEmpty ? sourceName : cleaned
     }
 
     nonisolated static func hash(_ url: URL) throws -> String {
         let handle = try FileHandle(forReadingFrom: url)
         defer { try? handle.close() }
         var digest = SHA256()
-        while let chunk = try handle.read(upToCount: 1_048_576), !chunk.isEmpty { digest.update(data: chunk) }
+        while let chunk = try handle.read(upToCount: 1_048_576), !chunk.isEmpty {
+            try Task.checkCancellation()
+            digest.update(data: chunk)
+        }
         return digest.finalize().map { String(format: "%02x", $0) }.joined()
     }
-    func stageImport(_ text: String) async {
+    @discardableResult
+    func stageImport(_ text: String) async -> PendingImport? {
         do {
             let snapshot = state
             let preview = try await Task.detached(priority: .userInitiated) {
@@ -327,7 +388,8 @@ final class StudioModel: ObservableObject {
                     PendingImport(packageID: preview.packageID, title: preview.title, json: text))
             }
             message = nil
-        } catch { message = error.localizedDescription }
+            return state.pending.first { $0.packageID == preview.packageID }
+        } catch { message = error.localizedDescription; return nil }
     }
     func unusedAssets() throws -> [URL] {
         var protected = Set(state.sources.compactMap { assetURL($0)?.lastPathComponent })
@@ -399,18 +461,75 @@ final class StudioModel: ObservableObject {
         }
     }
 
+    func commitImport(_ preview: ImportPreview, selected: Set<UUID>, projectID: UUID?, pendingID: UUID) async throws {
+        guard let repository else { throw LibraryError.invalid("知识库不可用") }
+        try await Task.detached(priority: .userInitiated) {
+            try ImportService.commit(preview, selected: selected, projectID: projectID, pendingID: pendingID, to: repository)
+        }.value
+        try await reloadAsync(repository)
+    }
+
+    func reviewCard(_ cardID: UUID, rating: Int, expectedRevision: Int?, eventID: UUID,
+        elapsedMilliseconds: Int, retention: Double) async throws
+    {
+        guard let repository else { throw LibraryError.invalid("知识库不可用") }
+        try await Task.detached(priority: .userInitiated) {
+            try repository.recordReview(cardID: cardID, rating: rating, expectedRevision: expectedRevision,
+                eventID: eventID, elapsedMilliseconds: elapsedMilliseconds, retention: retention)
+        }.value
+        try await reloadAsync(repository)
+    }
+
+    func deleteManaged(_ ids: Set<UUID>, restore: Bool = false, permanently: Bool = false) async -> Bool {
+        guard !ids.isEmpty, !changingManagedData else { return false }
+        changingManagedData = true
+        defer { changingManagedData = false }
+        message = nil
+        do {
+            if permanently {
+                guard !isImporting else { throw LibraryError.invalid("等待资料导入完成后再永久清理。") }
+                try stageAssetPurge(ids)
+            }
+            try await commitAsync { state in
+                if permanently { try Self.purge(ids, in: &state) }
+                else { try Self.setTrashed(ids, restored: restore, in: &state) }
+            }
+            if permanently { try finishAssetPurge() }
+            do {
+                try await Task.detached(priority: .utility) {
+                    try Self.syncWebDeletion(ids, restore: restore)
+                }.value
+            } catch { sharedWarning = "本地操作已完成，Safari 状态更新失败：\(error.localizedDescription)" }
+            return true
+        } catch {
+            message = error.localizedDescription
+            return false
+        }
+    }
+
+    private func stageAssetPurge(_ ids: Set<UUID>) throws {
+        try finishAssetPurge()
+        let names = state.sources.filter { ids.contains($0.id) && $0.deletedAt != nil }
+            .compactMap { assetURL($0)?.lastPathComponent }
+        if !names.isEmpty {
+            try JSONEncoder().encode(names).write(to: purgeJournal, options: .atomic)
+        }
+    }
+
+    nonisolated private static func syncWebDeletion(_ ids: Set<UUID>, restore: Bool) throws {
+        guard let store = try? WebMarkStore.configured() else { return }
+        for mark in try store.readAll() where ids.contains(mark.id) {
+            try store.annotate(id: mark.id, deleted: !restore)
+        }
+    }
+
     func delete(_ ids: Set<UUID>, restore: Bool = false, permanently: Bool = false) {
         guard !ids.isEmpty else { return }
         message = nil
         do {
             if permanently {
                 guard !isImporting else { throw LibraryError.invalid("资料正在导入，请稍后清理。") }
-                try finishAssetPurge()
-                let names = state.sources.filter { ids.contains($0.id) && $0.deletedAt != nil }
-                    .compactMap { assetURL($0)?.lastPathComponent }
-                if !names.isEmpty {
-                    try JSONEncoder().encode(names).write(to: purgeJournal, options: .atomic)
-                }
+                try stageAssetPurge(ids)
             }
             try commit { state in
                 if permanently { try Self.purge(ids, in: &state) }
@@ -418,12 +537,9 @@ final class StudioModel: ObservableObject {
             }
             if permanently { try finishAssetPurge() }
         } catch { message = error.localizedDescription }
-        if message == nil, let web = try? WebMarkStore.configured().readAll() {
-            for mark in web where ids.contains(mark.id) {
-                do { try WebMarkStore.configured().annotate(id: mark.id, deleted: !restore) } catch {
-                    sharedWarning = "本地操作已完成，Safari 状态更新失败：\(error.localizedDescription)"
-                }
-            }
+        if message == nil {
+            do { try Self.syncWebDeletion(ids, restore: restore) }
+            catch { sharedWarning = "本地操作已完成，Safari 状态更新失败：\(error.localizedDescription)" }
         }
     }
 

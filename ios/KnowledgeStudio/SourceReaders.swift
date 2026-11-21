@@ -10,9 +10,12 @@ struct SourceReaderView: View {
     @EnvironmentObject private var model: StudioModel
     let source: LibrarySource
     var location: ReadingLocator?
+    var closeReader: (@MainActor () -> Void)? = nil
+    @Environment(\.dismiss) private var dismiss
     @State private var attach = false
     @State private var readerID = UUID()
     @Environment(\.studyReaderPresentation) private var readerPresentation
+    private var book: Bool { [.pdf, .epub].contains(source.kind) }
     private var immersive: Bool { [.pdf, .epub, .local_video].contains(source.kind) }
     var body: some View {
         let live = model.state.sources.first { $0.id == self.source.id }
@@ -47,7 +50,9 @@ struct SourceReaderView: View {
                     Button("绑定原始文件") { attach = true }
                 }
             }
-        }.studySurface().navigationTitle(source.title).navigationBarTitleDisplayMode(.inline)
+        }.studySurface().navigationTitle(book ? "" : source.title).navigationBarTitleDisplayMode(.inline)
+            .toolbar(book ? .hidden : .automatic, for: .navigationBar)
+            .environment(\.studyReaderExit, book ? { if let closeReader { closeReader() } else { dismiss() } } : nil)
             .onAppear {
                 readerPresentation.setActive(readerID, source.id, true, immersive)
             }.onDisappear { readerPresentation.setActive(readerID, source.id, false, immersive) }
@@ -305,7 +310,6 @@ struct PDFStudyView: View {
                 marksInteractive: session.ink.tool == .select && !regionMode,
                 onMark: { id in selectedMark = model.state.marks.first { $0.id == id && $0.deletedAt == nil } },
                 onRegion: saveRegion)
-            PronunciationStatus()
             if recognizing { ProgressView("正在识别选区…").font(.caption) }
         }
     }
@@ -780,8 +784,8 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
     static let fontRange = 65.0...230.0
     static let spacingRange = 1.05...2.85
     static let marginRange = 0.35...2.75
-    static let song: FontFamily = "Songti SC"
-    static let hei: FontFamily = "PingFang SC"
+    static let song: FontFamily = "Iowan Old Style"
+    static let hei: FontFamily = "Helvetica Neue"
     static func fontScale(for percent: Double) -> Double {
         min(fontRange.upperBound, max(fontRange.lowerBound, percent)) / 100
     }
@@ -837,9 +841,10 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
                     EditingAction(title: "关键句高亮", action: #selector(StudyEPUBContainer.markSentence)),
                     EditingAction(title: "听发音", action: #selector(StudyEPUBContainer.pronounce)),
                     .copy, .lookup,
-                ], fontFamilyDeclarations: [
-                    CSSFontFamilyDeclaration(fontFamily: Self.song, alternates: ["STSong", "Georgia", .serif]).eraseToAnyHTMLFontFamilyDeclaration(),
-                    CSSFontFamilyDeclaration(fontFamily: Self.hei, alternates: ["Heiti SC", "Helvetica Neue", .sansSerif]).eraseToAnyHTMLFontFamilyDeclaration(),
+                ], contentInset: [.compact: (top: 18, bottom: 22), .regular: (top: 25, bottom: 25)],
+                fontFamilyDeclarations: [
+                    CSSFontFamilyDeclaration(fontFamily: Self.song, alternates: ["Songti SC", "STSong", "Georgia", .serif]).eraseToAnyHTMLFontFamilyDeclaration(),
+                    CSSFontFamilyDeclaration(fontFamily: Self.hei, alternates: ["PingFang SC", "Heiti SC", .sansSerif]).eraseToAnyHTMLFontFamilyDeclaration(),
                 ]))
             captureSelection = { [weak self, weak reader] kind in
                 guard let locator = reader?.currentSelection?.locator, let text = locator.text.highlight,
@@ -919,6 +924,7 @@ struct EPUBStudyView: View {
     @AppStorage("readerColumns") private var legacyColumns = true
     @AppStorage("readerColumnMode") private var columnMode = "legacy"
     @AppStorage("readerMargins") private var margins = 1.0
+    @AppStorage("readerParagraphSpacing") private var paragraphSpacing = 0.65
     @State private var settings = false
     @State private var selectedMark: LibraryMark?
     @AppStorage("readerFont") private var font = "serif"
@@ -962,6 +968,7 @@ struct EPUBStudyView: View {
         .onChange(of: theme) { _, _ in applyPreferences() }
         .onChange(of: columnMode) { _, _ in applyPreferences() }
         .onChange(of: margins) { _, _ in applyPreferences() }
+        .onChange(of: paragraphSpacing) { _, _ in applyPreferences() }
         .popover(isPresented: $settings, attachmentAnchor: .point(.topTrailing)) {
             NavigationStack {
                 Form {
@@ -989,6 +996,8 @@ struct EPUBStudyView: View {
                         Text("双页").tag("two")
                     }
                     Section("页边距") { Slider(value: $margins, in: EPUBSession.marginRange, step: 0.1) }
+                    Section("段间距") { Slider(value: $paragraphSpacing, in: 0...1.5, step: 0.05) }
+                    DisclosureGroup("发音来源") { PronunciationStatus() }
                 }.studySurface().navigationTitle("阅读设置").toolbar { Button("完成") { settings = false } }
             }.frame(idealWidth: 375, idealHeight: 440).presentationCompactAdaptation(.popover)
         }
@@ -1018,7 +1027,6 @@ struct EPUBStudyView: View {
                     marks: model.state.marks.filter { $0.sourceID == source.id && $0.deletedAt == nil },
                     capture: { session.captureSelection?($0) })
             } else { ProgressView("正在打开 EPUB…") }
-            PronunciationStatus()
         }
     }
 
@@ -1039,7 +1047,7 @@ struct EPUBStudyView: View {
             columnCount: mode.usesSpread(in: readerSize) ? .two : .one,
             fontFamily: font == "serif" ? EPUBSession.song : EPUBSession.hei,
             fontSize: EPUBSession.fontScale(for: fontSize),
-            lineHeight: lineHeight, pageMargins: margins, publisherStyles: false,
+            lineHeight: lineHeight, pageMargins: margins, paragraphSpacing: paragraphSpacing, publisherStyles: false,
             theme: theme == "dark" ? .dark : theme == "light" ? .light : .sepia)
     }
 

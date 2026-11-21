@@ -32,7 +32,9 @@ struct LoungeView: View {
                 }.padding(24).frame(maxWidth: 1060).frame(maxWidth: .infinity)
             }
         }.studySurface()
-            .sheet(isPresented: $music) { LoungeMusicLibrary().environmentObject(hub) }
+            .sheet(isPresented: $music) {
+                LoungeMusicLibrary().environmentObject(hub).presentationDetents([.medium, .large])
+            }
             .sheet(isPresented: $schedule) { LoungeTimerPanel().environmentObject(hub) }
             .sheet(isPresented: $stats) {
                 NavigationStack { LoungeStatsView().environmentObject(hub).environmentObject(model) }
@@ -580,14 +582,14 @@ struct LoungePreferences: View {
     @AppStorage("loungeDrawInterval") private var drawInterval = 30
 
     var body: some View {
-        Section("计时提醒") {
+        StudyPreferenceShelf("计时提醒") {
             Toggle("右下角浮窗", isOn: $popup)
             Toggle("静默提醒", isOn: $silent).onChange(of: silent) { _, _ in hub.reminderPreferencesChanged() }
             Toggle("触觉反馈（设备支持时）", isOn: $haptics)
             Stepper("浮窗显示 \(popupSeconds) 秒", value: $popupSeconds, in: 5...30)
                 .disabled(!popup)
         }
-        Section("休息纸条") {
+        StudyPreferenceShelf("休息纸条") {
             Picker("自动更新", selection: $drawInterval) {
                 Text("仅手动").tag(0)
                 ForEach([5, 15, 30, 60, 120], id: \.self) { Text("\($0) 分钟").tag($0) }

@@ -39,6 +39,7 @@ struct ExtensionSetupView: View {
     @AppStorage("readerColumnMode") private var columns = "legacy"
     @AppStorage("readerFont") private var font = "serif"
     @AppStorage("readerMargins") private var margins = 1.0
+    @AppStorage("readerParagraphSpacing") private var paragraphSpacing = 0.65
     @AppStorage("studyReaderToolsFade") private var toolsFade = true
 
     var body: some View {
@@ -46,10 +47,19 @@ struct ExtensionSetupView: View {
             GeometryReader { geometry in
                 if geometry.size.width >= 650 {
                     HStack(spacing: 0) {
-                        List(selection: $category) {
-                            ForEach(Category.allCases) { item in
-                                Label(item.rawValue, systemImage: item.icon).tag(item)
-                            }
+                        ScrollView {
+                            VStack(alignment: .leading, spacing: 6) {
+                                ForEach(Category.allCases) { item in
+                                    Button { category = item } label: {
+                                        Label(item.rawValue, systemImage: item.icon)
+                                            .frame(maxWidth: .infinity, minHeight: 48, alignment: .leading)
+                                            .padding(.horizontal, 12)
+                                            .background(category == item ? StudyTheme.mat : .clear,
+                                                in: RoundedRectangle(cornerRadius: 5))
+                                    }.buttonStyle(.plain)
+                                        .accessibilityAddTraits(category == item ? .isSelected : [])
+                                }
+                            }.padding(12)
                         }.studySurface().frame(width: 225)
                         Divider()
                         preferences(category ?? .reading)
@@ -71,21 +81,30 @@ struct ExtensionSetupView: View {
     }
 
     private func preferences(_ item: Category) -> some View {
-        Form {
-            switch item {
+        ScrollView {
+            VStack(alignment: .leading, spacing: 18) {
+                Label(item.rawValue, systemImage: item.icon)
+                    .font(.system(.title2, design: .serif, weight: .semibold)).accessibilityAddTraits(.isHeader)
+                preferenceContent(item)
+            }.padding(24).frame(maxWidth: 740).frame(maxWidth: .infinity)
+        }.studySurface().studyChange(item)
+    }
+
+    @ViewBuilder private func preferenceContent(_ item: Category) -> some View {
+        switch item {
             case .reading: reading
             case .video:
-                Section("本地视频") {
+                StudyPreferenceShelf("本地视频") {
                     Picker("标记提前量", selection: $lead) {
                         ForEach(0...3, id: \.self) { Text("\($0) 秒").tag($0) }
                     }
                 }
-                Section("Safari") {
+                StudyPreferenceShelf("Safari") {
                     NavigationLink("QuickMark 与 Safari 扩展") { StudioGuide(initialTopic: .safari) }
                     SafariSharedSettings()
                 }
             case .cards:
-                Section("FSRS · 新加入的卡片") {
+                StudyPreferenceShelf("FSRS · 新加入的卡片") {
                     Slider(value: $retention, in: 0.7...0.97, step: 0.01)
                     LabeledContent("目标保持率", value: "\(Int((retention * 100).rounded()))%")
                 }
@@ -94,7 +113,7 @@ struct ExtensionSetupView: View {
                     Text("英式英语").tag("en-GB")
                 }
             case .appearance:
-                Section("书房") {
+                StudyPreferenceShelf("书房") {
                     Picker("外观", selection: $appearance) {
                         Text("跟随系统").tag("system")
                         Text("浅色").tag("light")
@@ -117,13 +136,12 @@ struct ExtensionSetupView: View {
             case .help:
                 NavigationLink("使用指南") { StudioGuide() }
                 Button("恢复默认偏好", role: .destructive) { reset = true }
-            }
-        }.studySurface()
+        }
     }
 
     private var reading: some View {
         Group {
-            Section("PDF") {
+            StudyPreferenceShelf("PDF") {
                 Picker("布局", selection: $pdfLayout) {
                     ForEach(StudyPageLayout.allCases, id: \.rawValue) { Text($0.title).tag($0.rawValue) }
                 }
@@ -131,7 +149,7 @@ struct ExtensionSetupView: View {
                 Toggle("独立封面页", isOn: $cover)
                 Toggle("从右向左", isOn: $rtl)
             }
-            Section("EPUB") {
+            StudyPreferenceShelf("EPUB") {
                 Picker("分页", selection: $columns) {
                     Text("沿用原设置").tag("legacy")
                     Text("自动").tag("auto")
@@ -150,8 +168,9 @@ struct ExtensionSetupView: View {
                 Stepper("字号 \(Int(size))%", value: $size, in: EPUBSession.fontRange, step: 5)
                 LabeledContent("行距") { Slider(value: $lines, in: EPUBSession.spacingRange, step: 0.05) }
                 LabeledContent("页边距") { Slider(value: $margins, in: EPUBSession.marginRange, step: 0.1) }
+                LabeledContent("段间距") { Slider(value: $paragraphSpacing, in: 0...1.5, step: 0.05) }
             }
-            Section("工具") {
+            StudyPreferenceShelf("工具") {
                 Toggle("工具栏空闲时淡化", isOn: $toolsFade)
                 Toggle("允许手指书写 PDF", isOn: $fingerInk)
                 NavigationLink("Pencil 操作指南") { StudioGuide(initialTopic: .pencil) }
@@ -178,7 +197,26 @@ struct ExtensionSetupView: View {
         columns = "legacy"
         font = "serif"
         margins = 1
+        paragraphSpacing = 0.65
         toolsFade = true
+    }
+}
+
+struct StudyPreferenceShelf<Content: View>: View {
+    let title: String
+    let content: Content
+
+    init(_ title: String, @ViewBuilder content: () -> Content) {
+        self.title = title
+        self.content = content()
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text(title).font(.system(.headline, design: .serif))
+            Rectangle().fill(StudyTheme.rule).frame(height: 1)
+            content
+        }.frame(maxWidth: .infinity, alignment: .leading).studyPanel()
     }
 }
 

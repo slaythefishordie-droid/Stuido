@@ -30,7 +30,7 @@ struct StudySourceTile: View {
 
     private var caption: some View {
         VStack(alignment: .leading, spacing: 4) {
-            Text(source.title).font(.subheadline.weight(.semibold)).lineLimit(2)
+            Text(StudioModel.importTitle(source.title)).font(.subheadline.weight(.semibold)).lineLimit(2)
         }.multilineTextAlignment(.leading)
     }
 }
@@ -171,7 +171,7 @@ struct StudySourceCover: View {
             }
             if showTitle {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(source.title).font(.system(.headline, design: .serif)).lineLimit(3)
+                    Text(StudioModel.importTitle(source.title)).font(.system(.headline, design: .serif)).lineLimit(3)
                     Spacer(minLength: 0)
                     Text(author ?? source.url.flatMap { URL(string: $0)?.host } ?? studioLabel(source.kind.rawValue))
                         .font(.caption2.weight(.semibold)).lineLimit(1)

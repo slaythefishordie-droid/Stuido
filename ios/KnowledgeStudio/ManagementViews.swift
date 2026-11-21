@@ -11,68 +11,96 @@ struct AIInboxView: View {
     @State private var staging = false
     var body: some View {
         NavigationStack {
-            List {
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        StudyHeading(title: "导入卡片包")
-                        Text("先校验内容，再匹配资料和选择候选卡片。")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                    }.studyPanel()
-                }.listRowBackground(Color.clear)
-                Section("准备卡片包") {
-                    Button("选择 JSON 文件", systemImage: "doc.badge.plus") { importing = true }.disabled(staging)
-                    DisclosureGroup("查看或粘贴 JSON", isExpanded: $editingJSON) {
-                        TextEditor(text: $text).frame(minHeight: 126).font(.system(.body, design: .monospaced))
-                    }
-                    Button {
-                        let input = text
-                        staging = true
-                        Task {
-                            await model.stageImport(input)
-                            if model.message == nil && text == input { text = "" }
-                            staging = false
+            ScrollView {
+                VStack(alignment: .leading, spacing: 24) {
+                    Text("导入箱").font(.system(.largeTitle, design: .serif, weight: .semibold))
+                        .accessibilityAddTraits(.isHeader)
+                    importDesk
+                    if editingJSON { pasteArea }
+                    VStack(alignment: .leading, spacing: 12) {
+                        StudyHeading(title: "待确认批次")
+                        if model.state.pending.isEmpty {
+                            Label("暂无待确认批次", systemImage: "tray").font(.subheadline).foregroundStyle(.secondary)
                         }
-                    } label: {
-                        if staging { ProgressView().accessibilityLabel("正在校验卡片包") }
-                        else { Text("校验并放入导入箱") }
-                    }.disabled(text.isEmpty || staging)
-                }
-                Section("待确认批次") {
-                    if model.state.pending.isEmpty {
-                        Label("暂无待确认批次", systemImage: "tray").foregroundStyle(.secondary)
-                    }
-                    ForEach(model.state.pending) { item in
-                        Button {
-                            pending = item
-                        } label: {
-                            VStack(alignment: .leading, spacing: 5) {
-                                Text(item.title).font(.system(.headline, design: .serif))
-                                Text(item.createdAt.formatted(date: .abbreviated, time: .shortened))
-                                    .font(.caption).foregroundStyle(.secondary)
-                            }
+                        ForEach(model.state.pending) { item in
+                            Button { pending = item } label: {
+                                HStack(spacing: 14) {
+                                    Image(systemName: "doc.text").foregroundStyle(StudyTheme.copper)
+                                    VStack(alignment: .leading, spacing: 5) {
+                                        Text(item.title).font(.system(.headline, design: .serif))
+                                        Text(item.createdAt.formatted(date: .abbreviated, time: .shortened))
+                                            .font(.caption).foregroundStyle(.secondary)
+                                    }
+                                    Spacer()
+                                    Image(systemName: "chevron.right").font(.caption)
+                                }.studyPanel()
+                            }.buttonStyle(.plain)
                         }
                     }
-                }
-            }.studySurface().navigationTitle("导入箱")
+                }.padding(24).frame(maxWidth: 810).frame(maxWidth: .infinity)
+            }.studySurface().navigationBarTitleDisplayMode(.inline)
         }.fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
-            staging = true
-            Task {
-                defer { staging = false }
-                do {
-                    let url = try result.get()
-                    text = try await Task.detached(priority: .userInitiated) {
-                        let scope = url.startAccessingSecurityScopedResource()
-                        defer { if scope { url.stopAccessingSecurityScopedResource() } }
-                        let limit = 10 * 1024 * 1024
-                        let file = try FileHandle(forReadingFrom: url)
-                        defer { try? file.close() }
-                        let data = try file.read(upToCount: limit + 1) ?? Data()
-                        guard data.count <= limit else { throw LibraryError.invalid("JSON 超过 10 MiB") }
-                        return String(decoding: data, as: UTF8.self)
-                    }.value
-                } catch { model.message = error.localizedDescription }
-            }
+            do { receiveFile(try result.get()) }
+            catch { model.message = error.localizedDescription }
         }.sheet(item: $pending) { ImportReviewView(pending: $0).environmentObject(model) }
+    }
+
+    private var importDesk: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            Image(systemName: "tray.and.arrow.down").font(.title).foregroundStyle(StudyTheme.copper)
+            StudyHeading(title: "导入卡片包")
+            HStack(spacing: 12) {
+                Button("选择 JSON 文件") { importing = true }.buttonStyle(.borderedProminent)
+                Button(editingJSON ? "收起粘贴区" : "粘贴 JSON") { editingJSON.toggle() }.buttonStyle(.bordered)
+            }.disabled(staging)
+            if staging { ProgressView("正在读取并校验…").font(.caption) }
+        }.frame(maxWidth: .infinity, minHeight: 140, alignment: .leading).studyPanel()
+            .dropDestination(for: URL.self) { urls, _ in
+                guard let url = urls.first, url.isFileURL, url.pathExtension.lowercased() == "json", !staging else { return false }
+                receiveFile(url)
+                return true
+            }
+    }
+
+    private var pasteArea: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            TextEditor(text: $text).frame(minHeight: 112).font(.system(.body, design: .monospaced))
+                .scrollContentBackground(.hidden).accessibilityLabel("JSON 内容")
+            Button("校验并预览") {
+                let input = text
+                staging = true
+                Task {
+                    defer { staging = false }
+                    if let item = await model.stageImport(input) {
+                        text = ""
+                        pending = item
+                    }
+                }
+            }.buttonStyle(.bordered).disabled(staging || text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        }.studyPanel()
+    }
+
+    private func receiveFile(_ url: URL) {
+        guard !staging else { return }
+        staging = true
+        Task {
+            defer { staging = false }
+            do {
+                let contents = try await Task.detached(priority: .userInitiated) {
+                    let access = url.startAccessingSecurityScopedResource()
+                    defer { if access { url.stopAccessingSecurityScopedResource() } }
+                    let limit = 10 * 1024 * 1024
+                    let file = try FileHandle(forReadingFrom: url)
+                    defer { try? file.close() }
+                    let data = try file.read(upToCount: limit + 1) ?? Data()
+                    guard data.count <= limit, let text = String(data: data, encoding: .utf8) else {
+                        throw LibraryError.invalid("请选择 10 MiB 以内的 UTF-8 JSON 文件")
+                    }
+                    return text
+                }.value
+                pending = await model.stageImport(contents)
+            } catch { model.message = error.localizedDescription }
+        }
     }
 }
 struct ImportReviewView: View {
@@ -85,11 +113,15 @@ struct ImportReviewView: View {
     @State private var matches: [String: UUID] = [:]
     @State private var confirm = false
     @State private var loading = false
+    @State private var writing = false
+    @State private var writeError: String?
     @State private var rawSources: [[String: String]] = []
 
     var body: some View {
         NavigationStack {
             Form {
+                if let writeError { Text(writeError).foregroundStyle(StudyTheme.copper) }
+                if writing { ProgressView("正在导入所选卡片…") }
                 Section("匹配已有资料") {
                     ForEach(rawSources, id: \.self) { source in
                         Picker(
@@ -148,10 +180,10 @@ struct ImportReviewView: View {
                             Text($0.title).tag(Optional($0.id))
                         }
                     }
-                    Button("确认导入所选卡片") { confirm = true }.disabled(selected.isEmpty)
+                    Button("确认导入所选卡片") { confirm = true }.disabled(selected.isEmpty || writing)
                 }
             }.studySurface().navigationTitle(pending.title).toolbar { Button("关闭") { dismiss() } }
-        }.task {
+        }.interactiveDismissDisabled(writing).task {
             let json = pending.json
             rawSources = await Task.detached {
                 guard let root = try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: Any],
@@ -166,14 +198,18 @@ struct ImportReviewView: View {
         }
             .confirmationDialog("将所选候选写入知识库？", isPresented: $confirm, titleVisibility: .visible) {
                 Button("导入") {
-                    guard let preview, let repository = model.repository else { return }
-                    model.message = nil
-                    model.perform {
-                        try ImportService.commit(
-                            preview, selected: selected, projectID: project, pendingID: pending.id,
-                            to: repository)
+                    guard let preview, !writing else { return }
+                    let ids = selected
+                    let projectID = project
+                    writing = true
+                    writeError = nil
+                    Task {
+                        defer { writing = false }
+                        do {
+                            try await model.commitImport(preview, selected: ids, projectID: projectID, pendingID: pending.id)
+                            dismiss()
+                        } catch { writeError = error.localizedDescription }
                     }
-                    if model.message == nil { dismiss() }
                 }
             }
     }
@@ -414,9 +450,22 @@ struct LibraryView: View {
     }
     @ViewBuilder private var importFeedback: some View {
         if model.isImporting {
-            ProgressView("正在安全复制资料…").font(.caption)
+            HStack {
+                ProgressView()
+                Text(model.importStatus ?? "正在导入资料…")
+                if model.importCanCancel { Button("取消导入") { model.cancelImport() } }
+            }.font(.caption)
         } else if let status = model.importStatus {
-            Label(status, systemImage: "checkmark.circle").font(.caption).foregroundStyle(.secondary)
+            Text(status).font(.caption).foregroundStyle(.secondary)
+        }
+        if !model.sharedDocuments.isEmpty {
+            DisclosureGroup("来自分享菜单 · \(model.sharedDocuments.count)") {
+                ForEach(model.sharedDocuments) { entry in
+                    Button(entry.filename, systemImage: "square.and.arrow.down") {
+                        Task { await model.acceptSharedDocument(entry) }
+                    }.disabled(model.isImporting)
+                }
+            }
         }
     }
 
@@ -696,6 +745,8 @@ struct DataManagerView: View {
     @State private var kind = "全部"
     @State private var search = ""
     @State private var selected: Set<UUID> = []
+    @State private var selecting = false
+    @State private var moving = false
     private enum Decision { case trash, purge, cache, backup }
     @State private var decision: Decision?
     @State private var affected: Set<UUID> = []
@@ -768,8 +819,13 @@ struct DataManagerView: View {
                 } else {
                     objectList(showStorage: true)
                 }
-            }.navigationTitle("数据管理").searchable(text: $search)
-                .toolbar { EditButton() }
+            }.navigationTitle("数据管理").searchable(text: $search, prompt: "搜索对象")
+                .toolbar {
+                    Button(selecting ? "完成选择" : "选择") {
+                        selecting.toggle()
+                        selected.removeAll()
+                    }.accessibilityIdentifier("storage.select")
+                }
                 .onChange(of: kind) { _, _ in selected.removeAll() }
                 .onChange(of: search) { _, _ in selected.removeAll() }
         }.confirmationDialog(decisionTitle, isPresented: Binding(get: { decision != nil }, set: {
@@ -779,9 +835,7 @@ struct DataManagerView: View {
             case .trash, .purge:
                 let purge = decision == .purge
                 Button(purge ? "永久删除" : "移入回收站", role: .destructive) {
-                    model.delete(affected, permanently: purge)
-                    if model.message == nil { selected.subtract(affected) }
-                    refreshStorage = UUID()
+                    apply(affected, purge: purge)
                 }
             case .cache:
                 Button("清理缓存", role: .destructive) {
@@ -844,102 +898,134 @@ struct DataManagerView: View {
 
     private func objectList(showStorage: Bool) -> some View {
         let visible = rows
-        return List(selection: $selected) {
-                Section {
-                    VStack(alignment: .leading, spacing: 8) {
-                        StudyHeading(title: trash ? "回收站" : "知识库维护")
-                        Label("\(rows.count) 个对象", systemImage: trash ? "trash" : "externaldrive")
-                            .font(.subheadline).foregroundStyle(.secondary)
-                    }.studyPanel()
-                }.listRowBackground(Color.clear)
+        return ScrollView {
+            LazyVStack(alignment: .leading, spacing: 14) {
                 if showStorage {
-                    storageSummary
-                    objectSummary
+                    VStack(alignment: .leading, spacing: 14) { storageSummary; objectSummary }.studyPanel()
                 }
-                DisclosureGroup("备份与恢复") {
-                    Button(busy ? "正在处理…" : "生成完整备份 ZIP") {
-                        busy = true
-                        Task {
-                            do { backup = try await BackupService.export(model: model) } catch {
-                                model.message = error.localizedDescription
-                            }
-                            busy = false
+                HStack {
+                    Picker("内容范围", selection: $trash) {
+                        Text("知识库").tag(false)
+                        Text("回收站").tag(true)
+                    }.pickerStyle(.segmented).frame(maxWidth: 300)
+                        .accessibilityIdentifier("storage.scope")
+                        .onChange(of: trash) { _, _ in selected.removeAll() }
+                    Spacer()
+                    backupMenu
+                }
+                HStack {
+                    StudyHeading(title: trash ? "回收站" : "知识库对象")
+                    Text(visible.count.formatted()).monospacedDigit().foregroundStyle(.secondary)
+                    Spacer()
+                    Picker("类型", selection: $kind) {
+                        ForEach(["全部", "资料", "标记", "卡片", "项目", "白板", "关系", "复习记录"], id: \.self) {
+                            Text($0)
                         }
-                    }.disabled(busy)
-                    if let backup { ShareLink("导出备份", item: backup) }
-                    Button("选择备份并校验") { restoring = true }.disabled(busy)
+                    }.pickerStyle(.menu)
+                    Picker("排序", selection: $sort) {
+                        Text("按类型").tag("类型")
+                        Text("按名称").tag("名称")
+                    }.pickerStyle(.menu)
                 }
-                Picker("内容范围", selection: $trash) {
-                    Text("知识库").tag(false)
-                    Text("回收站").tag(true)
-                }.pickerStyle(.segmented).onChange(of: trash) { _, _ in selected = [] }
-                Picker("类型", selection: $kind) {
-                    ForEach(["全部", "资料", "标记", "卡片", "项目", "白板", "关系", "复习记录"], id: \.self) { Text($0) }
+                if moving { ProgressView("正在处理所选对象…").font(.subheadline) }
+                if visible.isEmpty {
+                    ContentUnavailableView(trash ? "回收站为空" : "没有匹配的对象",
+                        systemImage: trash ? "trash" : "tray")
                 }
-                Picker("排序", selection: $sort) {
-                    Text("按类型").tag("类型")
-                    Text("按名称").tag("名称")
-                }
-                Section("对象") {
-                    ForEach(visible) { row in
-                        NavigationLink {
-                            managedContent(row)
-                        } label: {
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(row.title).lineLimit(3)
-                                Text(row.kind).font(.caption).foregroundStyle(.secondary)
-                            }
-                        }.tag(row.id).contextMenu {
-                            if row.deleted {
-                                Button("恢复", systemImage: "arrow.uturn.backward") { model.delete([row.id], restore: true) }
-                                Button("永久删除", systemImage: "trash", role: .destructive) { ask(.purge, ids: [row.id]) }
-                            } else {
-                                Button("移入回收站", systemImage: "trash", role: .destructive) { ask(.trash, ids: [row.id]) }
-                            }
-                        }
-                    }
-                }
-                if !selected.isEmpty {
-                    Section("操作影响") {
-                        ForEach(Array(selected), id: \.self) { Text(model.impact(of: $0)).font(.caption) }
-                        if trash {
-                            Button("恢复所选") {
-                                model.delete(selected, restore: true)
-                                if model.message == nil { selected = [] }
-                            }
-                            Button("永久清理所选", role: .destructive) {
-                                ask(.purge, ids: selected)
-                            }
-                        } else {
-                            Button("移回待整理") {
-                                model.change { state in
-                                    for i in state.cards.indices where selected.contains(state.cards[i].id) {
-                                        state.cards[i].organization = .inbox
-                                    }
-                                    for i in state.marks.indices where selected.contains(state.marks[i].id) {
-                                        state.marks[i].organization = .inbox
-                                    }
-                                }
-                                selected = []
-                            }
-                            Button("归档所选卡片与标记") {
-                                model.change { state in
-                                    for i in state.cards.indices where selected.contains(state.cards[i].id) {
-                                        state.cards[i].organization = .archived
-                                    }
-                                    for i in state.marks.indices where selected.contains(state.marks[i].id) {
-                                        state.marks[i].organization = .archived
-                                    }
-                                }
-                                selected = []
-                            }
-                            Button("移入回收站", role: .destructive) {
-                                ask(.trash, ids: selected)
-                            }
-                        }
-                    }
-                }
+                ForEach(visible) { row in dataRow(row) }
+            }.padding(20)
         }.studySurface().studyChange(visible.count)
+            .safeAreaInset(edge: .bottom) {
+                if !selected.isEmpty { bulkActions }
+            }
+    }
+
+    private var backupMenu: some View {
+        Menu {
+            Button("生成完整备份 ZIP") {
+                busy = true
+                Task {
+                    defer { busy = false }
+                    do { backup = try await BackupService.export(model: model) }
+                    catch { model.message = error.localizedDescription }
+                }
+            }.disabled(busy || moving)
+            if let backup { ShareLink("导出备份", item: backup) }
+            Button("选择备份并校验") { restoring = true }.disabled(busy || moving)
+        } label: {
+            Label(busy ? "正在准备" : "备份", systemImage: "archivebox")
+        }
+    }
+
+    private func dataRow(_ row: Row) -> some View {
+        HStack(spacing: 14) {
+            if selecting {
+                ObjectSelectionRow(isSelected: Binding(get: { selected.contains(row.id) }, set: { checked in
+                    if checked { selected.insert(row.id) } else { selected.remove(row.id) }
+                })) { rowTitle(row) }.accessibilityIdentifier("storage.row." + row.title)
+            } else {
+                NavigationLink { managedContent(row) } label: { rowTitle(row) }
+                    .buttonStyle(.plain).accessibilityIdentifier("storage.row." + row.title)
+            }
+            if !selecting {
+                Menu {
+                    if row.deleted {
+                        Button("恢复", systemImage: "arrow.uturn.backward") { apply([row.id], restore: true) }
+                        Button("永久删除", role: .destructive) { ask(.purge, ids: [row.id]) }
+                    } else {
+                        Button("移入回收站", role: .destructive) { ask(.trash, ids: [row.id]) }
+                    }
+                } label: { Image(systemName: "ellipsis.circle").frame(width: 44, height: 44) }
+                    .accessibilityLabel("对象操作").accessibilityIdentifier("storage.actions." + row.title)
+            }
+        }.padding(.horizontal, 12).background(StudyTheme.leaf)
+            .overlay(alignment: .bottom) { Rectangle().fill(StudyTheme.rule).frame(height: 1) }
+            .disabled(moving)
+    }
+
+    private func rowTitle(_ row: Row) -> some View {
+        HStack(spacing: 12) {
+            Text(row.title).font(.subheadline.weight(.medium)).lineLimit(2)
+            Spacer(minLength: 8)
+            Text(row.kind).font(.caption).foregroundStyle(.secondary)
+        }.frame(minHeight: 61).contentShape(Rectangle())
+    }
+
+    private var bulkActions: some View {
+        HStack(spacing: 13) {
+            Text("已选 \(selected.count) 项").font(.subheadline)
+            Spacer()
+            if trash {
+                Button("恢复所选") { apply(selected, restore: true) }.buttonStyle(.bordered)
+                Button("永久删除", role: .destructive) { ask(.purge, ids: selected) }.buttonStyle(.bordered)
+            } else {
+                Menu("其它操作") {
+                    Button("移回待整理") { organize(.inbox) }
+                    Button("归档卡片与标记") { organize(.archived) }
+                }
+                Button("移入回收站", role: .destructive) { ask(.trash, ids: selected) }.buttonStyle(.bordered)
+            }
+        }.padding(12).background(StudyTheme.mat).disabled(moving)
+    }
+
+    private func organize(_ status: Organization) {
+        model.change { state in
+            for i in state.cards.indices where selected.contains(state.cards[i].id) { state.cards[i].organization = status }
+            for i in state.marks.indices where selected.contains(state.marks[i].id) { state.marks[i].organization = status }
+        }
+        if model.message == nil { selected.removeAll() }
+    }
+
+    private func apply(_ ids: Set<UUID>, restore: Bool = false, purge: Bool = false) {
+        guard !moving else { return }
+        moving = true
+        Task {
+            defer { moving = false }
+            if await model.deleteManaged(ids, restore: restore, permanently: purge) {
+                selected.subtract(ids)
+                refreshStorage = UUID()
+            }
+        }
     }
 
     private var objectSummary: some View {

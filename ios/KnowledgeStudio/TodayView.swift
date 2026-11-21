@@ -16,22 +16,52 @@ struct TodayView: View {
         NavigationStack {
             TimelineView(.periodic(from: .now, by: 60)) { clock in
                 let due = Dictionary(grouping: TodayReview.due(model.state.cards, at: clock.date), by: \.type)
-                List {
-                    ForEach(CardKind.allCases, id: \.self) { kind in
-                        let ids = (due[kind] ?? []).map(\.id)
-                        NavigationLink {
-                            ReviewQueueView(kind: kind, cardIDs: ids)
-                        } label: {
-                            Label {
-                                LabeledContent(kind.title, value: "\(ids.count)")
-                            } icon: {
-                                Image(systemName: "circle.fill").foregroundStyle(kind.color)
-                            }.frame(minHeight: 44)
-                        }.disabled(ids.isEmpty)
-                    }
-                }.studySurface().navigationTitle("今日复习")
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 20) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("今日复习").font(.system(.largeTitle, design: .serif, weight: .semibold))
+                                .accessibilityAddTraits(.isHeader)
+                            Text(due.isEmpty ? "今天的复习已就绪，暂无到期卡片。" :
+                                "\(due.values.reduce(0) { $0 + $1.count }) 张卡片待复习")
+                                .font(.subheadline).foregroundStyle(.secondary)
+                        }
+                        LazyVGrid(columns: [GridItem(.adaptive(minimum: 190, maximum: 460), spacing: 16)], spacing: 16) {
+                            ForEach(CardKind.allCases, id: \.self) { kind in
+                                let ids = (due[kind] ?? []).map(\.id)
+                                NavigationLink {
+                                    ReviewQueueView(kind: kind, cardIDs: ids)
+                                } label: {
+                                    ReviewQueueTile(kind: kind, count: ids.count)
+                                }.buttonStyle(.plain).disabled(ids.isEmpty)
+                                    .accessibilityIdentifier("review.queue." + kind.rawValue)
+                            }
+                        }
+                    }.padding(24).frame(maxWidth: 860).frame(maxWidth: .infinity, alignment: .center)
+                }.studySurface().navigationBarTitleDisplayMode(.inline)
             }
         }
+    }
+}
+
+private struct ReviewQueueTile: View {
+    let kind: CardKind
+    let count: Int
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text(kind.title).font(.system(.headline, design: .serif))
+                Spacer()
+                Image(systemName: count > 0 ? "arrow.up.right" : "checkmark")
+                    .font(.caption).foregroundStyle(.secondary)
+            }
+            Text(count.formatted()).font(.system(size: 37, weight: .medium, design: .serif))
+                .monospacedDigit()
+            Text(count > 0 ? "张待复习" : "暂无到期").font(.caption).foregroundStyle(.secondary)
+        }.padding(18).frame(maxWidth: .infinity, minHeight: 132, alignment: .leading)
+            .background(StudyTheme.leaf, in: RoundedRectangle(cornerRadius: 6))
+            .overlay(alignment: .leading) { Rectangle().fill(kind.color).frame(width: 3) }
+            .contentShape(Rectangle())
+            .accessibilityElement(children: .combine)
     }
 }
 
@@ -86,6 +116,8 @@ struct ReviewControls: View {
     @State private var expectedRevision: Int?
     @State private var started = Date()
     @State private var saved = false
+    @State private var saving = false
+    @State private var failure: String?
     @AppStorage("reviewRetention") private var retention = 0.9
     var body: some View {
         VStack(spacing: 8) {
@@ -93,19 +125,26 @@ struct ReviewControls: View {
             HStack {
                 ForEach(Array(["忘记", "困难", "良好", "轻松"].enumerated()), id: \.offset) { index, label in
                     Button(label) {
-                        model.perform {
-                            try model.repository?.recordReview(
-                                cardID: cardID, rating: index + 1,
-                                expectedRevision: expectedRevision, eventID: eventID,
-                                elapsedMilliseconds: max(
-                                    0, Int(min(86_400, Date().timeIntervalSince(started)) * 1000)),
-                                retention: retention)
+                        guard !saving, !saved else { return }
+                        saving = true
+                        failure = nil
+                        let elapsed = max(0, Int(min(86_400, Date().timeIntervalSince(started)) * 1000))
+                        Task {
+                            defer { saving = false }
+                            do {
+                                try await model.reviewCard(cardID, rating: index + 1,
+                                    expectedRevision: expectedRevision, eventID: eventID,
+                                    elapsedMilliseconds: elapsed, retention: retention)
+                                saved = true
+                                onSaved()
+                            } catch { failure = error.localizedDescription }
                         }
-                        saved = model.message == nil
-                        if saved { onSaved() }
-                    }.buttonStyle(.bordered).disabled(saved)
+                    }.buttonStyle(.bordered).disabled(saved || saving)
+                        .accessibilityIdentifier("review.rate.\(index + 1)")
                 }
             }
+            if saving { ProgressView().controlSize(.small).accessibilityLabel("正在保存复习结果") }
+            if let failure { Text(failure).font(.caption).foregroundStyle(.secondary) }
             if saved, let due = model.state.cards.first(where: { $0.id == cardID })?.schedule?.due {
                 Text("下次：\(due.formatted(date: .abbreviated, time: .shortened))").font(.caption)
             }

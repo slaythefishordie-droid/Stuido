@@ -161,7 +161,7 @@ final class LibraryAppTests: XCTestCase {
                 """),
             ("chapter.xhtml", """
                 <html xmlns="http://www.w3.org/1999/xhtml"><head><title>Chapter</title></head>
-                <body><p>A short passage for the EPUB reader.</p></body></html>
+                <body><p id="sample">A short passage for the EPUB reader. 中文阅读排版样本。</p></body></html>
                 """),
         ]
         let entryFile = root.appendingPathComponent("entry")
@@ -180,10 +180,80 @@ final class LibraryAppTests: XCTestCase {
         XCTAssertEqual(model.state.projects[0].sourceIDs, [source.id])
 
         let session = EPUBSession()
-        await session.open(url: try XCTUnwrap(model.assetURL(source)), location: nil,
-            preferences: .init(columnCount: .one, fontSize: EPUBSession.fontScale(for: 110)))
+        let asset = try XCTUnwrap(model.assetURL(source))
+        await session.open(url: asset, location: nil, preferences: .init(
+            columnCount: .one, fontFamily: EPUBSession.song, fontSize: 1.0, lineHeight: 1.35, publisherStyles: false))
         XCTAssertNil(session.error)
-        XCTAssertNotNil(session.navigator)
+        let reader = try XCTUnwrap(session.navigator)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let previous = scene.windows.first { $0.isKeyWindow }
+        let window = UIWindow(windowScene: scene)
+        window.rootViewController = StudyEPUBContainer(reader: reader)
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; previous?.makeKey() }
+
+        let first = try await metrics(reader) { $0.size > 0 && abs($0.ratio - 1.35) < 0.1 }
+        session.submit(.init(columnCount: .one, fontFamily: EPUBSession.song,
+            fontSize: 1.55, lineHeight: 1.35, publisherStyles: false))
+        let bigger = try await metrics(reader) { $0.size > first.size * 1.25 }
+        XCTAssertEqual(bigger.ratio, first.ratio, accuracy: 0.1)
+        session.submit(.init(columnCount: .one, fontFamily: EPUBSession.hei,
+            fontSize: 1.55, lineHeight: 2.1, publisherStyles: false))
+        let spaced = try await metrics(reader) { $0.ratio > bigger.ratio + 0.55 }
+        XCTAssertEqual(spaced.size, bigger.size, accuracy: 0.2)
+        XCTAssertNotEqual(spaced.font, first.font)
+        XCTAssertTrue(spaced.font.contains("PingFang"))
+        XCTAssertTrue(first.font.contains("Songti"))
+
+        let location = try XCTUnwrap(try session.location(selection: false)?.0)
+        XCTAssertEqual(location.href, "chapter.xhtml")
+        model.saveLocation(sourceID: source.id, locator: location)
+        let reopened = StudioModel(root: root)
+        XCTAssertEqual(reopened.state.sources.first?.lastLocation, location)
+    }
+
+    private struct EPUBMetrics: Decodable {
+        let size: Double
+        let ratio: Double
+        let font: String
+    }
+
+    private func metrics(_ reader: EPUBNavigatorViewController,
+        accepting: (EPUBMetrics) -> Bool) async throws -> EPUBMetrics
+    {
+        let script = """
+            (() => {
+              const p = document.getElementById('sample');
+              if (!p) return '';
+              const s = getComputedStyle(p), size = parseFloat(s.fontSize);
+              return JSON.stringify({size, ratio: parseFloat(s.lineHeight) / size, font: s.fontFamily});
+            })()
+            """
+        for _ in 0..<45 {
+            if case let .success(value) = await reader.evaluateJavaScript(script), let json = value as? String,
+                let result = try? JSONDecoder().decode(EPUBMetrics.self, from: Data(json.utf8)), accepting(result) {
+                return result
+            }
+            try await Task.sleep(for: .milliseconds(175))
+        }
+        throw LibraryError.invalid("EPUB 正文没有达到预期的 CSS 渲染值")
+    }
+
+    func testShareStagingKeepsOriginalUntilTheAppConfirmsImport() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let model = StudioModel(root: root)
+        let original = root.appendingPathComponent("original.pdf")
+        try Data("file provider fixture".utf8).write(to: original)
+        let share = SharedDocumentInbox(directory: root.appendingPathComponent("share"))
+        let entry = try share.stage(original, suggestedName: "../Book (Z-Library).pdf", fallbackExtension: "pdf")
+        XCTAssertEqual(try share.entries().map(\.id), [entry.id])
+        let imported = await model.importFile(try share.file(entry))
+        XCTAssertTrue(imported)
+        XCTAssertEqual(model.state.sources.first?.title, "Book")
+        XCTAssertTrue(FileManager.default.fileExists(atPath: original.path))
+        try share.remove(entry)
+        XCTAssertTrue(try share.entries().isEmpty)
     }
 
     func testEPUBSelectionLocatorRoundTripPreservesTextContext() throws {

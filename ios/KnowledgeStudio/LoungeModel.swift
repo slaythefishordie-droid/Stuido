@@ -88,6 +88,7 @@ final class LoungeHub: ObservableObject {
     private var entryLoadFailed = false
     private var ledgerLoadFailed = false
     private var playbackScope: UUID?
+    private lazy var audio = LoungeAudio(hub: self)
     private var wikiCache: [String: WikipediaNote] = [:]
     private var lastWikiRequest = Date.distantPast
     private var notificationNavigation = 0
@@ -204,12 +205,6 @@ final class LoungeHub: ObservableObject {
             ledger.checkpoint(now: now, uptime: uptime)
             persistLedger()
             savePlayhead()
-        }
-        if playing, let player, !player.isPlaying {
-            if player.currentTime == 0 || player.currentTime >= player.duration - 0.1 {
-                if mode == .repeatOne, let track { play(track, scope: playbackScope, resume: false) }
-                else { skip(1, automatically: true) }
-            } else { playing = false }
         }
         var timer = disk.timer
         if let deadline = timer.deadline, timer.consumeCompletion(at: now), update({ $0.timer = timer }) {
@@ -363,8 +358,11 @@ final class LoungeHub: ObservableObject {
     func play(_ track: LoungeTrack, scope: UUID? = nil, resume: Bool = true) {
         do {
             let next = try AVAudioPlayer(contentsOf: audioDirectory.appendingPathComponent(track.filename))
-            if resume, playback.trackID == track.id { next.currentTime = min(next.duration, playback.seconds) }
+            if resume, playback.trackID == track.id { next.currentTime = min(max(0, next.duration - 0.01), playback.seconds) }
             next.volume = volume
+            try audio.activate()
+            audio.userPaused()
+            next.delegate = audio
             guard next.prepareToPlay(), next.play() else { throw LibraryError.invalid("系统未能播放这个音频文件") }
             guard savePlayback(.init(trackID: track.id, seconds: next.currentTime)) else {
                 next.stop()
@@ -374,17 +372,54 @@ final class LoungeHub: ObservableObject {
             player = next
             playbackScope = scope
             playing = true
-        } catch { message = error.localizedDescription }
+            audio.publish()
+        } catch {
+            message = error.localizedDescription
+            if player?.isPlaying != true { playing = false; audio.deactivate(); audio.publish() }
+        }
     }
 
     func togglePlayback() {
+        if playing { pauseMusic() } else { resumeMusic() }
+    }
+
+    func pauseMusic(userInitiated: Bool = true) {
+        if userInitiated { audio.userPaused() }
+        player?.pause()
+        playing = false
+        savePlayhead()
+        audio.publish()
+        if userInitiated { audio.deactivate() }
+    }
+
+    func resumeMusic() {
+        guard !playing else { return }
         if let player {
-            if player.isPlaying { player.pause(); playing = false; savePlayhead() }
-            else {
-                playing = player.play()
-                if !playing { message = "播放未能继续。" }
+            do {
+                try audio.activate()
+                guard player.play() else { throw LibraryError.invalid("播放未能继续。") }
+                playing = true
+                audio.publish()
+            } catch {
+                audio.deactivate()
+                message = error.localizedDescription
             }
-        } else if let track = track ?? tracks.first { play(track) }
+        } else if let track = track ?? tracks.first {
+            play(track, scope: playbackScope)
+        }
+    }
+
+    func completeTrack(_ identity: ObjectIdentifier, success: Bool) {
+        guard player.map(ObjectIdentifier.init) == identity else { return }
+        if success, mode == .repeatOne, let track { play(track, scope: playbackScope, resume: false) }
+        else if success { skip(1, automatically: true) }
+        else { pauseMusic(); message = "当前曲目无法继续播放。" }
+    }
+
+    func resetMusic() {
+        player = nil
+        playing = false
+        audio.publish()
     }
 
     func seek(_ seconds: Double) {
@@ -392,8 +427,10 @@ final class LoungeHub: ObservableObject {
             if let track { savePlayback(.init(trackID: track.id, seconds: min(track.duration, max(0, seconds)))) }
             return
         }
+        guard seconds.isFinite else { return }
         player.currentTime = min(player.duration, max(0, seconds))
         savePlayhead()
+        audio.publish()
     }
 
     func skip(_ direction: Int, automatically: Bool = false) {
@@ -406,6 +443,8 @@ final class LoungeHub: ObservableObject {
             player = nil
             playing = false
             savePlayback(.init(trackID: track?.id, seconds: 0))
+            audio.publish()
+            audio.deactivate()
             return
         }
         let next = mode == .shuffle && list.count > 1
@@ -461,8 +500,8 @@ final class LoungeHub: ObservableObject {
                 if exists { try FileManager.default.moveItem(at: stage, to: file) }
                 return
             }
-            if player?.url == file { player?.stop(); player = nil; playing = false }
-            if playback.trackID == track.id { savePlayback(.init()) }
+            if player?.url == file { player?.stop(); player = nil; playing = false; audio.deactivate() }
+            if playback.trackID == track.id { savePlayback(.init()); audio.publish() }
             if exists { try FileManager.default.removeItem(at: stage) }
         } catch { message = error.localizedDescription }
     }

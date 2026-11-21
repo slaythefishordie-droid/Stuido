@@ -27,7 +27,9 @@ final class WordPronunciation: NSObject, ObservableObject, AVAudioPlayerDelegate
     }
     private func releaseAudioIfIdle() {
         guard player?.isPlaying != true, !synthesizer.isSpeaking else { return }
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        if !LoungeHub.shared.playing {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
     }
 
     func speak(_ text: String) {
@@ -44,9 +46,7 @@ final class WordPronunciation: NSObject, ObservableObject, AVAudioPlayerDelegate
             let cached = await CommonsPronunciation.shared.recording(word: word, preferredAccent: preferred)
             guard !Task.isCancelled else { return }
             if let cached, let audio = try? AVAudioPlayer(data: cached.audio) {
-                try? AVAudioSession.sharedInstance().setCategory(
-                    .playback, mode: .spokenAudio, options: [.duckOthers])
-                try? AVAudioSession.sharedInstance().setActive(true)
+                prepareAudioSession()
                 player = audio
                 audio.delegate = self
                 if audio.play() {
@@ -68,9 +68,7 @@ final class WordPronunciation: NSObject, ObservableObject, AVAudioPlayerDelegate
             return
         }
         synthesizer.stopSpeaking(at: .immediate)
-        try? AVAudioSession.sharedInstance().setCategory(
-            .playback, mode: .spokenAudio, options: [.duckOthers])
-        try? AVAudioSession.sharedInstance().setActive(true)
+        prepareAudioSession()
         let utterance = AVSpeechUtterance(string: word)
         utterance.voice = voice
         utterance.rate = AVSpeechUtteranceDefaultSpeechRate * 0.85
@@ -78,6 +76,12 @@ final class WordPronunciation: NSObject, ObservableObject, AVAudioPlayerDelegate
             "Apple 合成语音 · \(voice.language == "en-US" ? "美式英语" : voice.language == "en-GB" ? "英式英语" : voice.language)"
         synthesizer.speak(utterance)
     }
+    private func prepareAudioSession() {
+        guard !LoungeHub.shared.playing else { return }
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .spokenAudio, options: [.duckOthers])
+        try? AVAudioSession.sharedInstance().setActive(true)
+    }
+
     func stop() {
         task?.cancel()
         task = nil
@@ -86,7 +90,9 @@ final class WordPronunciation: NSObject, ObservableObject, AVAudioPlayerDelegate
         synthesizer.stopSpeaking(at: .immediate)
         recording = nil
         status = "已停止"
-        try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        if !LoungeHub.shared.playing {
+            try? AVAudioSession.sharedInstance().setActive(false, options: .notifyOthersOnDeactivation)
+        }
     }
 }
 

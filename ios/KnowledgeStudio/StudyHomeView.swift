@@ -5,7 +5,7 @@ struct StudyHomeView: View {
     @EnvironmentObject private var model: StudioModel
     @Environment(\.studyNavigation) private var navigation
     @AppStorage("studyHomeReviewFirst") private var reviewFirst = false
-    @ScaledMetric(relativeTo: .body) private var columnWidth = 270.0
+    @ScaledMetric(relativeTo: .body) private var columnWidth = 305.0
     private var reading: [LibrarySource] {
         model.state.sources.filter { $0.deletedAt == nil && $0.lastLocation != nil }
             .sorted { ($0.lastReadAt ?? $0.updatedAt) > ($1.lastReadAt ?? $1.updatedAt) }
@@ -92,12 +92,21 @@ struct StudyHomeView: View {
         TimelineView(.periodic(from: .now, by: 60)) { clock in
             let count = TodayReview.due(model.state.cards, at: clock.date).count
             Button { navigation.open(.today) } label: {
-                VStack(alignment: .leading, spacing: 9) {
-                    Label("今日复习", systemImage: "calendar")
-                        .font(.system(.title3, design: .serif, weight: .semibold))
-                    Text(count == 0 ? "今日没有到期卡片" : "\(count) 张卡片待复习")
-                        .font(.subheadline).foregroundStyle(.secondary)
-                }.frame(maxWidth: .infinity, minHeight: 84, alignment: .leading).studyPanel()
+                VStack(alignment: .leading, spacing: 10) {
+                    HStack {
+                        Label("今日复习", systemImage: "calendar")
+                            .font(.system(.title3, design: .serif, weight: .semibold))
+                        Spacer()
+                        Image(systemName: "arrow.up.right").font(.caption)
+                    }
+                    HStack(alignment: .firstTextBaseline, spacing: 8) {
+                        Text(count.formatted()).font(.system(size: 38, weight: .medium, design: .serif))
+                            .monospacedDigit()
+                        Text("张卡片待复习").font(.subheadline)
+                    }
+                }.frame(maxWidth: .infinity, minHeight: 100, alignment: .leading).padding(16)
+                    .background(StudyTheme.plum, in: RoundedRectangle(cornerRadius: 6))
+                    .foregroundStyle(StudyTheme.railText)
             }.buttonStyle(.plain)
         }
     }
