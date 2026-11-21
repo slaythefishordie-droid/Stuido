@@ -39,15 +39,17 @@ struct SharedDocumentInbox: Sendable {
     func entries() throws -> [Entry] {
         let fm = FileManager.default
         guard fm.fileExists(atPath: directory.path) else { return [] }
-        return try fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.creationDateKey],
-            options: [.skipsHiddenFiles]).compactMap { url in
+        let contents = try fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: [.creationDateKey],
+            options: [.skipsHiddenFiles])
+        let available: [(entry: Entry, created: Date)] = contents.compactMap { url in
             guard let id = UUID(uuidString: url.lastPathComponent),
                 let data = try? Data(contentsOf: url.appendingPathComponent("entry.json")),
                 let entry = try? JSONDecoder().decode(Entry.self, from: data),
                 entry.id == id, valid(entry.filename) else { return nil }
             let created = (try? url.resourceValues(forKeys: [.creationDateKey]).creationDate) ?? .distantPast
             return (entry, created)
-        }.sorted { $0.1 < $1.1 }.map(\.0)
+        }
+        return available.sorted { $0.created < $1.created }.map { $0.entry }
     }
 
     func file(_ entry: Entry) throws -> URL {
