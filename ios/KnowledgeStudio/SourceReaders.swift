@@ -24,50 +24,73 @@ struct SourceReaderView: View {
             FileManager.default.fileExists(atPath: url.path) ? url : nil
         }
         let showsPaper = book && live != nil && source.deletedAt == nil && localFile != nil
-        return Group {
-            if live == nil || source.deletedAt != nil {
-                ContentUnavailableView("资料不可用", systemImage: "doc.questionmark")
-            } else if let url = localFile {
-                switch source.kind {
-                case .pdf: PDFStudyView(source: source, url: url, location: location ?? source.lastLocation)
-                case .epub: EPUBStudyView(source: source, url: url, location: location ?? source.lastLocation)
-                case .local_video:
-                    LocalVideoStudyView(source: source, url: url, location: location ?? source.lastLocation)
-                default: Text("不支持的本地资料类型")
-                }
-            } else if let value = source.url, let url = URL(string: value), url.scheme == "https" {
-                VStack(spacing: 20) {
-                    Text(source.title).font(.title2)
-                    Link("在 Safari 打开出处", destination: destination(url))
-                    if let location, let excerpt = model.state.marks.first(where: {
-                        $0.sourceID == source.id && $0.locator == location && !$0.excerpt.isEmpty && $0.deletedAt == nil
-                    })?.excerpt {
-                        Text(excerpt).font(.system(.title3, design: .serif)).textSelection(.enabled)
-                            .frame(maxWidth: 520, alignment: .leading)
-                    }
-                }.padding()
-            } else {
-                VStack(spacing: 20) {
-                    ContentUnavailableView(
-                        "原始资料尚未绑定或不可用", systemImage: "doc.questionmark",
-                        description: Text("卡片和出处定位仍保留，请绑定相同的原始文件。"))
-                    Button("绑定原始文件") { attach = true }
-                }
-            }
-        }.studySurface().navigationTitle(showsPaper ? "" : StudioModel.importTitle(source.title)).navigationBarTitleDisplayMode(.inline)
-            .toolbar(showsPaper ? .hidden : .automatic, for: .navigationBar)
-            .environment(\.studyReaderExit, showsPaper ? { if let closeReader { closeReader() } else { dismiss() } } : nil)
-            .onAppear {
-                readerPresentation.setActive(readerID, source.id, true, immersive)
-            }.onDisappear { readerPresentation.setActive(readerID, source.id, false, immersive) }
-            .fileImporter(isPresented: $attach, allowedContentTypes: [.pdf, .movie, .data]) { result in
-                Task {
-                    do { await model.importFile(try result.get(), replacing: source.id) } catch {
-                        model.message = error.localizedDescription
-                    }
-                }
+        let exit: (@MainActor () -> Void)? = showsPaper ? leaveReader : nil
+        let visibility: Visibility = showsPaper ? .hidden : .automatic
+        let title = showsPaper ? "" : StudioModel.importTitle(source.title)
+        return readingSurface(source, localFile: localFile, available: live != nil && source.deletedAt == nil)
+            .studySurface()
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar(visibility, for: .navigationBar)
+            .environment(\.studyReaderExit, exit)
+            .onAppear { readerPresentation.setActive(readerID, source.id, true, immersive) }
+            .onDisappear { readerPresentation.setActive(readerID, source.id, false, immersive) }
+            .fileImporter(isPresented: $attach, allowedContentTypes: [.pdf, .movie, .data]) {
+                attachFile($0, to: source.id)
             }
     }
+
+    private func leaveReader() {
+        if let closeReader { closeReader() }
+        else { dismiss() }
+    }
+
+    private func attachFile(_ result: Result<URL, Error>, to sourceID: UUID) {
+        Task {
+            do { await model.importFile(try result.get(), replacing: sourceID) }
+            catch { model.message = error.localizedDescription }
+        }
+    }
+
+    @ViewBuilder private func readingSurface(_ source: LibrarySource, localFile: URL?, available: Bool) -> some View {
+        if !available {
+            ContentUnavailableView("资料不可用", systemImage: "doc.questionmark")
+        } else if let url = localFile {
+            let locator = location ?? source.lastLocation
+            switch source.kind {
+            case .pdf: PDFStudyView(source: source, url: url, location: locator)
+            case .epub: EPUBStudyView(source: source, url: url, location: locator)
+            case .local_video: LocalVideoStudyView(source: source, url: url, location: locator)
+            default: Text("不支持的本地资料类型")
+            }
+        } else if let value = source.url, let url = URL(string: value), url.scheme == "https" {
+            externalSource(source, url: url)
+        } else {
+            VStack(spacing: 20) {
+                ContentUnavailableView(
+                    "原始资料尚未绑定或不可用", systemImage: "doc.questionmark",
+                    description: Text("卡片和出处定位仍保留，请绑定相同的原始文件。"))
+                Button("绑定原始文件") { attach = true }
+            }
+        }
+    }
+
+    private func externalSource(_ source: LibrarySource, url: URL) -> some View {
+        let excerpt = location.flatMap { locator in
+            model.state.marks.first(where: {
+                $0.sourceID == source.id && $0.locator == locator && !$0.excerpt.isEmpty && $0.deletedAt == nil
+            })?.excerpt
+        }
+        return VStack(spacing: 20) {
+            Text(source.title).font(.title2)
+            Link("在 Safari 打开出处", destination: destination(url))
+            if let excerpt {
+                Text(excerpt).font(.system(.title3, design: .serif)).textSelection(.enabled)
+                    .frame(maxWidth: 520, alignment: .leading)
+            }
+        }.padding()
+    }
+
     private func destination(_ url: URL) -> URL {
         if source.kind == .article, let json = location?.nativeJSON,
             let quote = (try? JSONSerialization.jsonObject(with: Data(json.utf8)) as? [String: String])?[
