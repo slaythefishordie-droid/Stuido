@@ -1,3 +1,4 @@
+import CryptoKit
 import ImageIO
 import KnowledgeCore
 import PDFKit
@@ -41,6 +42,7 @@ struct StudySourceCover: View {
     var revision = 0
     @State private var thumbnail: UIImage?
     @State private var author: String?
+    @State private var editorial: UIImage?
 
     private struct RequestKey: Hashable {
         let asset: URL?
@@ -77,7 +79,7 @@ struct StudySourceCover: View {
             let coverHeight = isWide ? min(h * 0.89, w * 0.59) : h * 0.9
             ZStack {
                 StudyTheme.mat
-                if let image = displayImage {
+                if let image = displayImage ?? (w > 80 ? editorial : nil) {
                     Image(uiImage: image).resizable().scaledToFill()
                         .frame(width: coverWidth, height: coverHeight).clipped()
                         .shadow(color: .black.opacity(0.17), radius: 3, x: 2, y: 3)
@@ -85,6 +87,17 @@ struct StudySourceCover: View {
                     editorialCover(showTitle: w > 80)
                         .frame(width: coverWidth, height: coverHeight)
                         .shadow(color: .black.opacity(0.17), radius: 3, x: 2, y: 3)
+                }
+            }
+            .task(id: w > 80 ? editorialKey : nil) {
+                editorial = nil
+                guard w > 80, let key = editorialKey else { return }
+                editorial = StudyThumbnails.editorialArt(key: key) {
+                    let size = isWide ? CGSize(width: 340, height: 218) : CGSize(width: 236, height: 342)
+                    let renderer = ImageRenderer(content: editorialCover(showTitle: true)
+                        .frame(width: size.width, height: size.height))
+                    renderer.scale = 1
+                    return renderer.uiImage
                 }
             }
         }.accessibilityHidden(true)
@@ -98,6 +111,13 @@ struct StudySourceCover: View {
                     author = artwork.author
                 }
             }
+    }
+
+    private var editorialKey: String? {
+        if source.resolvedCoverMode == .custom || (source.resolvedCoverMode == .original && thumbnail != nil) { return nil }
+        let host = source.url.flatMap { URL(string: $0)?.host } ?? ""
+        return ["v1", String(variant), StudioModel.importTitle(source.title), author ?? "", source.kind.rawValue, host]
+            .joined(separator: "\u{1F}")
     }
 
     private var displayImage: UIImage? {
@@ -197,6 +217,7 @@ enum StudyThumbnails {
     }
 
     private static let memory = NSCache<NSURL, Artwork>()
+    private static let editorialMemory = NSCache<NSString, UIImage>()
     private static var requests: [URL: (UUID, Task<Artwork, Never>)] = [:]
 
     static var cacheDirectory: URL? {
@@ -212,9 +233,25 @@ enum StudyThumbnails {
         for (_, task) in requests.values { task.cancel() }
         requests.removeAll()
         memory.removeAllObjects()
+        editorialMemory.removeAllObjects()
         if let cacheDirectory, FileManager.default.fileExists(atPath: cacheDirectory.path) {
             try FileManager.default.removeItem(at: cacheDirectory)
         }
+    }
+
+    static func editorialArt(key: String, draw: () -> UIImage?) -> UIImage? {
+        if let cached = editorialMemory.object(forKey: key as NSString) { return cached }
+        let digest = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
+        let file = cacheDirectory?.appendingPathComponent("editorial-" + digest + ".jpg")
+        let existing = file.flatMap { UIImage(contentsOfFile: $0.path) }
+        guard let image = existing ?? draw() else { return nil }
+        editorialMemory.countLimit = 80
+        editorialMemory.setObject(image, forKey: key as NSString)
+        if existing == nil, let cacheDirectory, let file, let bytes = image.jpegData(compressionQuality: 0.86) {
+            try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
+            try? bytes.write(to: file, options: .atomic)
+        }
+        return image
     }
 
     static func artwork(_ asset: URL, kind: SourceKind) async -> Artwork {

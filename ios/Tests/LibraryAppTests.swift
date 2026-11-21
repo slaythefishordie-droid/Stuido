@@ -89,6 +89,48 @@ final class LibraryAppTests: XCTestCase {
             locator.rectangles, decoded.rectangles, "Page-space geometry must not be rewritten after rotation"
         )
     }
+    func testPDFSourceAnchorCentersInTheActualPDFKitViewport() throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        let file = root.appendingPathComponent("long-pages.pdf")
+        let renderer = UIGraphicsPDFRenderer(bounds: CGRect(x: 0, y: 0, width: 800, height: 1500))
+        try renderer.writePDF(to: file) { context in
+            for page in 1...3 {
+                context.beginPage()
+                ("Page \(page)" as NSString).draw(at: CGPoint(x: 390, y: 690), withAttributes: [
+                    .font: UIFont.systemFont(ofSize: 25),
+                ])
+            }
+        }
+        let fingerprint = try StudioModel.hash(file)
+        var locator = ReadingLocator(kind: "pdf", page: 2)
+        locator.fileFingerprint = fingerprint
+        locator.rectangles = [HighlightRect(page: 2, x: 380, y: 720, width: 60, height: 32)]
+        let session = PDFSession(url: file, location: locator)
+        let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
+        let active = scene.windows.first { $0.isKeyWindow }
+        let window = UIWindow(windowScene: scene)
+        let rootController = UIViewController()
+        window.rootViewController = rootController
+        window.makeKeyAndVisible()
+        defer { window.isHidden = true; active?.makeKey() }
+        let pdf = session.view
+        pdf.frame = CGRect(x: 20, y: 20, width: 640, height: 540)
+        rootController.view.addSubview(pdf)
+        pdf.autoScales = false
+        pdf.scaleFactor = 1
+        pdf.layoutDocumentView()
+        pdf.layoutIfNeeded()
+
+        session.restore(locator, fingerprint: fingerprint)
+        let page = try XCTUnwrap(pdf.document?.page(at: 1))
+        let position = pdf.convert(CGPoint(x: 410, y: 736), from: page)
+        XCTAssertEqual(session.pageNumber, 2)
+        XCTAssertEqual(position.y, pdf.bounds.midY, accuracy: 75)
+        XCTAssertTrue(page.annotations.contains { abs($0.bounds.midX - 410) < 1 && abs($0.bounds.midY - 736) < 1 })
+    }
+
     func testEPUBFontSliderConvertsPercentToReadiumScale() {
         XCTAssertEqual(EPUBSession.fontScale(for: 110), 1.1, accuracy: 0.001)
         XCTAssertEqual(EPUBSession.fontScale(for: 80), 0.8, accuracy: 0.001)

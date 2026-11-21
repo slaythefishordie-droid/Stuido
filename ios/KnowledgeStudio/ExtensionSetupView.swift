@@ -293,6 +293,6 @@ struct StudioGuide: View {
                     }
                 }
             }
-        }.studySurface().navigationTitle("使用指南").searchable(text: $query)
+        }.studySurface().navigationTitle("使用指南").searchable(text: $query, prompt: "搜索指南")
     }
 }

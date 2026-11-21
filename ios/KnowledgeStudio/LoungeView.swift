@@ -405,7 +405,7 @@ private struct LoungeMusicLibrary: View {
                     }
                 }
             }.studySurface().navigationTitle("个人曲库").navigationBarTitleDisplayMode(.inline)
-                .searchable(text: $search)
+                .searchable(text: $search, prompt: "搜索曲目")
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("完成") { dismiss() } }
                     ToolbarItem(placement: .primaryAction) {

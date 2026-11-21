@@ -293,7 +293,7 @@ struct LibraryView: View {
                 } else {
                     sourceList(includeProjects: true)
                 }
-            }.studySurface().navigationTitle("资料库").searchable(text: $search)
+            }.studySurface().navigationTitle("资料库").searchable(text: $search, prompt: "搜索资料")
                 .toolbar {
                     Button(model.isImporting ? "导入中…" : "导入资料") {
                         coverSourceID = nil

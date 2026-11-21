@@ -429,7 +429,7 @@ private struct StudioSearchView: View {
                         }
                     }
                 }
-            }.studySurface().navigationTitle("搜索书房").searchable(text: $text)
+            }.studySurface().navigationTitle("搜索书房").searchable(text: $text, prompt: "搜索资料、卡片与项目")
                 .toolbar { Button("关闭") { dismiss() } }
         }
     }
@@ -441,6 +441,7 @@ struct InboxView: View {
     @State private var editor: LibraryCard?
     @State private var archived = false
     @State private var undoMark: UUID?
+    @State private var editMode: EditMode = .inactive
     @State private var selected: Set<UUID> = []
     private struct SourceGroup: Identifiable {
         let id: UUID
@@ -461,7 +462,7 @@ struct InboxView: View {
     }
     var body: some View {
         NavigationStack {
-            inboxList.studySurface().navigationTitle("收集箱").searchable(text: $search)
+            inboxList.studySurface().navigationTitle("收集箱").searchable(text: $search, prompt: "搜索摘录").environment(\.editMode, $editMode)
                 .refreshable { await model.refreshAsync() }.toolbar { inboxToolbar }
         }.safeAreaInset(edge: .bottom) {
             if let undoMark {
@@ -548,7 +549,10 @@ struct InboxView: View {
     }
     @ToolbarContentBuilder private var inboxToolbar: some ToolbarContent {
         ToolbarItemGroup {
-            EditButton()
+            Button(editMode.isEditing ? "完成选择" : "选择") {
+                editMode = editMode.isEditing ? .inactive : .active
+                selected.removeAll()
+            }
             Button(archived ? "待整理" : "归档历史") { archived.toggle(); selected.removeAll() }
             Button("接收标记") { Task { await model.refreshAsync() } }
             if !selected.isEmpty {

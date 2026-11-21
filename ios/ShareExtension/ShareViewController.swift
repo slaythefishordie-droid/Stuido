@@ -58,10 +58,12 @@ final class ShareViewController: UIViewController {
             isSaving = true
             save.isEnabled = false
             caption.text = "正在接收资料…"
-            provider.loadFileRepresentation(forTypeIdentifier: format.0) { [weak self] url, error in
+            let complete: @Sendable (URL?, Error?) -> Void = { [weak self] url, error in
                 let failure: String?
                 do {
-                    guard let url else { throw error ?? CocoaError(.fileReadUnknown) }
+                    guard let url, url.isFileURL else { throw error ?? CocoaError(.fileReadUnknown) }
+                    let access = url.startAccessingSecurityScopedResource()
+                    defer { if access { url.stopAccessingSecurityScopedResource() } }
                     _ = try inbox.stage(url, suggestedName: name, fallbackExtension: ext)
                     failure = nil
                 } catch { failure = error.localizedDescription }
@@ -71,6 +73,16 @@ final class ShareViewController: UIViewController {
                     if let failure { caption.text = failure; save.isEnabled = true }
                     else { extensionContext?.completeRequest(returningItems: nil) }
                 }
+            }
+            if format.0 == "public.file-url" {
+                provider.loadItem(forTypeIdentifier: format.0, options: nil) { item, error in
+                    let link = (item as? URL) ?? (item as? Data).flatMap {
+                        URL(dataRepresentation: $0, relativeTo: nil)
+                    }
+                    complete(link, error)
+                }
+            } else {
+                provider.loadFileRepresentation(forTypeIdentifier: format.0, completionHandler: complete)
             }
         } catch { caption.text = error.localizedDescription }
     }

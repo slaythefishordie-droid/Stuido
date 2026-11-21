@@ -343,7 +343,7 @@ private struct BoardObjectPicker: View {
                         Label(item.title, systemImage: item.kind == .source ? "doc" : "rectangle.on.rectangle")
                     }
                 }
-            }.studySurface().searchable(text: $search).navigationTitle("添加知识对象")
+            }.studySurface().searchable(text: $search, prompt: "搜索资料或卡片").navigationTitle("添加知识对象")
                 .toolbar { Button("关闭") { dismiss() } }
         }
     }
