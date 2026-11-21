@@ -9,6 +9,7 @@ final class StudioModel: ObservableObject {
     @Published var sharedWarning: String?
     @Published private(set) var isImporting = false
     @Published private(set) var importStatus: String?
+    private var revision = 0
     let root: URL
     private(set) var repository: LibraryRepository?
 
@@ -21,6 +22,7 @@ final class StudioModel: ObservableObject {
             repository = try LibraryRepository(url: self.root.appendingPathComponent("library.sqlite"))
             try repository?.migratePrototype(at: self.root.appendingPathComponent("prototype-v1.json"))
             refresh()
+            try finishAssetPurge()
         } catch { message = "知识库未打开，原文件已保留：\(error.localizedDescription)" }
     }
     func perform(_ action: () throws -> Void) {
@@ -43,8 +45,27 @@ final class StudioModel: ObservableObject {
             }
         }
     }
+    private var refreshing = false
+
+    func refreshAsync() async {
+        guard let repository, !refreshing else { return }
+        refreshing = true
+        defer { refreshing = false }
+        do {
+            try await Task.detached(priority: .utility) {
+                try repository.receive(WebMarkStore.configured().readAll())
+                try repository.receivePages(PageCaptureStore.configured().readAll())
+            }.value
+            sharedWarning = nil
+        } catch {
+            sharedWarning = "Safari 交接未完成：\(error.localizedDescription)"
+        }
+        do { try await reloadAsync(repository) }
+        catch { message = error.localizedDescription }
+    }
+
     private func publish(_ snapshot: LibraryState) {
-        if snapshot != state { state = snapshot }
+        if snapshot != state { revision += 1; state = snapshot }
     }
 
     func commit(_ action: (inout LibraryState) throws -> Void) throws {
@@ -57,28 +78,80 @@ final class StudioModel: ObservableObject {
         do { try commit(action) }
         catch { message = error.localizedDescription }
     }
+    private func commitAsync(_ action: @escaping @Sendable (inout LibraryState) throws -> Void) async throws {
+        guard let repository else { throw LibraryError.invalid("知识库不可用") }
+        let before = revision
+        let committed = try await Task.detached(priority: .userInitiated) {
+            try repository.updateAndRead(action)
+        }.value
+        if revision == before { publish(committed); return }
+        try await reloadAsync(repository)
+    }
+
+    private func reloadAsync(_ repository: LibraryRepository) async throws {
+        while true {
+            let observed = revision
+            let latest = try await Task.detached { try repository.read() }.value
+            if revision == observed { publish(latest); return }
+        }
+    }
+
     func saveCard(_ card: LibraryCard, projects: Set<UUID>? = nil) {
-        change { state in
-            if let index = state.cards.firstIndex(where: { $0.id == card.id }) {
-                var edited = card
-                edited.schedule = state.cards[index].schedule
-                state.cards[index] = edited
-            } else {
-                state.cards.append(card)
-            }
-            if let projects {
-                for index in state.projects.indices where state.projects[index].deletedAt == nil {
-                    if projects.contains(state.projects[index].id) {
-                        if !state.projects[index].cardIDs.contains(card.id) {
-                            state.projects[index].cardIDs.append(card.id)
-                        }
-                    } else {
-                        state.projects[index].cardIDs.removeAll { $0 == card.id }
+        change { Self.writeCard(card, projects: projects, to: &$0) }
+    }
+
+    func saveEditedCard(_ card: LibraryCard, projects: Set<UUID>, inboxMark: UUID?) async throws {
+        try await commitAsync { state in
+            if let inboxMark {
+                guard let markIndex = state.marks.firstIndex(where: {
+                    $0.id == inboxMark && $0.deletedAt == nil && $0.organization == .inbox
+                }) else { throw LibraryError.invalid("这条摘录已处理，请返回收集箱。") }
+                if let existing = state.cards.first(where: { $0.markIDs.contains(inboxMark) }) {
+                    guard existing.deletedAt == nil && existing.id == card.id else {
+                        throw LibraryError.invalid("此摘录已有卡片。若卡片在回收站，请先恢复。")
                     }
+                }
+                Self.writeCard(card, projects: projects, to: &state)
+                state.marks[markIndex].organization = .archived
+            } else {
+                Self.writeCard(card, projects: projects, to: &state)
+            }
+        }
+    }
+
+    nonisolated private static func writeCard(_ card: LibraryCard, projects: Set<UUID>?,
+        to state: inout LibraryState)
+    {
+        if let index = state.cards.firstIndex(where: { $0.id == card.id }) {
+            var edited = card
+            edited.schedule = state.cards[index].schedule
+            state.cards[index] = edited
+        } else {
+            state.cards.append(card)
+        }
+        if let projects {
+            for index in state.projects.indices where state.projects[index].deletedAt == nil {
+                if projects.contains(state.projects[index].id) {
+                    if !state.projects[index].cardIDs.contains(card.id) {
+                        state.projects[index].cardIDs.append(card.id)
+                    }
+                } else {
+                    state.projects[index].cardIDs.removeAll { $0 == card.id }
                 }
             }
         }
     }
+
+    func renameSource(_ id: UUID, title: String) {
+        change { state in
+            let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            guard !title.isEmpty, let index = state.sources.firstIndex(where: { $0.id == id && $0.deletedAt == nil })
+            else { throw LibraryError.invalid("请输入资料名称。") }
+            state.sources[index].title = title
+            state.sources[index].updatedAt = .now
+        }
+    }
+
     func suggestedProjects(for card: LibraryCard) -> Set<UUID> {
         let exists = state.cards.contains { $0.id == card.id }
         let sourceIDs = Set(card.sourceRefs.map(\.sourceID))
@@ -145,8 +218,8 @@ final class StudioModel: ObservableObject {
             let imported = try await Task.detached(priority: .userInitiated) {
                 try Self.prepareAsset(url: url, root: root)
             }.value
-            var wasExisting = false
-            change { state in
+            let wasExisting = state.sources.contains { $0.assetHash == imported.assetHash && $0.deletedAt == nil }
+            try await commitAsync { state in
                 if let sourceID {
                     guard
                         let index = state.sources.firstIndex(where: {
@@ -164,7 +237,6 @@ final class StudioModel: ObservableObject {
                     let existing = state.sources.first {
                         $0.assetHash == imported.assetHash && $0.deletedAt == nil
                     }
-                    wasExisting = existing != nil
                     let id = existing?.id ?? imported.id
                     if existing == nil { state.sources.append(imported) }
                     if let projectID {
@@ -177,11 +249,10 @@ final class StudioModel: ObservableObject {
                     }
                 }
             }
-            if message == nil {
-                importStatus = wasExisting
+            message = nil
+            importStatus = wasExisting
                     ? (projectID == nil ? "这份资料已在资料库。" : "已将现有资料关联到所选项目。")
                     : "已导入「\(imported.title)」"
-            }
         } catch { message = error.localizedDescription }
     }
 
@@ -209,13 +280,13 @@ final class StudioModel: ObservableObject {
         }
         try output.close()
         let hash = digest.finalize().map { String(format: "%02x", $0) }.joined()
-        guard try Self.hash(stage) == hash else { throw LibraryError.invalid("资料复制校验失败，未加入资料库") }
         let destination = root.appendingPathComponent("assets/\(hash).\(ext)")
         try FileManager.default.createDirectory(
             at: destination.deletingLastPathComponent(), withIntermediateDirectories: true)
         if FileManager.default.fileExists(atPath: destination.path) {
             guard try Self.hash(destination) == hash else { throw LibraryError.invalid("现有资料摘要不符，拒绝覆盖") }
         } else {
+            guard try Self.hash(stage) == hash else { throw LibraryError.invalid("资料复制校验失败，未加入资料库") }
             do { try FileManager.default.moveItem(at: stage, to: destination) } catch CocoaError
                 .fileWriteFileExists
             {
@@ -241,7 +312,7 @@ final class StudioModel: ObservableObject {
             let preview = try await Task.detached(priority: .userInitiated) {
                 try ImportService.preview(text, existing: snapshot)
             }.value
-            try commit { state in
+            try await commitAsync { state in
                 if state.pending.contains(where: { $0.packageID == preview.packageID && $0.json != text }) {
                     throw LibraryError.invalid("导入箱已有同编号的不同批次")
                 }
@@ -310,80 +381,132 @@ final class StudioModel: ObservableObject {
         }.count
         return "关联卡片 \(cards)、标记 \(marks)、关系 \(relations)、项目 \(projects)。移入回收站保留关联；永久清理仅允许没有引用的对象。"
     }
+    private var purgeJournal: URL { root.appendingPathComponent("pending-asset-purge.json") }
+
+    private func finishAssetPurge() throws {
+        guard FileManager.default.fileExists(atPath: purgeJournal.path) else { return }
+        let names = Set(try JSONDecoder().decode([String].self, from: Data(contentsOf: purgeJournal)))
+        do {
+            for file in try unusedAssets() where names.contains(file.lastPathComponent) {
+                try FileManager.default.removeItem(at: file)
+            }
+            try FileManager.default.removeItem(at: purgeJournal)
+        } catch {
+            throw LibraryError.invalid("资料文件清理未完成，下次打开时会重试：\(error.localizedDescription)")
+        }
+    }
+
     func delete(_ ids: Set<UUID>, restore: Bool = false, permanently: Bool = false) {
-        change { state in
+        guard !ids.isEmpty else { return }
+        message = nil
+        do {
             if permanently {
-                for id in ids {
-                    let linked =
-                        state.reviewRecords.contains { $0.cardID == id }
-                        || state.marks.contains { $0.sourceID == id }
-                        || state.cards.contains {
-                            $0.markIDs.contains(id) || $0.sourceRefs.contains { $0.sourceID == id }
-                        } || state.relations.contains { $0.from == id || $0.to == id }
-                        || state.projects.contains {
-                            $0.references(id)
-                        }
-                    guard !linked else { throw LibraryError.invalid("对象仍被引用，请先解除关联或清理引用对象") }
-                }
-                state.reviewRecords.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
-                state.sources.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
-                state.marks.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
-                state.cards.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
-                state.projects.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
-                state.relations.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
-            } else {
-                let date: Date? = restore ? nil : Date()
-                for index in state.reviewRecords.indices where ids.contains(state.reviewRecords[index].id) {
-                    if restore {
-                        guard
-                            state.cards.contains(where: {
-                                $0.id == state.reviewRecords[index].cardID && $0.deletedAt == nil
-                            })
-                        else { throw LibraryError.invalid("请先恢复复习记录所属卡片") }
-                    }
-                    state.reviewRecords[index].deletedAt = date
-                }
-                for index in state.sources.indices where ids.contains(state.sources[index].id) {
-                    state.sources[index].deletedAt = date
-                }
-                for index in state.marks.indices where ids.contains(state.marks[index].id) {
-                    if restore {
-                        guard
-                            state.sources.contains(where: {
-                                $0.id == state.marks[index].sourceID && $0.deletedAt == nil
-                            })
-                        else { throw LibraryError.invalid("请先恢复标记的资料") }
-                    }
-                    state.marks[index].deletedAt = date
-                }
-                for index in state.cards.indices where ids.contains(state.cards[index].id) {
-                    if restore {
-                        guard
-                            state.cards[index].sourceRefs.allSatisfy({ ref in
-                                state.sources.contains { $0.id == ref.sourceID && $0.deletedAt == nil }
-                            }),
-                            state.cards[index].markIDs.allSatisfy({ id in
-                                state.marks.contains { $0.id == id && $0.deletedAt == nil }
-                            })
-                        else { throw LibraryError.invalid("请先恢复卡片出处") }
-                    }
-                    state.cards[index].deletedAt = date
-                }
-                for index in state.relations.indices where ids.contains(state.relations[index].id) {
-                    if restore {
-                        guard
-                            [state.relations[index].from, state.relations[index].to].allSatisfy({ id in
-                                state.cards.contains { $0.id == id && $0.deletedAt == nil }
-                            })
-                        else { throw LibraryError.invalid("请先恢复关系端点") }
-                    }
-                    state.relations[index].deletedAt = date
-                }
-                for index in state.projects.indices where ids.contains(state.projects[index].id) {
-                    state.projects[index].deletedAt = date
+                guard !isImporting else { throw LibraryError.invalid("资料正在导入，请稍后清理。") }
+                try finishAssetPurge()
+                let names = state.sources.filter { ids.contains($0.id) && $0.deletedAt != nil }
+                    .compactMap { assetURL($0)?.lastPathComponent }
+                if !names.isEmpty {
+                    try JSONEncoder().encode(names).write(to: purgeJournal, options: .atomic)
                 }
             }
-        }
+            try commit { state in
+                if permanently {
+                    let mapIDs = Set(state.projects.filter {
+                        $0.hasBoard && $0.boardTrashedAt != nil
+                    }.map(\.boardManagementID))
+                    let trashIDs = Set(
+                        state.sources.filter { $0.deletedAt != nil }.map(\.id) +
+                        state.marks.filter { $0.deletedAt != nil }.map(\.id) +
+                        state.cards.filter { $0.deletedAt != nil }.map(\.id) +
+                        state.projects.filter { $0.deletedAt != nil }.map(\.id) +
+                        state.relations.filter { $0.deletedAt != nil }.map(\.id) +
+                        state.reviewRecords.filter { $0.deletedAt != nil }.map(\.id))
+                    guard ids.isSubset(of: trashIDs.union(mapIDs)) else { throw LibraryError.invalid("请先移入回收站。") }
+                    for id in ids {
+                        let linked =
+                            state.reviewRecords.contains { !ids.contains($0.id) && ($0.cardID == id) }
+                            || state.marks.contains { !ids.contains($0.id) && ($0.sourceID == id) }
+                            || state.cards.contains {
+                                !ids.contains($0.id) && ($0.markIDs.contains(id) || $0.sourceRefs.contains { $0.sourceID == id })
+                            } || state.relations.contains { !ids.contains($0.id) && ($0.from == id || $0.to == id) }
+                            || state.projects.contains {
+                                !ids.contains($0.id) && $0.references(id, includingBoard: !ids.contains($0.boardManagementID))
+                            }
+                        guard !linked else { throw LibraryError.invalid("对象仍被引用，请先解除关联或清理引用对象") }
+                    }
+                    for index in state.projects.indices where ids.contains(state.projects[index].boardManagementID) {
+                        state.projects[index].board = nil
+                        state.projects[index].boardCoverImage = nil
+                        state.projects[index].boardTrashedAt = nil
+                    }
+                    state.reviewRecords.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
+                    state.sources.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
+                    state.marks.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
+                    state.cards.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
+                    state.projects.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
+                    state.relations.removeAll { ids.contains($0.id) && $0.deletedAt != nil }
+                } else {
+                    let date: Date? = restore ? nil : Date()
+                    for index in state.sources.indices where ids.contains(state.sources[index].id) {
+                        state.sources[index].deletedAt = date
+                    }
+                    for index in state.marks.indices where ids.contains(state.marks[index].id) {
+                        if restore {
+                            guard
+                                state.sources.contains(where: {
+                                    $0.id == state.marks[index].sourceID && $0.deletedAt == nil
+                                })
+                            else { throw LibraryError.invalid("请先恢复标记的资料") }
+                        }
+                        state.marks[index].deletedAt = date
+                    }
+                    for index in state.cards.indices where ids.contains(state.cards[index].id) {
+                        if restore {
+                            guard
+                                state.cards[index].sourceRefs.allSatisfy({ ref in
+                                    state.sources.contains { $0.id == ref.sourceID && $0.deletedAt == nil }
+                                }),
+                                state.cards[index].markIDs.allSatisfy({ id in
+                                    state.marks.contains { $0.id == id && $0.deletedAt == nil }
+                                })
+                            else { throw LibraryError.invalid("请先恢复卡片出处") }
+                        }
+                        state.cards[index].deletedAt = date
+                    }
+                    for index in state.reviewRecords.indices where ids.contains(state.reviewRecords[index].id) {
+                        if restore {
+                            guard
+                                state.cards.contains(where: {
+                                    $0.id == state.reviewRecords[index].cardID && $0.deletedAt == nil
+                                })
+                            else { throw LibraryError.invalid("请先恢复复习记录所属卡片") }
+                        }
+                        state.reviewRecords[index].deletedAt = date
+                    }
+                    for index in state.relations.indices where ids.contains(state.relations[index].id) {
+                        if restore {
+                            guard
+                                [state.relations[index].from, state.relations[index].to].allSatisfy({ id in
+                                    state.cards.contains { $0.id == id && $0.deletedAt == nil }
+                                })
+                            else { throw LibraryError.invalid("请先恢复关系端点") }
+                        }
+                        state.relations[index].deletedAt = date
+                    }
+                    for index in state.projects.indices where ids.contains(state.projects[index].id) {
+                        state.projects[index].deletedAt = date
+                    }
+                    for index in state.projects.indices where state.projects[index].hasBoard &&
+                        ids.contains(state.projects[index].boardManagementID) {
+                        if restore && state.projects[index].deletedAt != nil {
+                            throw LibraryError.invalid("请先恢复白板所属项目。")
+                        }
+                        state.projects[index].boardTrashedAt = date
+                    }
+                }
+            }
+            if permanently { try finishAssetPurge() }
+        } catch { message = error.localizedDescription }
         if message == nil, let web = try? WebMarkStore.configured().readAll() {
             for mark in web where ids.contains(mark.id) {
                 do { try WebMarkStore.configured().annotate(id: mark.id, deleted: !restore) } catch {

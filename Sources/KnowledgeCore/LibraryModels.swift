@@ -175,6 +175,13 @@ public struct LibraryProject: Codable, Identifiable, Equatable, Sendable {
     public var relationIDs: [UUID] = []
     public var board: ProjectBoard?
     public var boardCoverImage: Data?
+    public var boardTrashedAt: Date?
+    public var hasBoard: Bool { board != nil || boardCoverImage != nil }
+    public var boardManagementID: UUID {
+        let raw = id.uuid
+        return UUID(uuid: (raw.0, raw.1, raw.2, raw.3, raw.4, raw.5, raw.6 ^ 0x80, raw.7,
+            raw.8, raw.9, raw.10, raw.11, raw.12, raw.13, raw.14, raw.15))
+    }
     public var groups: [ProjectGroup]?
     public var sourceNotes: [String: String]?
     public var deletedAt: Date?

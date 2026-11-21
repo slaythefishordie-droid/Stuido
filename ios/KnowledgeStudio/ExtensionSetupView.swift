@@ -4,7 +4,7 @@ import SwiftUI
 struct ExtensionSetupView: View {
     private enum Category: String, CaseIterable, Identifiable {
         case reading = "阅读与 Pencil", video = "视频与 QuickMark", cards = "卡片与复习"
-        case appearance = "界面与布局", data = "数据与导入", help = "帮助与高级设置"
+        case appearance = "界面与布局", data = "数据与导入", help = "帮助与高级设置", lounge = "休息室"
         var id: Self { self }
         var icon: String {
             switch self {
@@ -14,6 +14,7 @@ struct ExtensionSetupView: View {
             case .appearance: "sidebar.leading"
             case .data: "externaldrive"
             case .help: "questionmark.circle"
+            case .lounge: "cup.and.saucer"
             }
         }
     }
@@ -111,6 +112,8 @@ struct ExtensionSetupView: View {
                 Button("库存、缓存与备份", systemImage: "externaldrive") { navigation.open(.manager) }
                 Button("导入 AI 卡片包", systemImage: "tray.and.arrow.down") { navigation.open(.imports) }
                 NavigationLink("从文件 App 导入") { StudioGuide(initialTopic: .files) }
+            case .lounge:
+                LoungePreferences()
             case .help:
                 NavigationLink("使用指南") { StudioGuide() }
                 Button("恢复默认偏好", role: .destructive) { reset = true }
@@ -141,12 +144,12 @@ struct ExtensionSetupView: View {
                     Text("夜读").tag("dark")
                 }
                 Picker("字体", selection: $font) {
-                    Text("衬线").tag("serif")
-                    Text("无衬线").tag("sans")
+                    Text("宋体 · 衬线").tag("serif")
+                    Text("黑体 · 无衬线").tag("sans")
                 }
-                Stepper("字号 \(Int(size))%", value: $size, in: 80...180, step: 10)
-                LabeledContent("行距") { Slider(value: $lines, in: 1.2...2.2, step: 0.1) }
-                LabeledContent("页边距") { Slider(value: $margins, in: 0.5...2.0, step: 0.25) }
+                Stepper("字号 \(Int(size))%", value: $size, in: EPUBSession.fontRange, step: 5)
+                LabeledContent("行距") { Slider(value: $lines, in: EPUBSession.spacingRange, step: 0.05) }
+                LabeledContent("页边距") { Slider(value: $margins, in: EPUBSession.marginRange, step: 0.1) }
             }
             Section("工具") {
                 Toggle("工具栏空闲时淡化", isOn: $toolsFade)

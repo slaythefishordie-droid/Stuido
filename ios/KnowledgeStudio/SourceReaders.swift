@@ -44,8 +44,8 @@ struct SourceReaderView: View {
             }
         }.studySurface().navigationTitle(source.title).navigationBarTitleDisplayMode(.inline)
             .onAppear {
-                if immersive { readerPresentation.setActive(readerID, true) }
-            }.onDisappear { readerPresentation.setActive(readerID, false) }
+                readerPresentation.setActive(readerID, source.id, true, immersive)
+            }.onDisappear { readerPresentation.setActive(readerID, source.id, false, immersive) }
             .fileImporter(isPresented: $attach, allowedContentTypes: [.pdf, .movie, .data]) { result in
                 Task {
                     do { await model.importFile(try result.get(), replacing: source.id) } catch {
@@ -301,14 +301,14 @@ struct PDFStudyView: View {
                 onMark: { id in selectedMark = model.state.marks.first { $0.id == id && $0.deletedAt == nil } },
                 onRegion: saveRegion)
             PronunciationStatus()
-            if !session.anchorStatus.isEmpty {
-                Text(session.anchorStatus).font(.caption).foregroundStyle(.secondary).padding(.horizontal, 8)
-            }
             if recognizing { ProgressView("正在识别选区…").font(.caption) }
         }
     }
 
     @ViewBuilder private var pdfOptions: some View {
+        if !session.anchorStatus.isEmpty {
+            Text(session.anchorStatus)
+        }
         Button("收藏当前位置") { capture(kind: kind, annotate: false) }
             .disabled(session.verifiedFingerprint == nil)
         Button("选文批注") { capture(kind: kind, annotate: true) }
@@ -772,7 +772,14 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
         if let value = try? Self.readingLocator(locator) { savePosition?(value) }
     }
     /// The Settings slider stores whole percentages. Readium expects a scale factor.
-    static func fontScale(for percent: Double) -> Double { min(180, max(80, percent)) / 100 }
+    static let fontRange = 65.0...230.0
+    static let spacingRange = 1.05...2.85
+    static let marginRange = 0.35...2.75
+    static let song: FontFamily = "Songti SC"
+    static let hei: FontFamily = "PingFang SC"
+    static func fontScale(for percent: Double) -> Double {
+        min(fontRange.upperBound, max(fontRange.lowerBound, percent)) / 100
+    }
 
     static func readingLocator(_ locator: Locator) throws -> ReadingLocator {
         ReadingLocator(
@@ -825,6 +832,9 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
                     EditingAction(title: "关键句高亮", action: #selector(StudyEPUBContainer.markSentence)),
                     EditingAction(title: "听发音", action: #selector(StudyEPUBContainer.pronounce)),
                     .copy, .lookup,
+                ], fontFamilyDeclarations: [
+                    CSSFontFamilyDeclaration(fontFamily: Self.song, alternates: ["Georgia", .serif]).eraseToAnyHTMLFontFamilyDeclaration(),
+                    CSSFontFamilyDeclaration(fontFamily: Self.hei, alternates: ["Helvetica Neue", .sansSerif]).eraseToAnyHTMLFontFamilyDeclaration(),
                 ]))
             captureSelection = { [weak self, weak reader] kind in
                 guard let locator = reader?.currentSelection?.locator, let text = locator.text.highlight,
@@ -947,20 +957,21 @@ struct EPUBStudyView: View {
         .onChange(of: theme) { _, _ in applyPreferences() }
         .onChange(of: columnMode) { _, _ in applyPreferences() }
         .onChange(of: margins) { _, _ in applyPreferences() }
-        .sheet(isPresented: $settings) {
+        .popover(isPresented: $settings, attachmentAnchor: .point(.topTrailing)) {
             NavigationStack {
                 Form {
+                    if let warning = session.locationWarning { Text(warning).font(.caption) }
                     Button("收藏当前阅读位置") { saveReadingMark() }
                         .disabled(session.navigator == nil)
                     Picker("字体", selection: $font) {
-                        Text("衬线阅读体").tag("serif")
-                        Text("无衬线体").tag("sans")
+                        Text("宋体 · 衬线").tag("serif")
+                        Text("黑体 · 无衬线").tag("sans")
                     }
                     Section("字号") {
-                        Slider(value: $fontSize, in: 80...180, step: 10)
+                        Slider(value: $fontSize, in: EPUBSession.fontRange, step: 5)
                         Text("\(Int(fontSize))%")
                     }
-                    Section("行距") { Slider(value: $lineHeight, in: 1.2...2.2, step: 0.1) }
+                    Section("行距") { Slider(value: $lineHeight, in: EPUBSession.spacingRange, step: 0.05) }
                     Picker("书页", selection: $theme) {
                         Text("纸白").tag("light")
                         Text("暖纸").tag("sepia")
@@ -972,10 +983,9 @@ struct EPUBStudyView: View {
                         Text("单页").tag("one")
                         Text("双页").tag("two")
                     }
-                    Section("页边距") { Slider(value: $margins, in: 0.5...2.0, step: 0.25) }
-                    Text("双页按可用宽度与书籍排版自动调整；固定版式书籍可能不支持字号和行距调整。").font(.caption)
+                    Section("页边距") { Slider(value: $margins, in: EPUBSession.marginRange, step: 0.1) }
                 }.studySurface().navigationTitle("阅读设置").toolbar { Button("完成") { settings = false } }
-            }.presentationDetents([.medium])
+            }.frame(idealWidth: 375, idealHeight: 440).presentationCompactAdaptation(.popover)
         }
         .onDisappear {
             if let value = try? session.location(selection: false) {
@@ -985,7 +995,6 @@ struct EPUBStudyView: View {
     }
     private var epubContent: some View {
         VStack(spacing: 2) {
-            if let warning = session.locationWarning { Text(warning).font(.caption).foregroundStyle(.orange) }
             if let error = session.error {
                 ContentUnavailableView {
                     Label("无法打开 EPUB", systemImage: "book.closed")
@@ -1023,9 +1032,9 @@ struct EPUBStudyView: View {
             columnMode == "one" || (columnMode == "legacy" && !legacyColumns) ? .single : .automatic
         return EPUBPreferences(
             columnCount: mode.usesSpread(in: readerSize) ? .two : .one,
-            fontFamily: font == "serif" ? .serif : .sansSerif,
+            fontFamily: font == "serif" ? EPUBSession.song : EPUBSession.hei,
             fontSize: EPUBSession.fontScale(for: fontSize),
-            lineHeight: lineHeight, pageMargins: margins,
+            lineHeight: lineHeight, pageMargins: margins, publisherStyles: false,
             theme: theme == "dark" ? .dark : theme == "light" ? .light : .sepia)
     }
 

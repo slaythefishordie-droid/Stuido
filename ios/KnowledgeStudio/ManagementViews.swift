@@ -205,6 +205,8 @@ struct LibraryView: View {
     @State private var projectTitle = ""
     @State private var selectedProject: UUID?
     @State private var coverSourceID: UUID?
+    @State private var renamingSource: UUID?
+    @State private var newSourceTitle = ""
     @AppStorage("libraryCoverLayout") private var coverLayout = true
     @State private var collection = "全部"
     @State private var selecting = false
@@ -284,6 +286,15 @@ struct LibraryView: View {
                         }.padding().frame(maxWidth: .infinity).background(.regularMaterial)
                     }
                 }
+        }.alert("重命名资料", isPresented: Binding(get: { renamingSource != nil }, set: {
+            if !$0 { renamingSource = nil }
+        })) {
+            TextField("显示名称", text: $newSourceTitle)
+            Button("保存") {
+                if let renamingSource { model.renameSource(renamingSource, title: newSourceTitle) }
+                renamingSource = nil
+            }
+            Button("取消", role: .cancel) { renamingSource = nil }
         }.fileImporter(
             isPresented: $importing,
             allowedContentTypes: coverSourceID == nil ? [.pdf, UTType(filenameExtension: "epub") ?? .data, .movie] : [.image]
@@ -312,6 +323,10 @@ struct LibraryView: View {
     }
 
     @ViewBuilder private func sourceActionMenu(_ source: LibrarySource) -> some View {
+        Button("重命名", systemImage: "pencil") {
+            newSourceTitle = source.title
+            renamingSource = source.id
+        }
         Menu("封面") {
             Button(source.coverImage == nil ? "选择自定义图片" : "更换自定义图片") {
                 coverSourceID = source.id
@@ -556,11 +571,14 @@ struct ProjectView: View {
                 let linked = Set(project.cardIDs)
                 ForEach(model.state.cards.filter { $0.deletedAt == nil && linked.contains($0.id) }
                     .sorted { $0.updatedAt > $1.updatedAt }) { card in
-                    NavigationLink { CardDetailView(cardID: card.id) } label: { StudyCardFace(card: card) }
+                    StudyCardPreview(card: card)
                         .listRowBackground(Color.clear).listRowSeparator(.hidden)
                 }
             }
         case .maps:
+            if project.boardTrashedAt != nil {
+                Text("白板在回收站").foregroundStyle(.secondary)
+            } else {
             NavigationLink { ProjectBoardView(projectID: projectID) } label: {
                 VStack(alignment: .leading, spacing: 9) {
                     StudyBoardCover(project: project)
@@ -573,6 +591,7 @@ struct ProjectView: View {
             }.contextMenu {
                 Button("更换白板封面") { choosingCover = true }
                 if project.boardCoverImage != nil { Button("恢复白板预览") { saveBoardCover(nil) } }
+            }
             }
         case .relations:
             projectRelations(project)
@@ -673,14 +692,14 @@ struct DataManagerView: View {
     @State private var kind = "全部"
     @State private var search = ""
     @State private var selected: Set<UUID> = []
-    @State private var confirming = false
-    @State private var permanent = false
+    private enum Decision { case trash, purge, cache, backup }
+    @State private var decision: Decision?
+    @State private var affected: Set<UUID> = []
     @State private var backup: URL?
     @State private var restoring = false
     @State private var busy = false
     @State private var confirmCleanup = false
     @State private var showCleanup = false
-    @State private var confirmCacheCleanup = false
     @State private var orphanFiles: [URL] = []
     @State private var selectedFiles: Set<URL> = []
     @State private var fileSizes: [URL: Int64] = [:]
@@ -693,7 +712,6 @@ struct DataManagerView: View {
     @State private var refreshStorage = UUID()
 
     @State private var validated: BackupService.Validated?
-    @State private var confirmRestore = false
     struct Row: Identifiable {
         let id: UUID
         let title: String
@@ -715,6 +733,9 @@ struct DataManagerView: View {
         all += model.state.projects.map {
             Row(id: $0.id, title: $0.title, kind: "项目", deleted: $0.deletedAt != nil)
         }
+        all += model.state.projects.filter { $0.hasBoard && ($0.deletedAt == nil || $0.boardTrashedAt != nil) }
+            .map { Row(id: $0.boardManagementID, title: $0.title + " · 白板", kind: "白板",
+                deleted: $0.boardTrashedAt != nil) }
         all += model.state.relations.map {
             Row(id: $0.id, title: $0.kind, kind: "关系", deleted: $0.deletedAt != nil)
         }
@@ -747,19 +768,30 @@ struct DataManagerView: View {
                 .toolbar { EditButton() }
                 .onChange(of: kind) { _, _ in selected.removeAll() }
                 .onChange(of: search) { _, _ in selected.removeAll() }
-        }.confirmationDialog(
-            permanent ? "永久清理不可撤销，确认已备份？" : "将所选对象移入回收站？",
-            isPresented: $confirming, titleVisibility: .visible
-        ) {
-            Button(permanent ? "永久清理" : "移入回收站", role: .destructive) {
-                model.delete(selected, permanently: permanent)
-                if model.message == nil { selected = [] }
-                refreshStorage = UUID()
+        }.confirmationDialog(decisionTitle, isPresented: Binding(get: { decision != nil }, set: {
+            if !$0 { decision = nil }
+        }), titleVisibility: .visible) {
+            switch decision {
+            case .trash, .purge:
+                let purge = decision == .purge
+                Button(purge ? "永久删除" : "移入回收站", role: .destructive) {
+                    model.delete(affected, permanently: purge)
+                    if model.message == nil { selected.subtract(affected) }
+                    refreshStorage = UUID()
+                }
+            case .cache:
+                Button("清理缓存", role: .destructive) {
+                    do { try StudyThumbnails.clearCache(); refreshStorage = UUID() }
+                    catch { model.message = error.localizedDescription }
+                }
+            case .backup:
+                Button("恢复并替换当前知识库", role: .destructive) { restoreBackup() }
+                Button("取消", role: .cancel) { clearBackup() }
+            case nil: EmptyView()
             }
-        }.confirmationDialog("清除可重新生成的缩略图缓存？", isPresented: $confirmCacheCleanup) {
-            Button("清理缓存", role: .destructive) {
-                do { try StudyThumbnails.clearCache(); refreshStorage = UUID() }
-                catch { model.message = error.localizedDescription }
+        } message: {
+            if decision == .trash || decision == .purge {
+                Text(affected.prefix(3).map { model.impact(of: $0) }.joined(separator: "\n"))
             }
         }.sheet(isPresented: $showCleanup) { cleanupSheet }
         .task(id: refreshStorage) { await readStorage() }
@@ -769,31 +801,40 @@ struct DataManagerView: View {
             Task {
                 do {
                     validated = try await BackupService.validate(result.get())
-                    confirmRestore = true
+                    decision = .backup
                 } catch { model.message = error.localizedDescription }
                 busy = false
             }
-        }.confirmationDialog(
-            "校验通过。替换为备份中的 \(validated?.state.cards.count ?? 0) 张卡片、\(validated?.state.marks.count ?? 0) 条标记？",
-            isPresented: $confirmRestore, titleVisibility: .visible
-        ) {
-            Button("确认恢复并替换当前知识库", role: .destructive) {
-                guard let validated else { return }
-                busy = true
-                Task {
-                    do { try await BackupService.restore(validated, model: model) } catch {
-                        model.message = error.localizedDescription
-                    }
-                    try? FileManager.default.removeItem(at: validated.directory)
-                    self.validated = nil
-                    busy = false
-                    refreshStorage = UUID()
-                }
-            }
-            Button("取消", role: .cancel) {
-                if let validated { try? FileManager.default.removeItem(at: validated.directory) }
-                validated = nil
-            }
+        }
+    }
+
+    private var decisionTitle: String {
+        switch decision {
+        case .trash: "将 \(affected.count) 个对象移入回收站？"
+        case .purge: "永久删除 \(affected.count) 个对象？"
+        case .cache: "清理可重新生成的缩略图缓存？"
+        case .backup: "用已校验的备份替换当前知识库？"
+        case nil: ""
+        }
+    }
+
+    private func ask(_ action: Decision, ids: Set<UUID>) {
+        affected = ids
+        decision = action
+    }
+
+    private func clearBackup() {
+        if let validated { try? FileManager.default.removeItem(at: validated.directory) }
+        validated = nil
+    }
+
+    private func restoreBackup() {
+        guard let validated else { return }
+        busy = true
+        Task {
+            defer { clearBackup(); busy = false; refreshStorage = UUID() }
+            do { try await BackupService.restore(validated, model: model) }
+            catch { model.message = error.localizedDescription }
         }
     }
 
@@ -828,7 +869,7 @@ struct DataManagerView: View {
                     Text("回收站").tag(true)
                 }.pickerStyle(.segmented).onChange(of: trash) { _, _ in selected = [] }
                 Picker("类型", selection: $kind) {
-                    ForEach(["全部", "资料", "标记", "卡片", "项目", "关系", "复习记录"], id: \.self) { Text($0) }
+                    ForEach(["全部", "资料", "标记", "卡片", "项目", "白板", "关系", "复习记录"], id: \.self) { Text($0) }
                 }
                 Picker("排序", selection: $sort) {
                     Text("按类型").tag("类型")
@@ -843,7 +884,14 @@ struct DataManagerView: View {
                                 Text(row.title).lineLimit(3)
                                 Text(row.kind).font(.caption).foregroundStyle(.secondary)
                             }
-                        }.tag(row.id)
+                        }.tag(row.id).contextMenu {
+                            if row.deleted {
+                                Button("恢复", systemImage: "arrow.uturn.backward") { model.delete([row.id], restore: true) }
+                                Button("永久删除", systemImage: "trash", role: .destructive) { ask(.purge, ids: [row.id]) }
+                            } else {
+                                Button("移入回收站", systemImage: "trash", role: .destructive) { ask(.trash, ids: [row.id]) }
+                            }
+                        }
                     }
                 }
                 if !selected.isEmpty {
@@ -852,11 +900,10 @@ struct DataManagerView: View {
                         if trash {
                             Button("恢复所选") {
                                 model.delete(selected, restore: true)
-                                selected = []
+                                if model.message == nil { selected = [] }
                             }
                             Button("永久清理所选", role: .destructive) {
-                                permanent = true
-                                confirming = true
+                                ask(.purge, ids: selected)
                             }
                         } else {
                             Button("移回待整理") {
@@ -882,8 +929,7 @@ struct DataManagerView: View {
                                 selected = []
                             }
                             Button("移入回收站", role: .destructive) {
-                                permanent = false
-                                confirming = true
+                                ask(.trash, ids: selected)
                             }
                         }
                     }
@@ -952,7 +998,7 @@ struct DataManagerView: View {
                     showCleanup = true
                 } catch { model.message = error.localizedDescription }
             }.disabled(model.isImporting || busy)
-            Button("清理缩略图缓存") { confirmCacheCleanup = true }.disabled(cacheBytes == 0)
+            Button("清理缩略图缓存") { decision = .cache }.disabled(cacheBytes == 0)
         }
     }
 
@@ -1050,6 +1096,8 @@ struct DataManagerView: View {
             CardDetailView(cardID: row.id)
         } else if model.state.marks.contains(where: { $0.id == row.id }) {
             MarkDetailView(markID: row.id)
+        } else if let project = model.state.projects.first(where: { $0.boardManagementID == row.id && $0.hasBoard }) {
+            ProjectBoardView(projectID: project.id)
         } else if model.state.projects.contains(where: { $0.id == row.id }) {
             ProjectView(projectID: row.id)
         } else {

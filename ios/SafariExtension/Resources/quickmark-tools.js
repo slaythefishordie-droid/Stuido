@@ -10,9 +10,10 @@
     <div class="loop-row"><button id="a">设 A</button><button id="b" disabled>设 B</button><button id="clear" disabled>清除</button></div>
     </section>
     <section class="pane" id="history" aria-label="标记历史" hidden style="width:auto;background:#f5e8d8;color:#3c2637;box-shadow:none">
-    <h2>标记历史</h2>
-    <div class="history-filter"><input type="search" id="search" placeholder="搜索标题、备注或时间" aria-label="搜索历史"></div>
-    <div class="history-filter"><label><input type="checkbox" id="current">仅当前视频</label><button id="refresh">刷新</button></div>
+    <h2 id="history-title">标记历史</h2>
+    <button id="videos" hidden>‹ 返回视频</button>
+    <div class="history-filter"><input type="search" id="search" placeholder="搜索视频" aria-label="搜索历史"></div>
+    <div class="history-filter"><label><input type="checkbox" id="current">仅当前视频</label><select id="history-sort" aria-label="视频排序"><option value="marked">最近标记</option><option value="watched">最近观看</option></select><button id="refresh">刷新</button></div>
     <p id="count"></p><div id="rows" style="max-height:29vh;overflow:auto"></div><button id="more">显示更多</button>
     <details><summary>导入与导出</summary><button id="export">导出书签 JSON</button>
     <label>导入旧书签<input id="import" type="file" accept="application/json,.json"></label></details></section>`;
@@ -41,7 +42,18 @@
   }
   const listeningButton = panelButton('listening', '精听');
   panelButton('history', '历史', () => refresh());
-  let a = null, b = null, boundVideo = null, marks = [], limit = 50;
+  let a = null, b = null, boundVideo = null, marks = [], limit = 50, selectedVideo = null;
+  let watched = {};
+  const recordWatch = () => {
+    let id; try { id = KnowledgeCapture.videoID(location.href); } catch { return; }
+    watched[id] = Date.now();
+    watched = Object.fromEntries(Object.entries(watched).sort((a, b) => b[1] - a[1]).slice(0, 300));
+    browser.storage.local.set({ historyWatched: watched }).catch(() => {});
+  };
+  browser.storage.local.get('historyWatched').then(value => {
+    watched = { ...value.historyWatched }; recordWatch();
+  }).catch(() => {});
+  document.addEventListener('yt-navigate-finish', recordWatch);
   function drawLoop() {
     find('b').disabled = a == null;
     find('clear').disabled = a == null;
@@ -91,9 +103,51 @@
     const query = find('search').value.toLowerCase();
     let id; try { id = KnowledgeCapture.videoID(location.href); } catch { id = null; }
     const current = find('current').checked;
-    const rows = marks.filter(mark => (!current || mark.videoID === id) && `${mark.title} ${mark.note ?? ''} ${mark.seconds} ${Math.floor(mark.seconds / 60)}:${String(mark.seconds % 60).padStart(2, '0')}`.toLowerCase().includes(query))
-      .sort((x, y) => current ? x.seconds - y.seconds : y.createdAt - x.createdAt);
-    find('count').textContent = `${rows.length} 条，已显示 ${Math.min(limit, rows.length)} 条`; find('rows').replaceChildren();
+    const groups = new Map();
+    for (const mark of marks) {
+      if (current && mark.videoID !== id) continue;
+      const group = groups.get(mark.videoID);
+      if (group) {
+        group.marks.push(mark);
+        if (mark.createdAt > group.recent) { group.recent = mark.createdAt; group.title = mark.title; }
+      } else groups.set(mark.videoID, { id: mark.videoID, title: mark.title, recent: mark.createdAt, marks:[mark] });
+    }
+    if (selectedVideo && !groups.has(selectedVideo)) selectedVideo = null;
+    const selected = groups.get(selectedVideo);
+    find('videos').hidden = !selected;
+    find('search').hidden = !!selected;
+    find('history-title').textContent = selected?.title ?? '标记历史';
+    const container = find('rows');
+    container.replaceChildren();
+    if (!selected) {
+      const videos = [...groups.values()].filter(group => group.id.includes(query) ||
+        group.marks.some(mark => mark.title.toLowerCase().includes(query)))
+        .sort((a, b) => (find('history-sort').value === 'watched'
+          ? ((watched[b.id] ?? 0) - (watched[a.id] ?? 0)) : 0) || b.recent - a.recent);
+      find('count').textContent = `${videos.length} 部视频`;
+      find('more').hidden = videos.length <= limit;
+      for (const group of videos.slice(0, limit)) {
+        const button = document.createElement('button');
+        button.className = 'history-video';
+        button.style.cssText = 'display:flex;width:100%;text-align:start;align-items:center;gap:9px;margin-bottom:6px';
+        if (/^[A-Za-z0-9_-]{11}$/.test(group.id)) {
+          const img = document.createElement('img');
+          img.alt = ''; img.loading = 'lazy'; img.width = 56; img.height = 42;
+          img.referrerPolicy = 'no-referrer';
+          img.src = `https://i.ytimg.com/vi/${group.id}/default.jpg`;
+          img.onerror = () => img.remove();
+          button.append(img);
+        }
+        const title = document.createElement('span');
+        title.textContent = `${group.title} · ${group.marks.length} 条`;
+        button.append(title);
+        button.onclick = () => { selectedVideo = group.id; limit = 50; render(); };
+        container.append(button);
+      }
+      return;
+    }
+    const rows = selected.marks.sort((a, b) => a.seconds - b.seconds);
+    find('count').textContent = `${rows.length} 条标记`;
     find('more').hidden = rows.length <= limit;
     for (const mark of rows.slice(0, limit)) {
       const row = document.createElement('div'); row.className = 'history-row';
@@ -109,7 +163,9 @@
   }
   find('refresh').onclick = refresh;
   find('search').oninput = () => { limit = 50; render(); };
-  find('current').onchange = () => { limit = 50; render(); };
+  find('current').onchange = () => { selectedVideo = null; limit = 50; render(); };
+  find('videos').onclick = () => { selectedVideo = null; limit = 50; render(); };
+  find('history-sort').onchange = () => { limit = 50; render(); };
   find('more').onclick = () => { limit += 50; render(); };
   find('export').onclick = async () => {
     await refresh();

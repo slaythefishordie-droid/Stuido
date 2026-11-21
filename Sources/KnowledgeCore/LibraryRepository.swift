@@ -3,7 +3,7 @@ import GRDB
 
 /// One versioned aggregate per SQLite transaction keeps import/restore atomic.
 /// Entity IDs and references are validated before every commit; no implicit cascade.
-public final class LibraryRepository {
+public final class LibraryRepository: Sendable {
     private let database: DatabaseQueue
     public init(url: URL) throws {
         try FileManager.default.createDirectory(

@@ -6,6 +6,11 @@ import UIKit
 @MainActor
 struct StudioView: View {
     @StateObject private var model = StudioModel()
+    @ObservedObject private var lounge = LoungeHub.shared
+    @State private var sceneID = UUID()
+    @State private var sourcesReading: [(reader: UUID, source: UUID)] = []
+    @State private var loungeOverlay = false
+    @AppStorage("loungePopupSeconds") private var popupSeconds = 12
     @Environment(\.scenePhase) private var phase
     @State private var choosingCard = false
     @State private var creatingProject = false
@@ -27,7 +32,7 @@ struct StudioView: View {
     @State private var activeReaders: Set<UUID> = []
     private var selected: StudySection { StudySection(rawValue: destination) ?? .home }
     private let primary: [StudySection] = [.home, .library, .inbox, .cards, .today]
-    private let secondary: [StudySection] = [.imports, .manager, .settings]
+    private let secondary: [StudySection] = [.imports, .manager, .settings, .lounge]
 
     var body: some View {
         GeometryReader { geometry in
@@ -50,7 +55,7 @@ struct StudioView: View {
                     if railRevealed {
                         HStack(spacing: 0) {
                             sidebar(expanded: expanded).frame(width: expanded ? 208 : 64)
-                            Color.black.opacity(0.18).onTapGesture { railRevealed = false }
+                            Color.clear.contentShape(Rectangle()).onTapGesture { railRevealed = false }
                                 .accessibilityHidden(true)
                         }.transition(.move(edge: .leading))
                     } else {
@@ -68,14 +73,39 @@ struct StudioView: View {
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: railRevealed)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: sideVisible)
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: expanded)
+            .overlay(alignment: .bottomTrailing) { loungeCorner }
+            .animation(reduceMotion ? nil : .smooth(duration: 0.24), value: lounge.reminder)
         }
         .environment(\.studyNavigation, StudyNavigation { select($0) })
-        .environment(\.studyReaderPresentation, StudyReaderPresentation(setActive: { id, visible in
+        .environment(\.studyReaderPresentation, StudyReaderPresentation(setActive: { id, sourceID, visible, immersive in
+            sourcesReading.removeAll { $0.reader == id }
             if visible {
-                if activeReaders.isEmpty { railRevealed = false }
-                activeReaders.insert(id)
+                sourcesReading.append((id, sourceID))
+                if immersive {
+                    if activeReaders.isEmpty { railRevealed = false }
+                    activeReaders.insert(id)
+                }
             } else { activeReaders.remove(id) }
+            updateLoungeActivity()
         }))
+        .environmentObject(lounge)
+        .sheet(isPresented: $loungeOverlay) {
+            NavigationStack {
+                LoungeView().toolbar { Button("返回学习") { loungeOverlay = false } }
+            }.environmentObject(lounge).environmentObject(model)
+        }
+        .task(id: lounge.reminder) {
+            if lounge.reminder != nil {
+                do { try await Task.sleep(for: .seconds(max(5, min(30, popupSeconds)))) } catch { return }
+                lounge.closeReminder()
+            }
+        }
+        .onChange(of: lounge.route, initial: true) { _, token in
+            if token != nil { openLounge() }
+        }
+        .onChange(of: loungeOverlay) { _, _ in updateLoungeActivity() }
+        .onAppear { updateLoungeActivity(promote: true) }
+        .onDisappear { lounge.scene(sceneID, active: false, sourceID: nil) }
         .background(StudyTheme.paper)
         .tint(StudyTheme.ink)
         .environment(\.defaultMinListRowHeight, compactDisplay ? 44 : 60)
@@ -144,7 +174,10 @@ struct StudioView: View {
         } message: {
             Text(model.message ?? "")
         }
-        .onChange(of: phase) { _, value in if value == .active { model.refresh() } }
+        .onChange(of: phase) { _, value in
+            updateLoungeActivity(promote: value == .active)
+            if value == .active { Task { await model.refreshAsync() } }
+        }
     }
     @ViewBuilder private var detail: some View {
         switch selected {
@@ -156,12 +189,64 @@ struct StudioView: View {
         case .imports: AIInboxView()
         case .manager: DataManagerView()
         case .settings: ExtensionSetupView()
+        case .lounge: LoungeView()
         }
     }
 
+    private func updateLoungeActivity(promote: Bool = false) {
+        lounge.scene(sceneID, active: phase == .active,
+            sourceID: loungeOverlay ? nil : sourcesReading.last?.source, promote: promote)
+    }
+
+    private func openLounge() {
+        lounge.closeReminder()
+        if !sourcesReading.isEmpty { loungeOverlay = true }
+        else { select(.lounge) }
+    }
+
+    @ViewBuilder private var loungeCorner: some View {
+        VStack(alignment: .trailing, spacing: 8) {
+            if let error = lounge.message {
+                HStack(alignment: .top) {
+                    Text(error).font(.caption)
+                    Button { lounge.message = nil } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("关闭提示")
+                }.padding(12).background(StudyTheme.leaf)
+            }
+            if lounge.reminder != nil {
+                HStack(spacing: 15) {
+                    Button { openLounge() } label: {
+                        Label("休息片刻", systemImage: "cup.and.saucer")
+                            .font(.system(.headline, design: .serif)).frame(minHeight: 44)
+                    }
+                    Button { lounge.closeReminder() } label: { Image(systemName: "xmark") }
+                        .accessibilityLabel("关闭休息提醒")
+                }.padding(.horizontal, 12).background(StudyTheme.leaf, in: RoundedRectangle(cornerRadius: 8))
+                    .overlay { RoundedRectangle(cornerRadius: 8).strokeBorder(StudyTheme.rule).allowsHitTesting(false) }
+                    .transition(.opacity.combined(with: reduceMotion ? .identity : .offset(y: 8)))
+            }
+            if selected != .lounge, !loungeOverlay, let track = lounge.track, lounge.player != nil {
+                Menu {
+                    Button(lounge.playing ? "暂停" : "播放") { lounge.togglePlayback() }
+                    Button("上一首") { lounge.skip(-1) }
+                    Button("下一首") { lounge.skip(1) }
+                    Button("打开休息室") { openLounge() }
+                } label: {
+                    Label(track.title, systemImage: lounge.playing ? "waveform" : "music.note")
+                        .lineLimit(1).font(.caption).frame(minHeight: 38)
+                        .padding(.horizontal, 12).background(StudyTheme.leaf, in: Capsule())
+                }.frame(maxWidth: 210)
+            }
+        }.buttonStyle(.plain).frame(maxWidth: 310, alignment: .trailing).padding(16)
+    }
+
     private func select(_ section: StudySection) {
-        if selected != section { activeReaders.removeAll() }
-        destination = section.rawValue
+        if selected != section {
+            activeReaders.removeAll()
+            sourcesReading.removeAll()
+        }
+        withAnimation(reduceMotion ? nil : .easeOut(duration: 0.19)) { destination = section.rawValue }
+        updateLoungeActivity()
         railRevealed = false
     }
 
@@ -309,6 +394,8 @@ struct InboxView: View {
     @EnvironmentObject private var model: StudioModel
     @State private var search = ""
     @State private var editor: LibraryCard?
+    @State private var archived = false
+    @State private var undoMark: UUID?
     @State private var selected: Set<UUID> = []
     private struct SourceGroup: Identifiable {
         let id: UUID
@@ -319,7 +406,7 @@ struct InboxView: View {
     private var groups: [SourceGroup] {
         let sources = Dictionary(uniqueKeysWithValues: model.state.sources.map { ($0.id, $0) })
         let marks = model.state.marks.filter { mark in
-            guard mark.deletedAt == nil, mark.organization == .inbox else { return false }
+            guard mark.deletedAt == nil, mark.organization == (archived ? .archived : .inbox) else { return false }
             let content = mark.excerpt + mark.note + (sources[mark.sourceID]?.title ?? "")
             return search.isEmpty || content.localizedCaseInsensitiveContains(search)
         }.sorted { $0.createdAt > $1.createdAt }
@@ -330,8 +417,31 @@ struct InboxView: View {
     var body: some View {
         NavigationStack {
             inboxList.studySurface().navigationTitle("收集箱").searchable(text: $search)
-                .refreshable { model.refresh() }.toolbar { inboxToolbar }
-        }.sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
+                .refreshable { await model.refreshAsync() }.toolbar { inboxToolbar }
+        }.safeAreaInset(edge: .bottom) {
+            if let undoMark {
+                HStack {
+                    Label("卡片已保存，摘录已归档", systemImage: "checkmark.circle")
+                    Spacer()
+                    Button("撤销归档") {
+                        model.change { state in
+                            if let index = state.marks.firstIndex(where: { $0.id == undoMark && $0.deletedAt == nil }) {
+                                state.marks[index].organization = .inbox
+                            }
+                        }
+                        if model.message == nil { self.undoMark = nil }
+                    }
+                }.padding().background(StudyTheme.leaf)
+            }
+        }.task(id: undoMark) {
+            if undoMark != nil {
+                do { try await Task.sleep(for: .seconds(7)) } catch { return }
+                undoMark = nil
+            }
+        }.sheet(item: $editor) { card in
+            CardEditor(card: card, inboxMark: card.markIDs.first) { undoMark = card.markIDs.first }
+                .environmentObject(model)
+        }
     }
     private var inboxList: some View {
         let groups = groups
@@ -339,7 +449,7 @@ struct InboxView: View {
             if let warning = model.sharedWarning { Text(warning).foregroundStyle(.orange) }
             if groups.isEmpty {
                 ContentUnavailableView(
-                    "没有待整理标记", systemImage: "tray", description: Text("在 Safari、PDF、EPUB 或本地视频中保存标记。"))
+                    archived ? "归档为空" : "没有待整理标记", systemImage: "tray", description: Text("在 Safari、PDF、EPUB 或本地视频中保存标记。"))
             }
             ForEach(groups) { group in
                 Section(group.title) {
@@ -368,15 +478,19 @@ struct InboxView: View {
     }
     private func markActions(_ mark: LibraryMark, source: LibrarySource?) -> some View {
         HStack {
-            Menu("整理成卡片") {
-                ForEach(CardKind.allCases, id: \.self) { kind in
-                    Button(kind.title) { editor = model.card(from: mark, type: kind) }
-                }
+            if !archived {
+                Button {
+                    guard editor == nil else { return }
+                    editor = model.state.cards.first { $0.markIDs.contains(mark.id) && $0.deletedAt == nil }
+                        ?? model.card(from: mark, type: mark.highlightKind)
+                } label: {
+                    Label("整理成卡片", systemImage: "rectangle.badge.plus")
+                }.buttonStyle(.bordered)
             }
             if let source, source.deletedAt == nil {
                 NavigationLink("回到出处") { SourceReaderView(source: source, location: mark.locator) }
             }
-            Button("归档") { archive([mark.id]) }
+            if !archived { Button("归档") { archive([mark.id]) } }
         }.buttonStyle(.borderless)
     }
     private func archive(_ ids: Set<UUID>) {
@@ -390,7 +504,8 @@ struct InboxView: View {
     @ToolbarContentBuilder private var inboxToolbar: some ToolbarContent {
         ToolbarItemGroup {
             EditButton()
-            Button("接收标记") { model.refresh() }
+            Button(archived ? "待整理" : "归档历史") { archived.toggle(); selected.removeAll() }
+            Button("接收标记") { Task { await model.refreshAsync() } }
             if !selected.isEmpty {
                 Button("归档所选") { archive(selected) }
                 Button("移入回收站", role: .destructive) {
@@ -479,11 +594,7 @@ struct CardsView: View {
                     ForEach(["全部", "词汇库", "语料库"] + CardKind.allCases.map(\.title), id: \.self) { Text($0) }
                 }.pickerStyle(.menu)
                 ForEach(cards) { card in
-                    NavigationLink {
-                        CardDetailView(cardID: card.id)
-                    } label: {
-                        StudyCardFace(card: card)
-                    }.listRowBackground(Color.clear).listRowSeparator(.hidden).contextMenu {
+                    StudyCardPreview(card: card).listRowBackground(Color.clear).listRowSeparator(.hidden).contextMenu {
                         Button("编辑卡片") { editor = card }
                         Button("移入回收站", role: .destructive) { model.delete([card.id]) }
                     }
@@ -497,6 +608,10 @@ struct CardEditor: View {
     @EnvironmentObject private var model: StudioModel
     @Environment(\.dismiss) private var dismiss
     @State var card: LibraryCard
+    var inboxMark: UUID? = nil
+    var onSaved: () -> Void = {}
+    @State private var saving = false
+    @State private var failure: String?
     @State private var projects: Set<UUID> = []
     @State private var initialized = false
 
@@ -505,6 +620,25 @@ struct CardEditor: View {
     var body: some View {
         NavigationStack {
             Form {
+                if let failure { Text(failure).foregroundStyle(.red) }
+                if inboxMark != nil && !model.state.cards.contains(where: { $0.id == card.id }) {
+                    Picker("卡片类型", selection: Binding(get: { card.type }, set: { kind in
+                        guard let inboxMark, let mark = model.state.marks.first(where: { $0.id == inboxMark }) else { return }
+                        let previous = card.content[fields[0]]
+                        let wasEdited = card.provenance[fields[0]]?.kind == "user_input"
+                        var next = model.card(from: mark, type: kind)
+                        next.id = card.id
+                        next.review = card.review
+                        if wasEdited {
+                            let field = LibraryCard.fields(for: kind)[0]
+                            next.content[field] = previous
+                            next.provenance[field] = FieldOrigin(kind: "user_input")
+                        }
+                        card = next
+                    })) {
+                        ForEach(CardKind.allCases, id: \.self) { Text($0.title).tag($0) }
+                    }
+                }
                 Section {
                     fieldEditor(fields[0])
                     if fields.count > 1 {
@@ -544,16 +678,16 @@ struct CardEditor: View {
                 Toggle("加入复习", isOn: Binding(
                     get: { card.review == .active },
                     set: { card.review = $0 ? .active : (card.schedule == nil ? .not_enrolled : .paused) }))
-            }.studySurface().navigationTitle("编辑卡片")
+            }.disabled(saving).studySurface().navigationTitle("编辑卡片").navigationBarTitleDisplayMode(.inline)
                 .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
+                    ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() }.disabled(saving) }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("保存") { save() }
-                            .disabled(card.content[fields[0]]?.trimmingCharacters(in: .whitespacesAndNewlines)
-                                .isEmpty ?? true)
+                        Button(saving ? "正在保存…" : "保存") { save() }
+                            .disabled(saving || (card.content[fields[0]]?.trimmingCharacters(in: .whitespacesAndNewlines)
+                                .isEmpty ?? true))
                     }
                 }
-        }.onAppear {
+        }.interactiveDismissDisabled(saving).onAppear {
             guard !initialized else { return }
             initialized = true
             projects = model.suggestedProjects(for: card)
@@ -573,99 +707,157 @@ struct CardEditor: View {
         card.content = card.content.filter { !$0.value.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }
         card.provenance = card.provenance.filter { card.content[$0.key] != nil || $0.key == "import_annotation" }
         card.updatedAt = Date()
-        model.saveCard(card, projects: projects)
-        if model.message == nil { dismiss() }
+        guard !saving else { return }
+        saving = true
+        failure = nil
+        let draft = card
+        let selectedProjects = projects
+        Task {
+            do {
+                try await model.saveEditedCard(draft, projects: selectedProjects, inboxMark: inboxMark)
+                onSaved()
+                dismiss()
+            } catch { failure = error.localizedDescription }
+            saving = false
+        }
+    }
+}
+
+struct StudyCardPreview: View {
+    @EnvironmentObject private var model: StudioModel
+    let card: LibraryCard
+    var featured = false
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            NavigationLink { CardDetailView(cardID: card.id) } label: {
+                StudyCardFace(card: card, featured: featured)
+            }.buttonStyle(.plain)
+            if let ref = card.sourceRefs.first(where: { ref in
+                model.state.sources.contains { $0.id == ref.sourceID && $0.deletedAt == nil }
+            }), let source = model.state.sources.first(where: { $0.id == ref.sourceID }) {
+                NavigationLink {
+                    CardDetailView(cardID: card.id, initialComparison: ref)
+                } label: {
+                    HStack {
+                        Text(source.title).lineLimit(1).foregroundStyle(.secondary)
+                        Spacer(minLength: 8)
+                        Label("原文对照", systemImage: "book.pages")
+                    }.font(.caption).padding(.horizontal, 14).frame(minHeight: 44)
+                        .contentShape(Rectangle())
+                }.buttonStyle(.plain).background(StudyTheme.leaf)
+            }
+        }
     }
 }
 
 struct CardDetailView: View {
     @EnvironmentObject private var model: StudioModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let cardID: UUID
     var reviewMode = false
     @State private var editor: LibraryCard?
     @State private var showDictionary = false
     @State private var comparison: CardReference?
+
+    init(cardID: UUID, reviewMode: Bool = false, initialComparison: CardReference? = nil) {
+        self.cardID = cardID
+        self.reviewMode = reviewMode
+        _comparison = State(initialValue: initialComparison)
+    }
+
     var body: some View {
         GeometryReader { geometry in
+            let wide = geometry.size.width >= 820
             HStack(spacing: 0) {
-                content(showComparison: geometry.size.width >= 900)
-                    .frame(maxWidth: comparison != nil && geometry.size.width >= 900 ? 380 : .infinity)
-                if geometry.size.width >= 900, let ref = comparison,
-                    let source = model.state.sources.first(where: {
-                        $0.id == ref.sourceID && $0.deletedAt == nil
-                    })
-                {
-                    Divider()
-                    NavigationStack {
-                        SourceReaderView(source: source, location: ref.locator)
-                            .id(ref.id)
-                            .toolbar { Button("结束对照") { comparison = nil } }
+                ScrollView {
+                    if let card = model.state.cards.first(where: { $0.id == cardID }) {
+                        folio(card).frame(maxWidth: 740).padding(24).frame(maxWidth: .infinity)
                     }
+                }.frame(maxWidth: wide && comparison != nil ? 440 : .infinity)
+                if wide, let comparison {
+                    Divider()
+                    sourcePane(comparison).transition(.move(edge: .trailing).combined(with: .opacity))
                 }
-            }
-        }.safeAreaInset(edge: .bottom) { if reviewMode { ReviewControls(cardID: cardID) } }.navigationTitle(
-            "卡片详情"
-        ).sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
+            }.animation(reduceMotion ? nil : .smooth(duration: 0.24), value: comparison?.id)
+                .sheet(isPresented: Binding(get: { !wide && comparison != nil }, set: {
+                    if !$0 { comparison = nil }
+                })) {
+                    if let comparison { sourcePane(comparison) }
+                }
+        }.studySurface().navigationBarTitleDisplayMode(.inline)
+            .safeAreaInset(edge: .bottom) { if reviewMode { ReviewControls(cardID: cardID) } }
+            .sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
     }
-    private func content(showComparison: Bool) -> some View {
-        Form {
-            if let card = model.state.cards.first(where: { $0.id == cardID }) {
-                Section { StudyCardFace(card: card, featured: card.type == .key_sentence) }
-                    .listRowBackground(Color.clear)
-                ForEach(LibraryCard.fields(for: card.type), id: \.self) { field in
-                    if let value = card.content[field] {
-                        Section(studioFieldLabel(field)) {
-                            Text(value).textSelection(.enabled)
-                        }
+
+    private func sourcePane(_ ref: CardReference) -> some View {
+        NavigationStack {
+            Group {
+                if let source = model.state.sources.first(where: { $0.id == ref.sourceID && $0.deletedAt == nil }) {
+                    SourceReaderView(source: source, location: ref.locator).id(ref.id)
+                } else { ContentUnavailableView("原文不可用", systemImage: "book.closed") }
+            }.toolbar { Button("结束对照") { comparison = nil } }
+        }
+    }
+
+    private func folio(_ card: LibraryCard) -> some View {
+        VStack(alignment: .leading, spacing: 19) {
+            VStack(alignment: .leading, spacing: 18) {
+                Label(card.type.title, systemImage: card.type == .key_sentence ? "quote.opening" : "circle.fill")
+                    .font(.caption.weight(.semibold)).foregroundStyle(card.type.color)
+                Text(card.title)
+                    .font(.system(card.type == .word ? .largeTitle : .title, design: .serif,
+                        weight: card.type == .keyword ? .bold : .medium))
+                    .italic(card.type == .expression)
+                    .textSelection(.enabled).accessibilityAddTraits(.isHeader)
+                ForEach(LibraryCard.fields(for: card.type).dropFirst(), id: \.self) { field in
+                    if let value = card.content[field], !value.isEmpty, value != card.title {
+                        Text(value).font(field == "example_en" ? .callout.italic() : .body)
+                            .foregroundStyle(.secondary).textSelection(.enabled)
                     }
                 }
                 if card.type == .word {
-                    Section("发音与释义") {
+                    HStack {
                         PronunciationButton(word: card.title)
                         Button("系统词典") { showDictionary = true }
                             .disabled(!UIReferenceLibraryViewController.dictionaryHasDefinition(forTerm: card.title))
-                            .sheet(isPresented: $showDictionary) { SystemDictionaryView(word: card.title) }
+                    }.sheet(isPresented: $showDictionary) { SystemDictionaryView(word: card.title) }
+                }
+                if !card.note.isEmpty { Text(card.note).font(.callout).textSelection(.enabled) }
+                if !card.importAnnotation.isEmpty { Text(card.importAnnotation).font(.callout).foregroundStyle(.secondary) }
+                ForEach(card.sourceRefs) { ref in
+                    if let source = model.state.sources.first(where: { $0.id == ref.sourceID && $0.deletedAt == nil }) {
+                        Divider()
+                        HStack {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(source.title).font(.subheadline.weight(.medium))
+                                if let locator = ref.locator { Text(locationLabel(locator)).font(.caption).foregroundStyle(.secondary) }
+                            }
+                            Spacer()
+                            Button { comparison = comparison?.id == ref.id ? nil : ref } label: {
+                                Label("原文对照", systemImage: "book.pages").labelStyle(.titleAndIcon)
+                            }.buttonStyle(.bordered)
+                        }
                     }
                 }
-                if !card.note.isEmpty || !card.importAnnotation.isEmpty {
-                    Section("笔记") {
-                        if !card.note.isEmpty { Text(card.note) }
-                        if !card.importAnnotation.isEmpty { Text(card.importAnnotation).foregroundStyle(.secondary) }
-                    }
-                }
-                Section("出处") {
-                    ForEach(card.sourceRefs) { ref in
-                        if let source = model.state.sources.first(where: { $0.id == ref.sourceID }) {
-                            if source.deletedAt == nil {
-                                NavigationLink {
-                                    SourceReaderView(source: source, location: ref.locator)
-                                } label: {
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(source.title)
-                                        if let locator = ref.locator {
-                                            Text(locationLabel(locator)).font(.caption).foregroundStyle(.secondary)
-                                        }
-                                    }
+            }.padding(24).frame(maxWidth: .infinity, alignment: .leading).background(StudyTheme.leaf)
+                .overlay(alignment: .leading) { Rectangle().fill(card.type.color).frame(width: 3) }
+            HStack {
+                Button("编辑", systemImage: "pencil") { editor = card }
+                Spacer()
+                if !card.markIDs.isEmpty {
+                    Menu("关联标记") {
+                        ForEach(card.markIDs, id: \.self) { id in
+                            if let mark = model.state.marks.first(where: { $0.id == id && $0.deletedAt == nil }) {
+                                NavigationLink(mark.excerpt.isEmpty ? locationLabel(mark.locator) : String(mark.excerpt.prefix(65))) {
+                                    MarkDetailView(markID: id)
                                 }
-                                if showComparison { Button("与原文并排对照") { comparison = ref } }
-                            } else {
-                                Text("\(source.title)（在回收站）")
                             }
                         }
                     }
                 }
-                Section("关联标记") {
-                    ForEach(card.markIDs, id: \.self) { id in
-                        NavigationLink(
-                            model.state.marks.first { $0.id == id }?.excerpt.isEmpty == false
-                                ? String((model.state.marks.first { $0.id == id }?.excerpt ?? "").prefix(80))
-                                : "查看标记与备注"
-                        ) { MarkDetailView(markID: id) }
-                    }
-                }
-                CardReviewHistory(card: card)
-                Button("编辑") { editor = card }
-            }
-        }.studySurface().tint(model.state.cards.first { $0.id == cardID }?.type.color ?? .accentColor)
+            }.font(.subheadline)
+            CardReviewHistory(card: card)
+        }
     }
 }

@@ -31,8 +31,6 @@ struct StudySourceTile: View {
     private var caption: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(source.title).font(.subheadline.weight(.semibold)).lineLimit(2)
-            Text(source.lastLocation.map(locationLabel) ?? studioLabel(source.kind.rawValue))
-                .font(.caption).foregroundStyle(.secondary).lineLimit(1)
         }.multilineTextAlignment(.leading)
     }
 }

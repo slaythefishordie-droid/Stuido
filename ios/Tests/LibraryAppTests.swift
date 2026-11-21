@@ -291,6 +291,46 @@ final class LibraryAppTests: XCTestCase {
         model.delete([source.id], restore: true)
         XCTAssertNil(model.state.sources[0].deletedAt)
     }
+    func testInboxCardAndArchiveCommitTogetherAndReopenWithoutDuplicate() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let model = StudioModel(root: root)
+        let source = LibrarySource(kind: .pdf, title: "Paper")
+        let mark = LibraryMark(sourceID: source.id, locator: ReadingLocator(kind: "pdf", page: 1), excerpt: "Tea")
+        try model.commit { $0.sources = [source]; $0.marks = [mark] }
+        let card = model.card(from: mark, type: .word)
+        try await model.saveEditedCard(card, projects: [], inboxMark: mark.id)
+        XCTAssertEqual(model.state.marks[0].organization, .archived)
+        model.change { $0.marks[0].organization = .inbox }
+        try await model.saveEditedCard(card, projects: [], inboxMark: mark.id)
+        XCTAssertEqual(model.state.cards.map(\.id), [card.id])
+        XCTAssertEqual(StudioModel(root: root).state.marks[0].organization, .archived)
+    }
+
+    func testPermanentSourceRemovalDeletesAssetAndKeepsRenamingIndependent() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let model = StudioModel(root: root)
+        let input = root.appendingPathComponent("fixture.pdf")
+        try Data("fixture for asset copy".utf8).write(to: input)
+        await model.importFile(input)
+        let source = try XCTUnwrap(model.state.sources.first)
+        let asset = try XCTUnwrap(model.assetURL(source))
+        model.renameSource(source.id, title: "Renamed")
+        XCTAssertEqual(model.state.sources.first?.title, "Renamed")
+        XCTAssertEqual(model.state.sources.first?.assetHash, source.assetHash)
+        XCTAssertEqual(model.state.sources.first.flatMap { model.assetURL($0) }, asset)
+        model.delete([source.id])
+        XCTAssertTrue(FileManager.default.fileExists(atPath: asset.path))
+        model.delete([source.id], restore: true)
+        XCTAssertNil(model.state.sources[0].deletedAt)
+        model.delete([source.id])
+        model.delete([source.id], permanently: true)
+        XCTAssertNil(model.message)
+        XCTAssertFalse(FileManager.default.fileExists(atPath: asset.path))
+        XCTAssertTrue(FileManager.default.fileExists(atPath: input.path))
+    }
+
     func testAssetCleanupPreservesReferencesAndRecoverySnapshots() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }

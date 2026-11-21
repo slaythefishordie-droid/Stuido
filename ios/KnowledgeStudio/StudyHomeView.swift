@@ -113,9 +113,7 @@ struct StudyHomeView: View {
     }
 
     private func cardLink(_ card: LibraryCard, featured: Bool = false) -> some View {
-        NavigationLink { CardDetailView(cardID: card.id) } label: {
-            StudyCardFace(card: card, featured: featured)
-        }.buttonStyle(.plain)
+        StudyCardPreview(card: card, featured: featured)
     }
 
     private func sourceLink(_ source: LibrarySource, compact: Bool) -> some View {

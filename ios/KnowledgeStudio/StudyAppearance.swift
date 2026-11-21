@@ -69,7 +69,7 @@ enum StudyTheme {
 }
 
 enum StudySection: String, CaseIterable, Identifiable {
-    case home, today, library, inbox, cards, imports, manager, settings
+    case home, today, library, inbox, cards, imports, manager, settings, lounge
     var id: Self { self }
     var title: String {
         switch self {
@@ -81,6 +81,7 @@ enum StudySection: String, CaseIterable, Identifiable {
         case .imports: "导入箱"
         case .manager: "数据管理"
         case .settings: "设置"
+        case .lounge: "休息室"
         }
     }
     var symbol: String {
@@ -93,6 +94,7 @@ enum StudySection: String, CaseIterable, Identifiable {
         case .imports: "tray.and.arrow.down"
         case .manager: "externaldrive"
         case .settings: "gearshape"
+        case .lounge: "cup.and.saucer"
         }
     }
 }
@@ -205,8 +207,8 @@ struct StudyCardFace: View {
 }
 
 struct StudyReaderPresentation: Sendable {
-    let setActive: @MainActor @Sendable (UUID, Bool) -> Void
-    static let neutral = StudyReaderPresentation(setActive: { _, _ in })
+    let setActive: @MainActor @Sendable (UUID, UUID, Bool, Bool) -> Void
+    static let neutral = StudyReaderPresentation(setActive: { _, _, _, _ in })
 
 }
 
