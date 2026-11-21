@@ -21,7 +21,8 @@ jobs:
         run: |
           set -euo pipefail
           gh run download 44911559142 -n KnowledgeStudio-build-evidence-40 -D "$RUNNER_TEMP/result"
-          ks_result="$RUNNER_TEMP/result/SimulatorTests.xcresult"
+          ks_result=$(find "$RUNNER_TEMP/result" -type d -name SimulatorTests.xcresult -print -quit)
+          test -n "$ks_result"
           mkdir -p evidence
           xcrun xcresulttool export attachments --path "$ks_result" --only-failures --output-path evidence
           xcrun xcresulttool get test-results tests --path "$ks_result" > evidence/tests.json
