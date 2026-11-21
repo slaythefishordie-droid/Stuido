@@ -2,7 +2,7 @@
 
 当前版本、测试结果、IPA 下载和到期日统一见[开发进度](progress.md)，失败排查见[工程问题](engineering-issues.md)。本文件只维护操作方法。
 
-**交付使用手动触发的设备归档。App 及 Safari 扩展经 AltStore Classic 重签后安装。**
+**交付使用手动触发的设备归档。App 及随附扩展经 AltStore Classic 重签后安装。**
 
 ## 构建
 
@@ -16,7 +16,7 @@
 
 1. 从进度日志的实际入口获取 IPA 和摘要；Actions Artifact 需先解压外层 ZIP。Release 是否已有附件以进度记录为准。
 2. Windows PowerShell 用 `Get-FileHash .\KnowledgeStudio-v1.0.0.ipa -Algorithm SHA256` 核对本体摘要（按实际文件名替换），不要比较外层 ZIP 的摘要。
-3. 按 AltStore 当前官方要求配置 Windows AltServer、iTunes/iCloud；在 iPad AltStore Classic 添加 IPA，保留 Safari 扩展，账户凭据仅在用户设备输入。
+3. 按 AltStore 当前官方要求配置 AltServer。在 iPad 的 AltStore Classic 添加 IPA，保留 Safari 与 Files 分享扩展，账户凭据在用户设备输入。
 4. 按系统提示启用开发者模式、信任开发者并定期刷新签名；免费账户有效期和 App 数量限制以实际提示为准。保持相同应用身份以延续数据，升级前保留独立备份。
 5. 主 App 进入收集箱；设置中保留 Safari 双向诊断。Safari 设置中启用扩展、授权网站，再按进度日志中的新增真机清单验收。
 

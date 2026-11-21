@@ -1,10 +1,10 @@
 # Knowledge Studio 开发约定
 
-开始任务先核对分支、未提交改动及用户目标，读本文件和 [开发进度](docs/progress.md) 的当前基线。按任务定位 [产品计划](docs/product-spec.md)、[Safari 路线图](docs/web-capture-roadmap.md) 的相关章节，以及涉及模块和问题 ID；不每轮通读全部历史。详细执行规则见 [工作流](docs/workflow.md)，排障查 [工程问题](docs/engineering-issues.md)。主开发分支为 feature/safari-extension。
+开始任务先核对分支、未提交改动及用户目标，读本文件和 [开发进度](docs/progress.md) 的当前基线。按任务定位 [产品计划](docs/product-spec.md)、[Safari 路线图](docs/web-capture-roadmap.md) 的相关章节，以及涉及模块和问题 ID；不每轮通读全部历史。详细执行规则见 [工作流](docs/workflow.md)，排障查 [工程问题](docs/engineering-issues.md)。
 
-## 当前 V2 开发约束
+## 分支与交付
 
-按 docs/progress.md 的 V2 安排及原计划阶段 5 → 6 → 7 推进，不重定义阶段。当前及本轮任务全部完成后都不构建 IPA、不做真机安装，等待用户另行安排；保留构建配置，原生工作流仅手动 package_ipa=true 才打包，日常 PR 可做无 IPA 检查。只做必要静态/单元/无 IPA 验证；功能完整候选仍需后续验收。主要 UI 开工前描述真实画面与操作路径。FSRS 不新增或重设计题型，已有实现状态先核实。详细要求按需读日志，避免反复扫仓库。
+沿用进度日志中的当前维护分支。日常修复、文档更新与例行发布继续在该分支推进，发布以标签定位。重大功能更新或重大开发转向需要并行维护时才新建分支，并在进度中注明基线和用途。IPA 由用户授权后通过现有工作流手动启用 `package_ipa=true`，真机验收单独记录。FSRS 题型沿用现有实现。
 
 ## 产品与设计职责
 

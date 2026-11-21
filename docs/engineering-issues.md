@@ -1,6 +1,6 @@
 # 开发与构建问题日志
 
-整理日期：2026-11-19（北京时间）。本文件按问题组织可复用经验；[开发日志](progress.md)按时间记录改动；[工作流](workflow.md)规定执行方法。后续新增问题记录现象、证据、处理、验证和未决项，不把推测写成已确认原因。
+最新整理为 2026-11-21（北京时间）。本文件记录修复经验与未决问题。[开发日志](progress.md)记录版本与结果，[工作流](workflow.md)记录执行方法。
 
 ## 快速定位
 
@@ -100,9 +100,11 @@
 
 v1.0.0 的 project.yml 全局设置为 TARGETED_DEVICE_FAMILY=2，但生成工程的目标平台默认值覆盖它，实际 Info.plist 与 package-report 为 [1,2]。CI 明确检查包含 iPad，32 项 iPad 模拟器测试与设备归档均通过。本版不承诺 iPhone 布局兼容。后续在各 target 明确设置后验证产物；不为此重复本次完整构建。
 
-## NET-02 · GitHub Release 附件上传域名缺失（待配置）
+## NET-02 · 本地附件上传受限（v3.7.0 已完成附件交付）
 
-v1.0.0 标签与 Release 草稿创建成功；`gh release create/upload` 上传附件时，`uploads.github.com` 返回 Forbidden。环境重启后同样失败。当前观测为 running、observations_current=true、network_policy.state=enforced，完整允许列表没有 uploads.github.com；GitHub API 仍可管理 Release，不能将附件上传失败误报为版本发布无权限。无 request_changes 工具，未更改策略或绕过代理。安装包已从 GitHub 连接器下载并通过校验，直接交付工作区文件；Release 暂指向成功运行的 Actions Artifact（截至 2026-11-26），附件永久归档待环境设置允许 uploads.github.com 后完成。不要重复原生构建，不覆盖 v1.0.0 标签。
+v1.0.0 的本地客户端访问 `uploads.github.com` 返回 403，Release 使用 Actions 产物链接和已校验的实包交付。原始观测见 [网络证据](verification/network-allowlist-audit-2026-11-19.json)。
+
+v3.7.0 从 GitHub 托管 runner 下载已通过测试的原始产物。上传前对照标签提交和 SHA-256，随后将 IPA、摘要及打包报告附到 Release。该操作复用了原归档。[附件上传日志](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44919350658)
 
 ## UX-01 · 设计章程落地（待实施核对，2026-11-19）
 

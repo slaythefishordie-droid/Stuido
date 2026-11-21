@@ -2,9 +2,21 @@
 
 本文件是交付状态、版本变更和真机结果的唯一入口。操作规则见[工作流](workflow.md)，错误与待办见[工程问题](engineering-issues.md)。日期使用北京时间；实现、自动验证、真机验收分别记录。
 
-## v3.0.0 iPadOS 交付 · 2026-11-20
+## 当前交付 · v3.7.0 · 2026-11-21
 
-已发布 [v3.0.0](https://github.com/slaythefishordie-droid/Stuido/releases/tag/v3.0.0)，build 7，提交 `c8cc249cbad439430a9bdfe6db26ae34fd3e6b06`。Swift 核心 31/31、iPad 模拟器 49/49、协议与 Safari 43/43，设备归档与含 Safari 扩展的 IPA 校验通过。[下载 IPA 和 SHA-256](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44715715405/artifacts/14620712162)保留至北京时间 2026-11-27 18:22。使用原 AltStore Classic 签名身份重签，实际安装及 Apple Pencil 延迟待真机确认。
+当前维护分支为 `release/v3.7.0`。正式版于北京时间 23:30 发布。发行标签对应 `78e5f3f82e376a9287a2ea1be1f61b27ab7a106a`，build 10。本轮补全收集箱编辑与归档、回收站、EPUB 正文设置、PDF 回跳、Lounge 后台音频及 Files 分享。各模块的实际检查与真机待验项见 [60 项验收记录](quality/v3.7.0.md)。
+
+设备归档与 IPA 校验成功。原生 Swift 核心 34/34，iPad（A16）模拟器 64/64（含 3 条界面流程），协议与 Safari 43/43。实包 9,345,498 字节，SHA-256 `fcef38a3d30155c746799f2d022de86cd6e77a1d4dcd34951e1e69ff66589027`。[下载 IPA](https://github.com/slaythefishordie-droid/Stuido/releases/download/v3.7.0/KnowledgeStudio-resignable.ipa) · [Release](https://github.com/slaythefishordie-droid/Stuido/releases/tag/v3.7.0) · [构建日志](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44917375916) · [IPA 构建产物备份](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44917375916/artifacts/14713156896)
+
+AltStore Classic 使用原签名身份覆盖安装，保留 Safari Web Extension 和 Share Extension。原位升级、真实 App Groups、Lounge 锁屏播放与控制、耳机中断、Pencil、窗口布局和旧书锚点待实机。构建产物备份保留至北京时间 2026-11-28 23:26。安装步骤见 [安装指南](build-and-install.md)。
+
+### 近期发行记录
+
+| 版本与日期（北京时间） | Build / 提交 | 实际交付与验证 | 日志 |
+|---|---|---|---|
+| [v3.6.0](https://github.com/slaythefishordie-droid/Stuido/releases/tag/v3.6.0) · 2026-11-21 | 9 / `08c4ac0` | 首版 Lounge、本地音频解码导入、资料改名、回收站、视频分组历史。核心 34、模拟器 59、协议与 Safari 43。 | [iPadOS 构建](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44879654347) |
+| [v3.5.0](https://github.com/slaythefishordie-droid/Stuido/releases/tag/v3.5.0) · 2026-11-21 | 8 / `1e5223d` | 本地视频 QuickMark、Files 打开、三种封面模式、卡片队列。核心 31、模拟器 52、协议与 Safari 43。 | [iPadOS 构建](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44796137820) |
+| [v3.0.0](https://github.com/slaythefishordie-droid/Stuido/releases/tag/v3.0.0) · 2026-11-20 | 7 / `c8cc249` | 书房原生视觉、SwiftUI 优化、Safari 扩展随包。核心 31、模拟器 49、协议与 Safari 43。 | [iPadOS 构建](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44715715405) |
 
 ## 页边书房原生集成 · 2026-11-20
 
@@ -35,9 +47,9 @@
 
 [图标提案与小尺寸对比](../design-lab/app-icon/icon-concepts.png)。A「页边书签」将暖纸拱页与古铜页签叠在深梅底推荐为主图标。B「打开的书」突出跨页阅读，C「一页批注」突出阅读转为自己的笔记。可分别查看 [A](../design-lab/app-icon/icon-a.png)、[B](../design-lab/app-icon/icon-b.png)、[C](../design-lab/app-icon/icon-c.png) 的 1024 × 1024 sRGB 不透明方形母版。操作系统应用主屏遮罩。选定后再接 AppIcon asset catalog 并检查 iPad 主屏及系统外观。[Apple App Icon 资产规范](https://developer.apple.com/documentation/xcode/configuring-your-app-icon)
 
-## V2 当前开发基线 · 2026-11-20
+## V2 冻结期开发记录 · 2026-11-20
 
-**最新交付约束：本轮全部开发完成后仍不构建 IPA、不安装真机，等待用户新的安排。** 继续自动推进已有目标，不在每个小阶段等待再次催促。CI 保留签名与打包配置，但仅明确手动 `package_ipa=true` 才能归档打包；本轮不触发它。原 v1.0.0 标签与数据保留，当前版本目标 2.0.0/build 6，为 V2 开发候选，不认定稳定版。
+当时的 V2 冻结目标为 2.0.0/build 6。当期仅做原生检查，IPA 在后续发行版本按用户安排手动构建。
 
 | 原计划 | 本轮实际实现 | 验收边界 |
 | --- | --- | --- |
@@ -88,9 +100,9 @@ FSRS-7 的官方 TypeScript 文档已有相关实现与迁移说明；本轮固�
 
 项目共享 Source 与独立研究语境、地图混合节点、直接回收站及 QuickMark 能力保留的实施边界见 UX-01。后续先针对用户选定的界面给简短方案，核心关系/迁移的重大调整按授权边界确认；本条不是自动开启全部界面重做。
 
-## 当前基线 · 2026-11-19
+## v1.0.0 交付基线 · 2026-11-19
 
-- 主开发分支：`feature/safari-extension`；远端默认仍为 main（管理权限阻塞见 ADMIN-01）。
+- 当时的开发分支为 `feature/safari-extension`（远端默认分支的历史操作见 ADMIN-01）。
 - [v1.0.0 已公开发布](https://github.com/slaythefishordie-droid/Stuido/releases/tag/v1.0.0)，2026-11-19 21:15:51，非草稿、非预发布。标签提交 b82e4ed；功能提交 d0938a5；CI PR 合并提交 f7dae1954dd44b497806e0335962a824998af652。后续提交仅文档维护。
 - 版本 1.0.0 / build 4；原生运行 [44484104854](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44484104854)：核心 21/21、iPad 模拟器 32/32、设备归档、签名权限和 IPA 校验通过。协议/Safari 运行 44484104729：43/43。
 - 实包 8,005,262 字节；SHA-256 `c4de7372a639e8c9da5fa3dfc5ea3f5d8b78d81261163d207cf67ffe69749244`。下载后 ZIP、版本及 iPhoneOS 平台复核通过。
@@ -112,7 +124,7 @@ FSRS-7 的官方 TypeScript 文档已有相关实现与迁移说明；本轮固�
 
 已完成可读性与效率整理：新增 Swift 模块统一格式，交接/导入建立临时索引，无变化不写库，1 MiB 分块复制和摘要、ZIP 工作后台执行。不将本地合成测试宣称为真机性能提升。当时阶段 5–6 尚未实施；最新进展以顶部 V2 基线为准。
 
-## 下一步验收与优先级
+## v1.0.0 发布时的验收清单
 
 1. 发布附件永久归档、默认分支管理：处理 NET-02 / ADMIN-01，权限变化前不重复尝试。
 2. 真机记录型号、系统、包 SHA、AltStore 版本及结果：保留扩展安装 → Safari 识别 → 双向共享；继承用户已确认的里程碑 1 结果，不要求无理由重测。
