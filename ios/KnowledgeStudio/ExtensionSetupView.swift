@@ -260,8 +260,8 @@ struct StudioGuide: View {
                  ("square.dashed", "扫描件使用区域工具，长按并拖动框选。"),
                  ("pencil.tip", "在 PDF 选笔或橡皮，手指仍可翻页和缩放。双击遵循系统偏好。")]
             case .files:
-                [("folder", "在文件 App 中长按 PDF、EPUB 或 MP4、M4V、MOV，找到系统的打开选项。"),
-                 ("books.vertical", "选择 Knowledge Studio，确认导入，可同时选择项目。")]
+                [("folder", "在文件 App 中长按 PDF、EPUB 或 MP4、M4V、MOV，选择「共享」或「打开方式」。"),
+                 ("books.vertical", "打开方式可以同时选择项目。通过共享发送后，在资料库的「来自分享菜单」确认接收。")]
             case .safari:
                 [("safari", "在 iPad 的 Safari 扩展设置中启用 Knowledge Studio。"),
                  ("bookmark", "在支持的网页轻点标记。精听中可设置提前量和循环。"),

@@ -20,10 +20,14 @@ struct SourceReaderView: View {
     var body: some View {
         let live = model.state.sources.first { $0.id == self.source.id }
         let source = live ?? self.source
+        let localFile = model.assetURL(source).flatMap { url in
+            FileManager.default.fileExists(atPath: url.path) ? url : nil
+        }
+        let showsPaper = book && live != nil && source.deletedAt == nil && localFile != nil
         return Group {
             if live == nil || source.deletedAt != nil {
                 ContentUnavailableView("资料不可用", systemImage: "doc.questionmark")
-            } else if let url = model.assetURL(source), FileManager.default.fileExists(atPath: url.path) {
+            } else if let url = localFile {
                 switch source.kind {
                 case .pdf: PDFStudyView(source: source, url: url, location: location ?? source.lastLocation)
                 case .epub: EPUBStudyView(source: source, url: url, location: location ?? source.lastLocation)
@@ -50,9 +54,9 @@ struct SourceReaderView: View {
                     Button("绑定原始文件") { attach = true }
                 }
             }
-        }.studySurface().navigationTitle(book ? "" : source.title).navigationBarTitleDisplayMode(.inline)
-            .toolbar(book ? .hidden : .automatic, for: .navigationBar)
-            .environment(\.studyReaderExit, book ? { if let closeReader { closeReader() } else { dismiss() } } : nil)
+        }.studySurface().navigationTitle(showsPaper ? "" : StudioModel.importTitle(source.title)).navigationBarTitleDisplayMode(.inline)
+            .toolbar(showsPaper ? .hidden : .automatic, for: .navigationBar)
+            .environment(\.studyReaderExit, showsPaper ? { if let closeReader { closeReader() } else { dismiss() } } : nil)
             .onAppear {
                 readerPresentation.setActive(readerID, source.id, true, immersive)
             }.onDisappear { readerPresentation.setActive(readerID, source.id, false, immersive) }

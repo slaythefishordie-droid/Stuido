@@ -340,6 +340,7 @@ final class StudioModel: ObservableObject {
             guard try Self.hash(destination) == hash else { throw LibraryError.invalid("现有资料摘要不符，拒绝覆盖") }
         } else {
             guard try Self.hash(stage) == hash else { throw LibraryError.invalid("资料复制校验失败，未加入资料库") }
+            try Task.checkCancellation()
             do { try FileManager.default.moveItem(at: stage, to: destination) } catch CocoaError
                 .fileWriteFileExists
             {
