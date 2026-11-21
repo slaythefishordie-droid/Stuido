@@ -1,4 +1,5 @@
 @preconcurrency import AVFoundation
+import AudioToolbox
 import Foundation
 import KnowledgeCore
 import SwiftUI
@@ -43,8 +44,11 @@ private struct LoungeDisk: Codable, Equatable {
     var draws: [String: [UUID]] = [:]
     var nextDraw: [String: Date] = [:]
     var timer = LoungeCountdown()
-    var lastTrackID: String?
-    var playhead: Double?
+}
+
+private struct LoungePlaybackBookmark: Codable, Equatable {
+    var trackID: String?
+    var seconds: Double = 0
 }
 
 @MainActor
@@ -53,11 +57,11 @@ final class LoungeHub: ObservableObject {
     static let notificationID = "knowledge-studio.lounge.timer"
 
     @Published private var disk = LoungeDisk()
+    private var playback = LoungePlaybackBookmark()
     @Published private(set) var player: AVAudioPlayer?
     @Published private(set) var playing = false
     @Published private(set) var reminder: UUID?
     @Published private(set) var route: UUID?
-    @Published private(set) var ledgerVersion = 0
     @Published private(set) var importing = false
     @Published var message: String?
     @Published var volume: Float = 0.75 {
@@ -77,6 +81,7 @@ final class LoungeHub: ObservableObject {
     private var ledger: LoungeLedger
     private var scenes: [UUID: SceneActivity] = [:]
     private var sceneOrder: UInt64 = 0
+    private var foregroundSince = Date.distantFuture
     private var ticker: Task<Void, Never>?
     private var audioCheckpoint: TimeInterval = 0
     private var lastSavedLedger: [StudyInterval]
@@ -85,6 +90,7 @@ final class LoungeHub: ObservableObject {
     private var playbackScope: UUID?
     private var wikiCache: [String: WikipediaNote] = [:]
     private var lastWikiRequest = Date.distantPast
+    private var notificationNavigation = 0
 
     init(root: URL? = nil) {
         self.root = root ?? FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
@@ -102,6 +108,11 @@ final class LoungeHub: ObservableObject {
         } catch {
             entryLoadFailed = true
             message = "休息室资料无法读取，原文件已保留。"
+        }
+        let playbackFile = self.root.appendingPathComponent("playback.json")
+        if let data = try? Data(contentsOf: playbackFile),
+            let bookmark = try? JSONDecoder().decode(LoungePlaybackBookmark.self, from: data) {
+            playback = bookmark
         }
         if ledgerLoadFailed { message = "学习时光记录无法读取，原文件已保留。" }
         if !entryLoadFailed { recoverMusicRemovals() }
@@ -125,13 +136,14 @@ final class LoungeHub: ObservableObject {
     var tracks: [LoungeTrack] { disk.tracks }
     var playlists: [LoungePlaylist] { disk.playlists }
     var countdown: LoungeCountdown { disk.timer }
-    var track: LoungeTrack? { tracks.first { $0.id == disk.lastTrackID } }
-    var playhead: Double { player?.currentTime ?? disk.playhead ?? 0 }
+    var track: LoungeTrack? { tracks.first { $0.id == playback.trackID } }
+    var playhead: Double { player?.currentTime ?? playback.seconds }
 
     func scene(_ id: UUID, active: Bool, sourceID: UUID?, promote: Bool = false) {
         let now = Date.now
         let uptime = ProcessInfo.processInfo.systemUptime
         if active {
+            if scenes.isEmpty { foregroundSince = now }
             if scenes[id] == nil || promote { sceneOrder &+= 1 }
             scenes[id] = SceneActivity(order: promote ? sceneOrder : scenes[id]?.order ?? sceneOrder,
                 sourceID: sourceID)
@@ -167,7 +179,6 @@ final class LoungeHub: ObservableObject {
         do {
             try write(ledger.records, to: "study-time.json")
             lastSavedLedger = ledger.records
-            ledgerVersion &+= 1
         } catch { message = "学习时间未能保存：\(error.localizedDescription)" }
     }
 
@@ -201,20 +212,33 @@ final class LoungeHub: ObservableObject {
             } else { playing = false }
         }
         var timer = disk.timer
-        if timer.consumeCompletion(at: now), update({ $0.timer = timer }) {
-            UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: [Self.notificationID])
-            if UserDefaults.standard.object(forKey: "loungeTimerPopup") == nil ||
-                UserDefaults.standard.bool(forKey: "loungeTimerPopup") {
-                reminder = UUID()
-            }
-            if UserDefaults.standard.bool(forKey: "loungeTimerHaptics") {
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
-            }
+        if let deadline = timer.deadline, timer.consumeCompletion(at: now), update({ $0.timer = timer }) {
+            showCompletion(after: deadline)
         }
         let interval = drawInterval
         if interval > 0 {
             for kind in LoungePromptKind.allCases where disk.nextDraw[kind.rawValue, default: .distantPast] <= now {
                 draw(kind)
+            }
+        }
+    }
+
+    private func showCompletion(after deadline: Date) {
+        let center = UNUserNotificationCenter.current()
+        let previousRoute = notificationNavigation
+        center.removePendingNotificationRequests(withIdentifiers: [Self.notificationID])
+        Task {
+            let delivered = await center.deliveredNotifications()
+            guard previousRoute == notificationNavigation, !scenes.isEmpty else { return }
+            let alreadyNotified = delivered.contains {
+                $0.request.identifier == Self.notificationID && $0.date >= deadline.addingTimeInterval(-1)
+            }
+            guard deadline >= foregroundSince || !alreadyNotified else { return }
+            let preferences = UserDefaults.standard
+            if (preferences.object(forKey: "loungeTimerPopup") as? Bool) ?? true { reminder = UUID() }
+            if !preferences.bool(forKey: "loungeTimerSilent") { AudioServicesPlaySystemSound(1004) }
+            if preferences.bool(forKey: "loungeTimerHaptics") {
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
         }
     }
@@ -234,10 +258,17 @@ final class LoungeHub: ObservableObject {
     }
 
     func openFromNotification() {
+        notificationNavigation &+= 1
         reminder = nil
         route = UUID()
     }
     func closeReminder() { reminder = nil }
+
+    func consumeRoute() -> Bool {
+        guard route != nil else { return false }
+        route = nil
+        return true
+    }
 
     private func scheduleNotification(requestPermission: Bool = false) {
         let center = UNUserNotificationCenter.current()
@@ -332,10 +363,10 @@ final class LoungeHub: ObservableObject {
     func play(_ track: LoungeTrack, scope: UUID? = nil, resume: Bool = true) {
         do {
             let next = try AVAudioPlayer(contentsOf: audioDirectory.appendingPathComponent(track.filename))
-            if resume, disk.lastTrackID == track.id { next.currentTime = min(next.duration, disk.playhead ?? 0) }
+            if resume, playback.trackID == track.id { next.currentTime = min(next.duration, playback.seconds) }
             next.volume = volume
             guard next.prepareToPlay(), next.play() else { throw LibraryError.invalid("系统未能播放这个音频文件") }
-            guard update({ $0.lastTrackID = track.id; $0.playhead = next.currentTime }) else {
+            guard savePlayback(.init(trackID: track.id, seconds: next.currentTime)) else {
                 next.stop()
                 return
             }
@@ -358,7 +389,7 @@ final class LoungeHub: ObservableObject {
 
     func seek(_ seconds: Double) {
         guard let player else {
-            if let track { update { $0.playhead = min(track.duration, max(0, seconds)) } }
+            if let track { savePlayback(.init(trackID: track.id, seconds: min(track.duration, max(0, seconds)))) }
             return
         }
         player.currentTime = min(player.duration, max(0, seconds))
@@ -374,7 +405,7 @@ final class LoungeHub: ObservableObject {
             player?.stop()
             player = nil
             playing = false
-            update { $0.playhead = 0 }
+            savePlayback(.init(trackID: track?.id, seconds: 0))
             return
         }
         let next = mode == .shuffle && list.count > 1
@@ -384,7 +415,15 @@ final class LoungeHub: ObservableObject {
     }
 
     private func savePlayhead() {
-        if let player { update { $0.playhead = player.currentTime } }
+        if let player, playing || player.currentTime > 0 {
+            savePlayback(.init(trackID: track?.id, seconds: player.currentTime))
+        }
+    }
+
+    @discardableResult private func savePlayback(_ next: LoungePlaybackBookmark) -> Bool {
+        guard next != playback else { return true }
+        do { try write(next, to: "playback.json"); playback = next; return true }
+        catch { message = "播放位置未能保存：\(error.localizedDescription)"; return false }
     }
 
     func favorite(_ track: LoungeTrack) {
@@ -417,13 +456,13 @@ final class LoungeHub: ObservableObject {
             if exists { try FileManager.default.moveItem(at: file, to: stage) }
             guard update({ state in
                 state.tracks.removeAll { $0.id == track.id }
-                if state.lastTrackID == track.id { state.lastTrackID = nil; state.playhead = nil }
                 for index in state.playlists.indices { state.playlists[index].trackIDs.removeAll { $0 == track.id } }
             }) else {
                 if exists { try FileManager.default.moveItem(at: stage, to: file) }
                 return
             }
             if player?.url == file { player?.stop(); player = nil; playing = false }
+            if playback.trackID == track.id { savePlayback(.init()) }
             if exists { try FileManager.default.removeItem(at: stage) }
         } catch { message = error.localizedDescription }
     }

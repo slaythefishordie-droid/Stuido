@@ -39,35 +39,27 @@ struct StudioView: View {
             let width = geometry.size.width
             let immersive = !activeReaders.isEmpty
             let expanded = width >= 850 && (railMode == "expanded" || (railMode == "auto" && width >= 1040))
-            let sideVisible = !immersive && width >= 620
+            let sideVisible = immersive ? railRevealed : width >= 620
             HStack(spacing: 0) {
-                if sideVisible { sidebar(expanded: expanded).frame(width: expanded ? 208 : 64) }
+                if sideVisible {
+                    sidebar(expanded: expanded && !immersive).frame(width: expanded && !immersive ? 208 : 64)
+                        .transition(.move(edge: .leading))
+                }
                 VStack(spacing: 0) {
-                    if !sideVisible && !immersive {
-                        compactNavigation
-                    }
-                    detail
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    if !sideVisible && !immersive { compactNavigation }
+                    detail.frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
             }
             .overlay(alignment: .leading) {
-                if immersive {
-                    if railRevealed {
-                        HStack(spacing: 0) {
-                            sidebar(expanded: expanded).frame(width: expanded ? 208 : 64)
-                            Color.clear.contentShape(Rectangle()).onTapGesture { railRevealed = false }
-                                .accessibilityHidden(true)
-                        }.transition(.move(edge: .leading))
-                    } else {
-                        Button { railRevealed = true } label: {
-                            Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
-                                .padding(.vertical, 15).padding(.horizontal, 5)
-                                .background(StudyTheme.plum, in: Capsule()).foregroundStyle(StudyTheme.railText)
-                        }.buttonStyle(.plain).accessibilityLabel("展开书房导航")
-                            .simultaneousGesture(DragGesture(minimumDistance: 12).onEnded { value in
-                                if value.translation.width > 14 { railRevealed = true }
-                            })
-                    }
+                if immersive && !railRevealed {
+                    Button { railRevealed = true } label: {
+                        Image(systemName: "chevron.right").font(.caption2.weight(.semibold))
+                            .padding(.vertical, 15).padding(.horizontal, 5)
+                            .background(StudyTheme.plum, in: Capsule()).foregroundStyle(StudyTheme.railText)
+                    }.buttonStyle(.plain).accessibilityLabel("展开书房导航")
+                        .simultaneousGesture(DragGesture(minimumDistance: 12).onEnded { value in
+                            if value.translation.width > 14 { railRevealed = true }
+                        })
                 }
             }
             .animation(reduceMotion ? nil : .easeInOut(duration: 0.22), value: railRevealed)
@@ -100,9 +92,7 @@ struct StudioView: View {
                 lounge.closeReminder()
             }
         }
-        .onChange(of: lounge.route, initial: true) { _, token in
-            if token != nil { openLounge() }
-        }
+        .onChange(of: lounge.route, initial: true) { _, _ in acceptNotificationRoute() }
         .onChange(of: loungeOverlay) { _, _ in updateLoungeActivity() }
         .onAppear { updateLoungeActivity(promote: true) }
         .onDisappear { lounge.scene(sceneID, active: false, sourceID: nil) }
@@ -176,7 +166,10 @@ struct StudioView: View {
         }
         .onChange(of: phase) { _, value in
             updateLoungeActivity(promote: value == .active)
-            if value == .active { Task { await model.refreshAsync() } }
+            if value == .active {
+                acceptNotificationRoute()
+                Task { await model.refreshAsync() }
+            }
         }
     }
     @ViewBuilder private var detail: some View {
@@ -196,6 +189,11 @@ struct StudioView: View {
     private func updateLoungeActivity(promote: Bool = false) {
         lounge.scene(sceneID, active: phase == .active,
             sourceID: loungeOverlay ? nil : sourcesReading.last?.source, promote: promote)
+    }
+
+    private func acceptNotificationRoute() {
+        guard phase == .active, lounge.consumeRoute() else { return }
+        openLounge()
     }
 
     private func openLounge() {
@@ -232,8 +230,14 @@ struct StudioView: View {
                     Button("下一首") { lounge.skip(1) }
                     Button("打开休息室") { openLounge() }
                 } label: {
-                    Label(track.title, systemImage: lounge.playing ? "waveform" : "music.note")
-                        .lineLimit(1).font(.caption).frame(minHeight: 38)
+                    Group {
+                        if activeReaders.isEmpty {
+                            Label(track.title, systemImage: lounge.playing ? "waveform" : "music.note")
+                        } else {
+                            Image(systemName: lounge.playing ? "waveform" : "music.note")
+                                .accessibilityLabel("音乐播放控制")
+                        }
+                    }.lineLimit(1).font(.caption).frame(minHeight: 38)
                         .padding(.horizontal, 12).background(StudyTheme.leaf, in: Capsule())
                 }.frame(maxWidth: 210)
             }
@@ -458,7 +462,7 @@ struct InboxView: View {
                     }
                 }
             }
-        }
+        }.studyChange(groups.reduce(0) { $0 + $1.marks.count })
     }
     private func markRow(_ mark: LibraryMark, source: LibrarySource?) -> some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -725,13 +729,18 @@ struct CardEditor: View {
 
 struct StudyCardPreview: View {
     @EnvironmentObject private var model: StudioModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var motion
     let card: LibraryCard
     var featured = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            NavigationLink { CardDetailView(cardID: card.id) } label: {
+            NavigationLink {
+                CardDetailView(cardID: card.id).studioTransitionDestination(card.id, in: motion, enabled: !reduceMotion)
+            } label: {
                 StudyCardFace(card: card, featured: featured)
+                    .studioTransitionSource(card.id, in: motion, enabled: !reduceMotion)
             }.buttonStyle(.plain)
             if let ref = card.sourceRefs.first(where: { ref in
                 model.state.sources.contains { $0.id == ref.sourceID && $0.deletedAt == nil }

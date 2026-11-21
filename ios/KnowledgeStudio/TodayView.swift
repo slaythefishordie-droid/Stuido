@@ -64,7 +64,7 @@ private struct ReviewQueueView: View {
                             reviewed += 1
                             index = nextIndex + 1
                         }
-                    }.id(id)
+                    }.id(id).transition(.opacity)
                     .toolbar {
                         ToolbarItem(placement: .principal) {
                             Text("\(kind.title) · \(nextIndex + 1)/\(cardIDs.count)").font(.subheadline)
@@ -74,7 +74,7 @@ private struct ReviewQueueView: View {
                 ContentUnavailableView("本轮结束", systemImage: "checkmark.circle",
                     description: Text("已完成 \(reviewed) 张\(kind.title)。"))
             }
-        }.studySurface()
+        }.studySurface().studyChange(nextIndex)
     }
 }
 

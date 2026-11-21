@@ -32,7 +32,12 @@ struct SourceReaderView: View {
                 VStack(spacing: 20) {
                     Text(source.title).font(.title2)
                     Link("在 Safari 打开出处", destination: destination(url))
-                    Text("在 Safari 原页面学习并使用扩展采集。")
+                    if let location, let excerpt = model.state.marks.first(where: {
+                        $0.sourceID == source.id && $0.locator == location && !$0.excerpt.isEmpty && $0.deletedAt == nil
+                    })?.excerpt {
+                        Text(excerpt).font(.system(.title3, design: .serif)).textSelection(.enabled)
+                            .frame(maxWidth: 520, alignment: .leading)
+                    }
                 }.padding()
             } else {
                 VStack(spacing: 20) {
@@ -833,8 +838,8 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
                     EditingAction(title: "听发音", action: #selector(StudyEPUBContainer.pronounce)),
                     .copy, .lookup,
                 ], fontFamilyDeclarations: [
-                    CSSFontFamilyDeclaration(fontFamily: Self.song, alternates: ["Georgia", .serif]).eraseToAnyHTMLFontFamilyDeclaration(),
-                    CSSFontFamilyDeclaration(fontFamily: Self.hei, alternates: ["Helvetica Neue", .sansSerif]).eraseToAnyHTMLFontFamilyDeclaration(),
+                    CSSFontFamilyDeclaration(fontFamily: Self.song, alternates: ["STSong", "Georgia", .serif]).eraseToAnyHTMLFontFamilyDeclaration(),
+                    CSSFontFamilyDeclaration(fontFamily: Self.hei, alternates: ["Heiti SC", "Helvetica Neue", .sansSerif]).eraseToAnyHTMLFontFamilyDeclaration(),
                 ]))
             captureSelection = { [weak self, weak reader] kind in
                 guard let locator = reader?.currentSelection?.locator, let text = locator.text.highlight,

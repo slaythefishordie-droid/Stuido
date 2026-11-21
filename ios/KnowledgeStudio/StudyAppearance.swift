@@ -238,3 +238,26 @@ extension EnvironmentValues {
         set { self[StudyNavigationKey.self] = newValue }
     }
 }
+
+
+private struct StudyChange<Value: Equatable>: ViewModifier {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    let value: Value
+    func body(content: Content) -> some View {
+        content.animation(reduceMotion ? nil : .easeOut(duration: 0.19), value: value)
+    }
+}
+
+extension View {
+    func studyChange<Value: Equatable>(_ value: Value) -> some View { modifier(StudyChange(value: value)) }
+
+    @ViewBuilder func studioTransitionSource(_ id: UUID, in namespace: Namespace.ID, enabled: Bool) -> some View {
+        if #available(iOS 18, *), enabled { matchedTransitionSource(id: id, in: namespace) }
+        else { self }
+    }
+
+    @ViewBuilder func studioTransitionDestination(_ id: UUID, in namespace: Namespace.ID, enabled: Bool) -> some View {
+        if #available(iOS 18, *), enabled { navigationTransition(.zoom(sourceID: id, in: namespace)) }
+        else { self }
+    }
+}

@@ -200,6 +200,8 @@ struct ImportReviewView: View {
 
 struct LibraryView: View {
     @EnvironmentObject private var model: StudioModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Namespace private var coverMotion
     @State private var importing = false
     @State private var search = ""
     @State private var projectTitle = ""
@@ -375,8 +377,10 @@ struct LibraryView: View {
     private func sourceLink(_ source: LibrarySource, compact: Bool) -> some View {
         NavigationLink {
             SourceReaderView(source: source, location: source.lastLocation)
+                .studioTransitionDestination(source.id, in: coverMotion, enabled: !reduceMotion)
         } label: {
             StudySourceTile(source: source, asset: model.assetURL(source), compact: compact)
+                .studioTransitionSource(source.id, in: coverMotion, enabled: !reduceMotion)
         }.contextMenu { sourceActionMenu(source) }
     }
 
@@ -839,7 +843,8 @@ struct DataManagerView: View {
     }
 
     private func objectList(showStorage: Bool) -> some View {
-        List(selection: $selected) {
+        let visible = rows
+        return List(selection: $selected) {
                 Section {
                     VStack(alignment: .leading, spacing: 8) {
                         StudyHeading(title: trash ? "回收站" : "知识库维护")
@@ -876,7 +881,7 @@ struct DataManagerView: View {
                     Text("按名称").tag("名称")
                 }
                 Section("对象") {
-                    ForEach(rows) { row in
+                    ForEach(visible) { row in
                         NavigationLink {
                             managedContent(row)
                         } label: {
@@ -934,7 +939,7 @@ struct DataManagerView: View {
                         }
                     }
                 }
-        }.studySurface()
+        }.studySurface().studyChange(visible.count)
     }
 
     private var objectSummary: some View {

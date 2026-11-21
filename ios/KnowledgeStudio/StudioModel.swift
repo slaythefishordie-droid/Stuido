@@ -237,6 +237,9 @@ final class StudioModel: ObservableObject {
                     let existing = state.sources.first {
                         $0.assetHash == imported.assetHash && $0.deletedAt == nil
                     }
+                    if existing == nil && state.sources.contains(where: { $0.assetHash == imported.assetHash }) {
+                        throw LibraryError.invalid("这份资料在回收站，请先恢复。")
+                    }
                     let id = existing?.id ?? imported.id
                     if existing == nil { state.sources.append(imported) }
                     if let projectID {
