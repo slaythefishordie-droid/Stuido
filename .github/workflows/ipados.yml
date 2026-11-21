@@ -24,8 +24,11 @@ jobs:
           ks_result=$(find "$RUNNER_TEMP/result" -type d -name SimulatorTests.xcresult -print -quit)
           test -n "$ks_result"
           mkdir -p evidence
-          xcrun xcresulttool export attachments --path "$ks_result" --only-failures --output-path evidence
-          xcrun xcresulttool get test-results tests --path "$ks_result" > evidence/tests.json
+          ks_test="StudyAcceptanceTests/testInboxOpensPrefilledEditorThenArchivesInOneSave()"
+          xcrun xcresulttool export attachments --path "$ks_result" --test-id "$ks_test" --output-path evidence
+          xcrun xcresulttool get test-results activities --path "$ks_result" --test-id "$ks_test" > evidence/activities.json || true
+          xcrun xcresulttool get test-results test-details --path "$ks_result" --test-id "$ks_test" > evidence/details.json || true
+          du -h evidence/*
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
           name: Inbox-simulator-failure-evidence
