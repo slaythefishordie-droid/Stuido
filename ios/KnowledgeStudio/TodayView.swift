@@ -10,12 +10,12 @@ enum TodayReview {
 }
 
 struct TodayView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
 
     var body: some View {
         NavigationStack {
             TimelineView(.periodic(from: .now, by: 60)) { clock in
-                let due = Dictionary(grouping: TodayReview.due(model.state.cards, at: clock.date), by: \.type)
+                let due = Dictionary(grouping: TodayReview.due(model.cards, at: clock.date), by: \.type)
                 ScrollView {
                     VStack(alignment: .leading, spacing: 20) {
                         VStack(alignment: .leading, spacing: 8) {
@@ -66,7 +66,7 @@ private struct ReviewQueueTile: View {
 }
 
 private struct ReviewQueueView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     let kind: CardKind
     @State var cardIDs: [UUID]
     @State private var index = 0
@@ -78,7 +78,7 @@ private struct ReviewQueueView: View {
     }
 
     private var nextIndex: Int? {
-        let active = Set(model.state.cards.lazy.filter {
+        let active = Set(model.cards.lazy.filter {
             $0.deletedAt == nil && $0.review == .active && ($0.schedule?.due ?? .distantPast) <= .now
         }.map(\.id))
         return cardIDs.indices.dropFirst(index).first { active.contains(cardIDs[$0]) }
@@ -109,7 +109,7 @@ private struct ReviewQueueView: View {
 }
 
 struct ReviewControls: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     let cardID: UUID
     var onSaved: () -> Void = {}
     @State private var eventID = UUID()
@@ -145,16 +145,16 @@ struct ReviewControls: View {
             }
             if saving { ProgressView().controlSize(.small).accessibilityLabel("正在保存复习结果") }
             if let failure { Text(failure).font(.caption).foregroundStyle(.secondary) }
-            if saved, let due = model.state.cards.first(where: { $0.id == cardID })?.schedule?.due {
+            if saved, let due = model.cards.first(where: { $0.id == cardID })?.schedule?.due {
                 Text("下次：\(due.formatted(date: .abbreviated, time: .shortened))").font(.caption)
             }
         }.padding().background(.regularMaterial)
-            .onAppear { expectedRevision = model.state.cards.first { $0.id == cardID }?.schedule?.revision }
+            .onAppear { expectedRevision = model.cards.first { $0.id == cardID }?.schedule?.revision }
     }
 }
 
 struct CardReviewHistory: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     let card: LibraryCard
     @State private var retention = 0.9
     var body: some View {
@@ -171,7 +171,7 @@ struct CardReviewHistory: View {
                 }
                 Text("保留当前到期时间，新参数从下一次评分起生效。").font(.caption).foregroundStyle(.secondary)
             }
-            let records = model.state.reviewRecords.filter { $0.cardID == card.id }.sorted {
+            let records = model.reviewRecords.filter { $0.cardID == card.id }.sorted {
                 $0.reviewedAt > $1.reviewedAt
             }
             if records.isEmpty { Text("尚无复习记录") }

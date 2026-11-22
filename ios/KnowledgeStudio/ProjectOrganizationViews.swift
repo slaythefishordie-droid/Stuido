@@ -2,7 +2,7 @@ import KnowledgeCore
 import SwiftUI
 
 struct ProjectSourceNoteView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     let projectID: UUID
     let sourceID: UUID
     @State private var text = ""
@@ -30,16 +30,16 @@ struct ProjectSourceNoteView: View {
         }.onAppear {
             guard !loaded else { return }
             loaded = true
-            text = model.state.projects.first { $0.id == projectID }?.sourceNotes?[sourceID.uuidString] ?? ""
+            text = model.projects.first { $0.id == projectID }?.sourceNotes?[sourceID.uuidString] ?? ""
         }
     }
 }
 
 struct ProjectGroupsView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     let projectID: UUID
     @State private var title = ""
-    private var groups: [ProjectGroup] { model.state.projects.first { $0.id == projectID }?.groups ?? [] }
+    private var groups: [ProjectGroup] { model.projects.first { $0.id == projectID }?.groups ?? [] }
     var body: some View {
         List {
             Section("新建分组") {
@@ -74,13 +74,13 @@ struct ProjectGroupsView: View {
     }
 }
 struct ProjectGroupDetail: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     let projectID: UUID
     let groupID: UUID
     @State private var editing = false
     @State private var title = ""
     private var group: ProjectGroup? {
-        model.state.projects.first { $0.id == projectID }?.groups?.first { $0.id == groupID }
+        model.projects.first { $0.id == projectID }?.groups?.first { $0.id == groupID }
     }
     private func update(_ action: (inout ProjectGroup) -> Void) {
         model.change { state in
@@ -99,7 +99,7 @@ struct ProjectGroupDetail: View {
                 }
                 Section("资料") {
                     ForEach(
-                        model.state.sources.filter {
+                        model.sources.filter {
                             $0.deletedAt == nil && (editing || group.sourceIDs.contains($0.id))
                         }
                     ) { source in
@@ -127,7 +127,7 @@ struct ProjectGroupDetail: View {
                 }
                 Section("卡片") {
                     ForEach(
-                        model.state.cards.filter {
+                        model.cards.filter {
                             $0.deletedAt == nil && (editing || group.cardIDs.contains($0.id))
                         }
                     ) { card in

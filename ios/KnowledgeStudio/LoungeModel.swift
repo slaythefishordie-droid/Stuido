@@ -160,14 +160,23 @@ final class LoungeHub: ObservableObject {
             savePlayhead()
         } else {
             tick()
-            if ticker == nil {
-                ticker = Task { [weak self] in
-                    while !Task.isCancelled {
-                        do { try await Task.sleep(for: .seconds(1)) } catch { return }
-                        self?.tick()
-                    }
-                }
-            }
+            scheduleTick()
+        }
+    }
+
+    private func scheduleTick() {
+        ticker?.cancel()
+        ticker = nil
+        guard !scenes.isEmpty else { return }
+        var deadlines = [disk.timer.deadline].compactMap { $0 }
+        if drawInterval > 0 { deadlines.append(contentsOf: disk.nextDraw.values) }
+        let delay = PerformanceBudget.nextWakeDelay(now: .now,
+            checkpointIn: 30 - (ProcessInfo.processInfo.systemUptime - audioCheckpoint), deadlines: deadlines)
+        ticker = Task { [weak self] in
+            do { try await Task.sleep(for: .seconds(delay)) } catch { return }
+            guard let self else { return }
+            self.tick()
+            self.scheduleTick()
         }
     }
 
@@ -193,7 +202,7 @@ final class LoungeHub: ObservableObject {
         var next = disk
         edit(&next)
         guard next != disk else { return true }
-        do { try write(next, to: "lounge.json"); disk = next; return true }
+        do { try write(next, to: "lounge.json"); disk = next; scheduleTick(); return true }
         catch { message = "休息室未能保存：\(error.localizedDescription)"; return false }
     }
 

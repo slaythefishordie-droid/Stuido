@@ -3,7 +3,7 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 struct AIInboxView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     @State private var text = ""
     @State private var importing = false
     @State private var pending: PendingImport?
@@ -19,10 +19,10 @@ struct AIInboxView: View {
                     if editingJSON { pasteArea }
                     VStack(alignment: .leading, spacing: 12) {
                         StudyHeading(title: "待确认批次")
-                        if model.state.pending.isEmpty {
+                        if model.pending.isEmpty {
                             Label("暂无待确认批次", systemImage: "tray").font(.subheadline).foregroundStyle(.secondary)
                         }
-                        ForEach(model.state.pending) { item in
+                        ForEach(model.pending) { item in
                             Button { pending = item } label: {
                                 HStack(spacing: 14) {
                                     Image(systemName: "doc.text").foregroundStyle(StudyTheme.copper)
@@ -42,7 +42,7 @@ struct AIInboxView: View {
         }.fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
             do { receiveFile(try result.get()) }
             catch { model.message = error.localizedDescription }
-        }.sheet(item: $pending) { ImportReviewView(pending: $0).environmentObject(model) }
+        }.sheet(item: $pending) { ImportReviewView(pending: $0).environment(model) }
     }
 
     private var importDesk: some View {
@@ -104,7 +104,7 @@ struct AIInboxView: View {
     }
 }
 struct ImportReviewView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let pending: PendingImport
     @State private var preview: ImportPreview?
@@ -135,7 +135,7 @@ struct ImportReviewView: View {
                         ) {
                             Text("按摘要／链接匹配，否则新建").tag(nil as UUID?)
                             ForEach(
-                                model.state.sources.filter {
+                                model.sources.filter {
                                     $0.deletedAt == nil && $0.kind.rawValue == source["kind"]
                                 }
                             ) { Text($0.title).tag(Optional($0.id)) }
@@ -176,7 +176,7 @@ struct ImportReviewView: View {
                     }
                     Picker("项目", selection: $project) {
                         Text("不关联项目").tag(nil as UUID?)
-                        ForEach(model.state.projects.filter { $0.deletedAt == nil }) {
+                        ForEach(model.projects.filter { $0.deletedAt == nil }) {
                             Text($0.title).tag(Optional($0.id))
                         }
                     }
@@ -235,7 +235,7 @@ struct ImportReviewView: View {
 }
 
 struct LibraryView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var coverMotion
     @State private var importing = false
@@ -250,9 +250,9 @@ struct LibraryView: View {
     @State private var selecting = false
     @State private var selected: Set<UUID> = []
     private var sources: [LibrarySource] {
-        let projects = model.state.projects.filter { $0.deletedAt == nil }
+        let projects = model.projects.filter { $0.deletedAt == nil }
         let classified = collection == "未分类" ? Set(projects.flatMap(\.sourceIDs)) : []
-        let results = model.state.sources.filter { source in
+        let results = model.sources.filter { source in
             source.deletedAt == nil
                 && (search.isEmpty || source.title.localizedCaseInsensitiveContains(search))
                 && (collection != "收藏" || source.isFavorite == true)
@@ -431,7 +431,7 @@ struct LibraryView: View {
                     if model.message == nil { projectTitle = "" }
                 }
             }
-            ForEach(model.state.projects.filter { $0.deletedAt == nil }) { project in
+            ForEach(model.projects.filter { $0.deletedAt == nil }) { project in
                 if wide {
                     Button {
                         selectedProject = project.id
@@ -526,7 +526,7 @@ struct LibraryView: View {
 }
 
 struct ProjectView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     let projectID: UUID
     private enum SectionKind: String, CaseIterable { case sources = "资料", cards = "卡片", maps = "地图", relations = "关系" }
     @State private var section = SectionKind.sources
@@ -535,7 +535,7 @@ struct ProjectView: View {
     @State private var title = ""
     @State private var note = ""
     @State private var choosingCover = false
-    private var project: LibraryProject? { model.state.projects.first { $0.id == projectID } }
+    private var project: LibraryProject? { model.projects.first { $0.id == projectID } }
 
     var body: some View {
         List {
@@ -622,7 +622,7 @@ struct ProjectView: View {
         case .cards:
             Section("项目卡片") {
                 let linked = Set(project.cardIDs)
-                ForEach(model.state.cards.filter { $0.deletedAt == nil && linked.contains($0.id) }
+                ForEach(model.cards.filter { $0.deletedAt == nil && linked.contains($0.id) }
                     .sorted { $0.updatedAt > $1.updatedAt }) { card in
                     StudyCardPreview(card: card)
                         .listRowBackground(Color.clear).listRowSeparator(.hidden)
@@ -652,8 +652,8 @@ struct ProjectView: View {
     }
 
     @ViewBuilder private func projectRelations(_ project: LibraryProject) -> some View {
-        let cardIndex = Dictionary(uniqueKeysWithValues: model.state.cards.map { ($0.id, $0) })
-        let relations = model.state.relations.filter { $0.deletedAt == nil && project.relationIDs.contains($0.id) }
+        let cardIndex = Dictionary(uniqueKeysWithValues: model.cards.map { ($0.id, $0) })
+        let relations = model.relations.filter { $0.deletedAt == nil && project.relationIDs.contains($0.id) }
         Section("卡片关系") {
             if relations.isEmpty { Text("此项目暂无已关联的卡片关系。").foregroundStyle(.secondary) }
             ForEach(relations) { relation in
@@ -675,7 +675,7 @@ struct ProjectView: View {
 
     private func projectSources(_ ids: [UUID]) -> [LibrarySource] {
         let ids = Set(ids)
-        return model.state.sources.filter { $0.deletedAt == nil && ids.contains($0.id) }
+        return model.sources.filter { $0.deletedAt == nil && ids.contains($0.id) }
     }
 
     private func sourceRow(_ source: LibrarySource) -> some View {
@@ -702,7 +702,7 @@ struct ProjectView: View {
 
     @ViewBuilder private func membership(_ project: LibraryProject) -> some View {
         Section("关联资料") {
-            ForEach(model.state.sources.filter { $0.deletedAt == nil }) { source in
+            ForEach(model.sources.filter { $0.deletedAt == nil }) { source in
                 ObjectSelectionRow(
                     source.title,
                     isSelected: Binding(
@@ -719,7 +719,7 @@ struct ProjectView: View {
             }
         }
         Section("关联卡片") {
-            ForEach(model.state.cards.filter { $0.deletedAt == nil }) { card in
+            ForEach(model.cards.filter { $0.deletedAt == nil }) { card in
                 ObjectSelectionRow(
                     card.title,
                     isSelected: Binding(
@@ -740,7 +740,7 @@ struct ProjectView: View {
 }
 
 struct DataManagerView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     @State private var trash = false
     @State private var kind = "全部"
     @State private var search = ""
@@ -774,27 +774,27 @@ struct DataManagerView: View {
         let deleted: Bool
     }
     var rows: [Row] {
-        var all: [Row] = model.state.sources.map {
+        var all: [Row] = model.sources.map {
             Row(id: $0.id, title: $0.title, kind: "资料", deleted: $0.deletedAt != nil)
         }
-        all += model.state.marks.map {
+        all += model.marks.map {
             Row(
                 id: $0.id, title: $0.excerpt.isEmpty ? locationLabel($0.locator) : $0.excerpt, kind: "标记",
                 deleted: $0.deletedAt != nil)
         }
-        all += model.state.cards.map {
+        all += model.cards.map {
             Row(id: $0.id, title: $0.title, kind: "卡片", deleted: $0.deletedAt != nil)
         }
-        all += model.state.projects.map {
+        all += model.projects.map {
             Row(id: $0.id, title: $0.title, kind: "项目", deleted: $0.deletedAt != nil)
         }
-        all += model.state.projects.filter { $0.hasBoard && ($0.deletedAt == nil || $0.boardTrashedAt != nil) }
+        all += model.projects.filter { $0.hasBoard && ($0.deletedAt == nil || $0.boardTrashedAt != nil) }
             .map { Row(id: $0.boardManagementID, title: $0.title + " · 白板", kind: "白板",
                 deleted: $0.boardTrashedAt != nil) }
-        all += model.state.relations.map {
+        all += model.relations.map {
             Row(id: $0.id, title: $0.kind, kind: "关系", deleted: $0.deletedAt != nil)
         }
-        all += model.state.reviewRecords.map {
+        all += model.reviewRecords.map {
             Row(
                 id: $0.id, title: "\($0.rating) · \($0.reviewedAt.formatted())", kind: "复习记录",
                 deleted: $0.deletedAt != nil)
@@ -839,8 +839,10 @@ struct DataManagerView: View {
                 }
             case .cache:
                 Button("清理缓存", role: .destructive) {
-                    do { try StudyThumbnails.clearCache(); refreshStorage = UUID() }
-                    catch { model.message = error.localizedDescription }
+                    Task {
+                        do { try await StudyThumbnails.clearCache(); refreshStorage = UUID() }
+                        catch { model.message = error.localizedDescription }
+                    }
                 }
             case .backup:
                 Button("恢复并替换当前知识库", role: .destructive) { restoreBackup() }
@@ -853,7 +855,7 @@ struct DataManagerView: View {
             }
         }.sheet(isPresented: $showCleanup) { cleanupSheet }
         .task(id: refreshStorage) { await readStorage() }
-        .onReceive(model.$state.dropFirst()) { _ in refreshStorage = UUID() }
+        .onChange(of: model.state) { _, _ in refreshStorage = UUID() }
         .fileImporter(isPresented: $restoring, allowedContentTypes: [.zip]) { result in
             busy = true
             Task {
@@ -1035,12 +1037,12 @@ struct DataManagerView: View {
 
     private var objectSummary: some View {
         let counts = [
-            ("资料", model.state.sources.lazy.filter { $0.deletedAt == nil }.count),
-            ("标记", model.state.marks.lazy.filter { $0.deletedAt == nil }.count),
-            ("卡片", model.state.cards.lazy.filter { $0.deletedAt == nil }.count),
-            ("项目", model.state.projects.lazy.filter { $0.deletedAt == nil }.count),
-            ("关系", model.state.relations.lazy.filter { $0.deletedAt == nil }.count),
-            ("复习记录", model.state.reviewRecords.lazy.filter { $0.deletedAt == nil }.count),
+            ("资料", model.sources.lazy.filter { $0.deletedAt == nil }.count),
+            ("标记", model.marks.lazy.filter { $0.deletedAt == nil }.count),
+            ("卡片", model.cards.lazy.filter { $0.deletedAt == nil }.count),
+            ("项目", model.projects.lazy.filter { $0.deletedAt == nil }.count),
+            ("关系", model.relations.lazy.filter { $0.deletedAt == nil }.count),
+            ("复习记录", model.reviewRecords.lazy.filter { $0.deletedAt == nil }.count),
         ]
         let peak = max(1, counts.map { $0.1 }.max() ?? 1)
         return Section("知识库对象") {
@@ -1135,7 +1137,7 @@ struct DataManagerView: View {
     }
 
     private func readStorage() async {
-        let urls = Set(model.state.sources.compactMap { model.assetURL($0) })
+        let urls = Set(model.sources.compactMap { model.assetURL($0) })
         let snapshot = model.state
         let cache = StudyThumbnails.cacheDirectory
         let root = model.root
@@ -1186,15 +1188,15 @@ struct DataManagerView: View {
                 Text(row.title).font(.title3)
                 Text("此内容在回收站中。返回后点选择可恢复或永久清理。").foregroundStyle(.secondary)
             }.padding()
-        } else if let source = model.state.sources.first(where: { $0.id == row.id }) {
+        } else if let source = model.sources.first(where: { $0.id == row.id }) {
             SourceReaderView(source: source, location: source.lastLocation)
-        } else if model.state.cards.contains(where: { $0.id == row.id }) {
+        } else if model.cards.contains(where: { $0.id == row.id }) {
             CardDetailView(cardID: row.id)
-        } else if model.state.marks.contains(where: { $0.id == row.id }) {
+        } else if model.marks.contains(where: { $0.id == row.id }) {
             MarkDetailView(markID: row.id)
-        } else if let project = model.state.projects.first(where: { $0.boardManagementID == row.id && $0.hasBoard }) {
+        } else if let project = model.projects.first(where: { $0.boardManagementID == row.id && $0.hasBoard }) {
             ProjectBoardView(projectID: project.id)
-        } else if model.state.projects.contains(where: { $0.id == row.id }) {
+        } else if model.projects.contains(where: { $0.id == row.id }) {
             ProjectView(projectID: row.id)
         } else {
             VStack(alignment: .leading, spacing: 16) {

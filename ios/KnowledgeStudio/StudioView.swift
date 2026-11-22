@@ -3,18 +3,27 @@ import SwiftUI
 import UniformTypeIdentifiers
 import UIKit
 
+// StateObject's lazy factory keeps heavyweight model initialization out of
+// repeated View value construction; collection observation lives in StudioModel.
+@MainActor
+private final class StudioSession: ObservableObject {
+    let model: StudioModel
+    init(model: StudioModel) { self.model = model }
+}
+
 @MainActor
 struct StudioView: View {
-    @StateObject private var model: StudioModel
+    @StateObject private var session: StudioSession
+    private var model: StudioModel { session.model }
 
     init() {
         #if DEBUG
         if let id = ProcessInfo.processInfo.environment["STUDIO_ACCEPTANCE_FIXTURE"], UUID(uuidString: id) != nil {
-            _model = StateObject(wrappedValue: Self.acceptanceModel(id))
+            _session = StateObject(wrappedValue: StudioSession(model: Self.acceptanceModel(id)))
             return
         }
         #endif
-        _model = StateObject(wrappedValue: StudioModel())
+        _session = StateObject(wrappedValue: StudioSession(model: StudioModel()))
     }
 
     #if DEBUG
@@ -122,7 +131,7 @@ struct StudioView: View {
         .sheet(isPresented: $loungeOverlay) {
             NavigationStack {
                 LoungeView().toolbar { Button("返回学习") { loungeOverlay = false } }
-            }.environmentObject(lounge).environmentObject(model)
+            }.environmentObject(lounge).environment(model)
         }
         .task(id: lounge.reminder) {
             if lounge.reminder != nil {
@@ -138,7 +147,7 @@ struct StudioView: View {
         .tint(StudyTheme.ink)
         .environment(\.defaultMinListRowHeight, compactDisplay ? 44 : 60)
         .preferredColorScheme(appearance == "dark" ? .dark : appearance == "light" ? .light : nil)
-        .environmentObject(model)
+        .environment(model)
         .confirmationDialog("新建", isPresented: $choosingCard) {
             ForEach(CardKind.allCases, id: \.self) { kind in
                 Button(kind.title) { quickCard = LibraryCard(type: kind, content: [:]) }
@@ -158,8 +167,8 @@ struct StudioView: View {
             }
             Button("取消", role: .cancel) {}
         }
-        .sheet(isPresented: $showingSearch) { StudioSearchView().environmentObject(model) }
-        .sheet(item: $quickCard) { CardEditor(card: $0).environmentObject(model) }
+        .sheet(isPresented: $showingSearch) { StudioSearchView().environment(model) }
+        .sheet(item: $quickCard) { CardEditor(card: $0).environment(model) }
         .onOpenURL { url in
             guard url.isFileURL else { return }
             guard pendingDocument == nil, !model.isImporting else {
@@ -175,7 +184,7 @@ struct StudioView: View {
                     Text(document.url.lastPathComponent)
                     Picker("归入项目", selection: $importProject) {
                         Text("暂不分类").tag(nil as UUID?)
-                        ForEach(model.state.projects.filter { $0.deletedAt == nil }) { project in
+                        ForEach(model.projects.filter { $0.deletedAt == nil }) { project in
                             Text(project.title).tag(Optional(project.id))
                         }
                     }
@@ -383,7 +392,7 @@ struct StudioView: View {
 }
 
 private struct StudioSearchView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var text = ""
     @State private var projectID: UUID?
@@ -391,7 +400,7 @@ private struct StudioSearchView: View {
     var body: some View {
         NavigationStack {
             List {
-                let projects = model.state.projects.filter { $0.deletedAt == nil }
+                let projects = model.projects.filter { $0.deletedAt == nil }
                 Picker("范围", selection: $projectID) {
                     Text("全书房").tag(nil as UUID?)
                     ForEach(projects) { Text($0.title).tag(Optional($0.id)) }
@@ -402,7 +411,7 @@ private struct StudioSearchView: View {
                     let sources = Set(project?.sourceIDs ?? [])
                     let cards = Set(project?.cardIDs ?? [])
                     Section("资料") {
-                        ForEach(model.state.sources.filter {
+                        ForEach(model.sources.filter {
                             $0.deletedAt == nil && (project == nil || sources.contains($0.id))
                                 && $0.title.localizedCaseInsensitiveContains(query)
                         }) { source in
@@ -412,7 +421,7 @@ private struct StudioSearchView: View {
                         }
                     }
                     Section("卡片") {
-                        ForEach(model.state.cards.filter {
+                        ForEach(model.cards.filter {
                             $0.deletedAt == nil && (project == nil || cards.contains($0.id))
                                 && $0.content.values.contains { $0.localizedCaseInsensitiveContains(query) }
                         }) { card in
@@ -436,7 +445,7 @@ private struct StudioSearchView: View {
 }
 
 struct InboxView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     @State private var search = ""
     @State private var archived = false
     @State private var undoMark: UUID?
@@ -450,8 +459,8 @@ struct InboxView: View {
         var title: String { source?.title ?? "资料不可用" }
     }
     private var groups: [SourceGroup] {
-        let sources = Dictionary(uniqueKeysWithValues: model.state.sources.map { ($0.id, $0) })
-        let marks = model.state.marks.filter { mark in
+        let sources = Dictionary(uniqueKeysWithValues: model.sources.map { ($0.id, $0) })
+        let marks = model.marks.filter { mark in
             guard mark.deletedAt == nil, mark.organization == (archived ? .archived : .inbox) else { return false }
             let content = mark.excerpt + mark.note + (sources[mark.sourceID]?.title ?? "")
             return search.isEmpty || content.localizedCaseInsensitiveContains(search)
@@ -465,8 +474,8 @@ struct InboxView: View {
             inboxList.studySurface().navigationTitle("收集箱").searchable(text: $search, prompt: "搜索摘录")
                 .refreshable { await model.refreshAsync() }.toolbar { inboxToolbar }
                 .navigationDestination(for: DraftRoute.self) { route in
-                    if let mark = model.state.marks.first(where: { $0.id == route.markID && $0.deletedAt == nil }) {
-                        let draft = model.state.cards.first { $0.markIDs.contains(mark.id) && $0.deletedAt == nil }
+                    if let mark = model.marks.first(where: { $0.id == route.markID && $0.deletedAt == nil }) {
+                        let draft = model.cards.first { $0.markIDs.contains(mark.id) && $0.deletedAt == nil }
                             ?? model.card(from: mark, type: mark.highlightKind)
                         CardEditor(card: draft, inboxMark: mark.id, ownNavigation: false) { undoMark = mark.id }
                     } else {
@@ -594,14 +603,14 @@ func locationLabel(_ locator: ReadingLocator) -> String {
     return locator.href ?? "阅读定位"
 }
 struct MarkDetailView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     let markID: UUID
     @State private var note = ""
     @State private var showingInk = false
     @State private var kind: CardKind = .expression
     var body: some View {
         Form {
-            if let mark = model.state.marks.first(where: { $0.id == markID }) {
+            if let mark = model.marks.first(where: { $0.id == markID }) {
                 Label(mark.highlightKind.title, systemImage: "circle.fill").foregroundStyle(
                     mark.highlightKind.color)
                 Text(mark.excerpt)
@@ -631,23 +640,23 @@ struct MarkDetailView: View {
                 }
             }
         }.studySurface().navigationTitle("标记详情").sheet(isPresented: $showingInk) {
-            if let mark = model.state.marks.first(where: { $0.id == markID }) {
-                EPUBInkNote(mark: mark).environmentObject(model)
+            if let mark = model.marks.first(where: { $0.id == markID }) {
+                EPUBInkNote(mark: mark).environment(model)
             }
         }.onAppear {
-            note = model.state.marks.first { $0.id == markID }?.note ?? ""
-            kind = model.state.marks.first { $0.id == markID }?.highlightKind ?? .expression
+            note = model.marks.first { $0.id == markID }?.note ?? ""
+            kind = model.marks.first { $0.id == markID }?.highlightKind ?? .expression
         }
     }
 }
 
 struct CardsView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     @State private var search = ""
     @State private var category = "全部"
     @State private var editor: LibraryCard?
     var cards: [LibraryCard] {
-        model.state.cards.filter { card in
+        model.cards.filter { card in
             card.deletedAt == nil
                 && (category == "全部" || card.type.title == category
                     || (category == "词汇库" && [.word, .keyword].contains(card.type))
@@ -682,12 +691,12 @@ struct CardsView: View {
                     }
                 }.padding(24).frame(maxWidth: 1180).frame(maxWidth: .infinity)
             }.studySurface().navigationBarTitleDisplayMode(.inline).searchable(text: $search, prompt: "搜索卡片")
-        }.sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
+        }.sheet(item: $editor) { CardEditor(card: $0).environment(model) }
     }
 }
 
 struct CardEditor: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State var card: LibraryCard
     var inboxMark: UUID? = nil
@@ -714,9 +723,9 @@ struct CardEditor: View {
     private var form: some View {
         Form {
             if let failure { Text(failure).foregroundStyle(.red) }
-            if inboxMark != nil && !model.state.cards.contains(where: { $0.id == card.id }) {
+            if inboxMark != nil && !model.cards.contains(where: { $0.id == card.id }) {
                 Picker("卡片类型", selection: Binding(get: { card.type }, set: { kind in
-                    guard let inboxMark, let mark = model.state.marks.first(where: { $0.id == inboxMark }) else { return }
+                    guard let inboxMark, let mark = model.marks.first(where: { $0.id == inboxMark }) else { return }
                     let previous = card.content[fields[0]]
                     let wasEdited = card.provenance[fields[0]]?.kind == "user_input"
                     var next = model.card(from: mark, type: kind)
@@ -745,15 +754,15 @@ struct CardEditor: View {
             if !card.sourceRefs.isEmpty {
                 Section("出处") {
                     ForEach(card.sourceRefs) { ref in
-                        if let source = model.state.sources.first(where: { $0.id == ref.sourceID }) {
+                        if let source = model.sources.first(where: { $0.id == ref.sourceID }) {
                             LabeledContent(source.title, value: ref.locator.map { locationLabel($0) } ?? "")
                         }
                     }
                 }
             }
-            if model.state.projects.contains(where: { $0.deletedAt == nil }) {
+            if model.projects.contains(where: { $0.deletedAt == nil }) {
                 DisclosureGroup("关联项目（\(projects.count)）") {
-                    ForEach(model.state.projects.filter { $0.deletedAt == nil }) { project in
+                    ForEach(model.projects.filter { $0.deletedAt == nil }) { project in
                         Toggle(project.title, isOn: Binding(
                             get: { projects.contains(project.id) },
                             set: { enabled in
@@ -763,7 +772,7 @@ struct CardEditor: View {
                     }
                 }
             }
-            if model.state.cards.contains(where: { $0.id == card.id }) {
+            if model.cards.contains(where: { $0.id == card.id }) {
                 DisclosureGroup("个人笔记") {
                     TextField("个人笔记", text: $card.note, axis: .vertical)
                 }
@@ -812,7 +821,7 @@ struct CardEditor: View {
 }
 
 struct StudyCardPreview: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Namespace private var motion
     let card: LibraryCard
@@ -827,8 +836,8 @@ struct StudyCardPreview: View {
                     .studioTransitionSource(card.id, in: motion, enabled: !reduceMotion)
             }.buttonStyle(.plain)
             if let ref = card.sourceRefs.first(where: { ref in
-                model.state.sources.contains { $0.id == ref.sourceID && $0.deletedAt == nil }
-            }), let source = model.state.sources.first(where: { $0.id == ref.sourceID }) {
+                model.sources.contains { $0.id == ref.sourceID && $0.deletedAt == nil }
+            }), let source = model.sources.first(where: { $0.id == ref.sourceID }) {
                 NavigationLink {
                     CardDetailView(cardID: card.id, initialComparison: ref)
                 } label: {
@@ -845,7 +854,7 @@ struct StudyCardPreview: View {
 }
 
 struct CardDetailView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     let cardID: UUID
     var reviewMode = false
@@ -864,7 +873,7 @@ struct CardDetailView: View {
             let wide = geometry.size.width >= 820
             HStack(spacing: 0) {
                 ScrollView {
-                    if let card = model.state.cards.first(where: { $0.id == cardID }) {
+                    if let card = model.cards.first(where: { $0.id == cardID }) {
                         folio(card).frame(maxWidth: 740).padding(24).frame(maxWidth: .infinity)
                     }
                 }.frame(maxWidth: wide && comparison != nil ? 440 : .infinity)
@@ -880,13 +889,13 @@ struct CardDetailView: View {
                 }
         }.studySurface().navigationBarTitleDisplayMode(.inline)
             .safeAreaInset(edge: .bottom) { if reviewMode { ReviewControls(cardID: cardID) } }
-            .sheet(item: $editor) { CardEditor(card: $0).environmentObject(model) }
+            .sheet(item: $editor) { CardEditor(card: $0).environment(model) }
     }
 
     private func sourcePane(_ ref: CardReference) -> some View {
         NavigationStack {
             Group {
-                if let source = model.state.sources.first(where: { $0.id == ref.sourceID && $0.deletedAt == nil }) {
+                if let source = model.sources.first(where: { $0.id == ref.sourceID && $0.deletedAt == nil }) {
                     SourceReaderView(source: source, location: ref.locator, closeReader: { comparison = nil }).id(ref.id)
                 } else { ContentUnavailableView("原文不可用", systemImage: "book.closed") }
             }.toolbar { Button("结束对照") { comparison = nil } }
@@ -919,7 +928,7 @@ struct CardDetailView: View {
                 if !card.note.isEmpty { Text(card.note).font(.callout).textSelection(.enabled) }
                 if !card.importAnnotation.isEmpty { Text(card.importAnnotation).font(.callout).foregroundStyle(.secondary) }
                 ForEach(card.sourceRefs) { ref in
-                    if let source = model.state.sources.first(where: { $0.id == ref.sourceID && $0.deletedAt == nil }) {
+                    if let source = model.sources.first(where: { $0.id == ref.sourceID && $0.deletedAt == nil }) {
                         Divider()
                         HStack {
                             VStack(alignment: .leading, spacing: 4) {
@@ -941,7 +950,7 @@ struct CardDetailView: View {
                 if !card.markIDs.isEmpty {
                     Menu("关联标记") {
                         ForEach(card.markIDs, id: \.self) { id in
-                            if let mark = model.state.marks.first(where: { $0.id == id && $0.deletedAt == nil }) {
+                            if let mark = model.marks.first(where: { $0.id == id && $0.deletedAt == nil }) {
                                 NavigationLink(mark.excerpt.isEmpty ? locationLabel(mark.locator) : String(mark.excerpt.prefix(65))) {
                                     MarkDetailView(markID: id)
                                 }

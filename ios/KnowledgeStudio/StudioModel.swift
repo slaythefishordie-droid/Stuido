@@ -1,19 +1,29 @@
 import CryptoKit
 import KnowledgeCore
 import SwiftUI
+import Observation
 
 @MainActor
-final class StudioModel: ObservableObject {
-    @Published private(set) var state = LibraryState()
-    @Published var message: String?
-    @Published var sharedWarning: String?
-    @Published private(set) var isImporting = false
-    @Published private(set) var importStatus: String?
-    @Published private(set) var importCanCancel = false
-    @Published private(set) var sharedDocuments: [SharedDocumentInbox.Entry] = []
-    private var importTask: Task<LibrarySource, Error>?
-    private var changingManagedData = false
-    private var revision = 0
+@Observable
+final class StudioModel {
+    private(set) var state = LibraryState()
+    private(set) var sources: [LibrarySource] = []
+    private(set) var marks: [LibraryMark] = []
+    private(set) var cards: [LibraryCard] = []
+    private(set) var projects: [LibraryProject] = []
+    private(set) var relations: [LibraryRelation] = []
+    private(set) var pending: [PendingImport] = []
+    private(set) var reviewRecords: [LibraryReviewRecord] = []
+    private(set) var markIndex = LibraryMarkIndex([])
+    var message: String?
+    var sharedWarning: String?
+    private(set) var isImporting = false
+    private(set) var importStatus: String?
+    private(set) var importCanCancel = false
+    private(set) var sharedDocuments: [SharedDocumentInbox.Entry] = []
+    @ObservationIgnored private var importTask: Task<LibrarySource, Error>?
+    @ObservationIgnored private var changingManagedData = false
+    @ObservationIgnored private var revision = 0
     let root: URL
     private(set) var repository: LibraryRepository?
 
@@ -49,12 +59,13 @@ final class StudioModel: ObservableObject {
             }
         }
     }
-    private var refreshing = false
+    @ObservationIgnored private var refreshing = false
 
     func refreshAsync() async {
         guard let repository, !refreshing else { return }
         refreshing = true
-        defer { refreshing = false }
+        let trace = PerformanceTrace.signposter.beginInterval("SafariReceive", id: PerformanceTrace.signposter.makeSignpostID())
+        defer { refreshing = false; PerformanceTrace.signposter.endInterval("SafariReceive", trace) }
         do {
             try await Task.detached(priority: .utility) {
                 try repository.receive(WebMarkStore.configured().readAll())
@@ -69,7 +80,18 @@ final class StudioModel: ObservableObject {
     }
 
     private func publish(_ snapshot: LibraryState) {
-        if snapshot != state { revision += 1; state = snapshot }
+        guard snapshot != state else { return }
+        revision += 1
+        state = snapshot
+        // Separate dependencies: a reading-position change must not invalidate a
+        // card-only screen or rebuild the reader's mark index.
+        if sources != snapshot.sources { sources = snapshot.sources }
+        if marks != snapshot.marks { marks = snapshot.marks; markIndex = LibraryMarkIndex(snapshot.marks) }
+        if cards != snapshot.cards { cards = snapshot.cards }
+        if projects != snapshot.projects { projects = snapshot.projects }
+        if relations != snapshot.relations { relations = snapshot.relations }
+        if pending != snapshot.pending { pending = snapshot.pending }
+        if reviewRecords != snapshot.reviewRecords { reviewRecords = snapshot.reviewRecords }
     }
 
     func commit(_ action: (inout LibraryState) throws -> Void) throws {
@@ -84,6 +106,8 @@ final class StudioModel: ObservableObject {
     }
     private func commitAsync(_ action: @escaping @Sendable (inout LibraryState) throws -> Void) async throws {
         guard let repository else { throw LibraryError.invalid("知识库不可用") }
+        let trace = PerformanceTrace.signposter.beginInterval("LibraryCommit", id: PerformanceTrace.signposter.makeSignpostID())
+        defer { PerformanceTrace.signposter.endInterval("LibraryCommit", trace) }
         let before = revision
         let committed = try await Task.detached(priority: .userInitiated) {
             try repository.updateAndRead(action)
@@ -202,6 +226,69 @@ final class StudioModel: ObservableObject {
             }
         }
     }
+    private struct ReadingPosition: Sendable {
+        let locator: ReadingLocator
+        let date: Date
+    }
+    @ObservationIgnored private var pendingPositions: [UUID: ReadingPosition] = [:]
+    @ObservationIgnored private var readingWriteTask: Task<Void, Never>?
+    @ObservationIgnored private var readingFailure: Error?
+
+    /// Coalesce only replaceable resume positions. Marks, ink and edits retain
+    /// their durable transactional APIs. A single drain bounds concurrent work.
+    func queueReadingPosition(sourceID: UUID, locator: ReadingLocator) {
+        if readingWriteTask == nil, pendingPositions[sourceID] == nil,
+            let source = sources.first(where: { $0.id == sourceID }), source.lastLocation == locator,
+            let read = source.lastReadAt, Date().timeIntervalSince(read) < 60 { return }
+        pendingPositions[sourceID] = ReadingPosition(locator: locator, date: .now)
+        startReadingWrites()
+    }
+
+    private func startReadingWrites() {
+        guard readingWriteTask == nil, !pendingPositions.isEmpty else { return }
+        readingFailure = nil
+        readingWriteTask = Task { await drainReadingPositions() }
+    }
+
+    private func drainReadingPositions() async {
+        // Keep an in-flight save alive when the reader closes or the App resigns
+        // active. Expiration ends the OS assertion, never cancels a transaction.
+        let background = ReadingSaveAssertion()
+        defer {
+            readingWriteTask = nil
+            background.end()
+        }
+        while !pendingPositions.isEmpty {
+            let batch = pendingPositions
+            pendingPositions.removeAll()
+            do {
+                try await commitAsync { state in
+                    for index in state.sources.indices {
+                        guard let position = batch[state.sources[index].id], state.sources[index].deletedAt == nil else { continue }
+                        // A newer explicit edit/mark or another window wins over an
+                        // old position waiting for the writer connection.
+                        guard (state.sources[index].lastReadAt ?? .distantPast) <= position.date else { continue }
+                        state.sources[index].lastLocation = position.locator
+                        state.sources[index].lastReadAt = position.date
+                    }
+                }
+            } catch {
+                for (id, position) in batch where pendingPositions[id] == nil { pendingPositions[id] = position }
+                readingFailure = error
+                message = "阅读位置尚未保存，将在下次保存时重试：\(error.localizedDescription)"
+                return
+            }
+        }
+    }
+
+    /// Export/restore and lifecycle tests can wait for durable state, not merely
+    /// an enqueued UI update. Failed positions remain available for retry.
+    func flushReadingPositions() async throws {
+        startReadingWrites()
+        while let task = readingWriteTask { await task.value }
+        if let readingFailure { throw readingFailure }
+    }
+
     func assetURL(_ source: LibrarySource) -> URL? {
         guard let hash = source.assetHash, let ext = source.assetExtension else { return nil }
         return root.appendingPathComponent("assets/\(hash).\(ext)")
@@ -648,4 +735,19 @@ final class StudioModel: ObservableObject {
         }
     }
 
+}
+
+@MainActor
+private final class ReadingSaveAssertion {
+    private var identifier = UIBackgroundTaskIdentifier.invalid
+    init() {
+        identifier = UIApplication.shared.beginBackgroundTask(withName: "Reading position") { [weak self] in
+            Task { @MainActor in self?.end() }
+        }
+    }
+    func end() {
+        guard identifier != .invalid else { return }
+        UIApplication.shared.endBackgroundTask(identifier)
+        identifier = .invalid
+    }
 }

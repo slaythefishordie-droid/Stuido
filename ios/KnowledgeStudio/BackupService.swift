@@ -19,6 +19,7 @@ struct ValidatedBackup: Sendable {
 enum BackupService {
     nonisolated private static let metadataLimit = 64 * 1024 * 1024
     static func export(model: StudioModel) async throws -> URL {
+        try await model.flushReadingPositions()
         guard let repository = model.repository else { throw LibraryError.invalid("知识库不可用") }
         let snapshot = try repository.read()
         let root = model.root
@@ -134,6 +135,7 @@ enum BackupService {
         }
     }
     static func restore(_ validated: Validated, model: StudioModel) async throws {
+        try await model.flushReadingPositions()
         guard let repository = model.repository else { throw LibraryError.invalid("知识库不可用") }
         let root = model.root
         try await Task.detached(priority: .userInitiated) { try prepareRestore(validated, root: root) }.value

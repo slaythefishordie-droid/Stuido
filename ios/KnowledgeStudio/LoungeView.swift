@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
 
 struct LoungeView: View {
     @EnvironmentObject private var hub: LoungeHub
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var music = false
     @State private var schedule = false
@@ -37,7 +37,7 @@ struct LoungeView: View {
             }
             .sheet(isPresented: $schedule) { LoungeTimerPanel().environmentObject(hub) }
             .sheet(isPresented: $stats) {
-                NavigationStack { LoungeStatsView().environmentObject(hub).environmentObject(model) }
+                NavigationStack { LoungeStatsView().environmentObject(hub).environment(model) }
             }
             .sheet(item: $prompts) { LoungePromptLibrary(kind: $0).environmentObject(hub) }
     }
@@ -246,7 +246,7 @@ private struct LoungeTimerPanel: View {
 
 private struct LoungeStatsView: View {
     @EnvironmentObject private var hub: LoungeHub
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var days = 7
     var body: some View {
@@ -317,7 +317,7 @@ private struct LoungeStatsView: View {
     private struct SourceTime: Identifiable { let id: UUID?; let title: String; let seconds: TimeInterval }
     private func sourceName(_ id: UUID?) -> String {
         guard let id else { return "书房其他活动" }
-        return model.state.sources.first { $0.id == id }?.title ?? "已移除的资料"
+        return model.sources.first { $0.id == id }?.title ?? "已移除的资料"
     }
     private func historyDays(_ records: [StudyInterval], calendar: Calendar) -> [Day] {
         var totals: [Date: TimeInterval] = [:]

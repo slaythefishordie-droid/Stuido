@@ -1,0 +1,285 @@
+{
+  "configuration" : "Release",
+  "datasets" : [
+    {
+      "cards" : 100,
+      "marks" : 200,
+      "metrics" : {
+        "indexed_marks_for_100_sources" : {
+          "checksum" : 1400,
+          "max_ms" : 0.052488,
+          "median_ms" : 0.021091,
+          "samples_ms" : [
+            0.020791,
+            0.020801,
+            0.020932,
+            0.021091,
+            0.026379,
+            0.047861,
+            0.052488
+          ]
+        },
+        "mark_index_build" : {
+          "checksum" : 140,
+          "max_ms" : 0.032479,
+          "median_ms" : 0.02675,
+          "samples_ms" : [
+            0.025398,
+            0.025959,
+            0.026279,
+            0.02675,
+            0.027892,
+            0.028232,
+            0.032479
+          ]
+        },
+        "marks_for_100_sources" : {
+          "checksum" : 1400,
+          "max_ms" : 0.344694,
+          "median_ms" : 0.240999,
+          "samples_ms" : [
+            0.240019,
+            0.240528,
+            0.240629,
+            0.240999,
+            0.24118,
+            0.242472,
+            0.344694
+          ]
+        },
+        "no_change_transaction" : {
+          "checksum" : 1400,
+          "max_ms" : 0.015863,
+          "median_ms" : 0.010786,
+          "samples_ms" : [
+            0.010276,
+            0.010305,
+            0.010555,
+            0.010786,
+            0.011026,
+            0.011266,
+            0.015863
+          ]
+        },
+        "read" : {
+          "checksum" : 700,
+          "max_ms" : 0.050365,
+          "median_ms" : 0.011428,
+          "samples_ms" : [
+            0.011067,
+            0.011076,
+            0.011137,
+            0.011428,
+            0.012268,
+            0.015243,
+            0.050365
+          ]
+        },
+        "reading_position_transaction" : {
+          "checksum" : 70,
+          "max_ms" : 6.469321,
+          "median_ms" : 5.673284,
+          "samples_ms" : [
+            5.390001,
+            5.439345,
+            5.542168,
+            5.673284,
+            5.68451,
+            5.739792,
+            6.469321
+          ]
+        }
+      },
+      "snapshot_bytes" : 105320,
+      "sources" : 10
+    },
+    {
+      "cards" : 2000,
+      "marks" : 4000,
+      "metrics" : {
+        "indexed_marks_for_100_sources" : {
+          "checksum" : 14000,
+          "max_ms" : 0.280298,
+          "median_ms" : 0.218466,
+          "samples_ms" : [
+            0.216172,
+            0.217424,
+            0.217654,
+            0.218466,
+            0.2212,
+            0.235291,
+            0.280298
+          ]
+        },
+        "mark_index_build" : {
+          "checksum" : 140,
+          "max_ms" : 0.742908,
+          "median_ms" : 0.552324,
+          "samples_ms" : [
+            0.513546,
+            0.515449,
+            0.538714,
+            0.552324,
+            0.598522,
+            0.688117,
+            0.742908
+          ]
+        },
+        "marks_for_100_sources" : {
+          "checksum" : 14000,
+          "max_ms" : 47.193443,
+          "median_ms" : 45.866654,
+          "samples_ms" : [
+            45.388551,
+            45.516862,
+            45.79618,
+            45.866654,
+            46.070278,
+            46.455333,
+            47.193443
+          ]
+        },
+        "no_change_transaction" : {
+          "checksum" : 28000,
+          "max_ms" : 0.015543,
+          "median_ms" : 0.010796,
+          "samples_ms" : [
+            0.010506,
+            0.010626,
+            0.010656,
+            0.010796,
+            0.010876,
+            0.011377,
+            0.015543
+          ]
+        },
+        "read" : {
+          "checksum" : 14000,
+          "max_ms" : 0.088853,
+          "median_ms" : 0.011648,
+          "samples_ms" : [
+            0.011347,
+            0.011567,
+            0.011628,
+            0.011648,
+            0.012378,
+            0.015012,
+            0.088853
+          ]
+        },
+        "reading_position_transaction" : {
+          "checksum" : 1400,
+          "max_ms" : 103.421946,
+          "median_ms" : 99.709673,
+          "samples_ms" : [
+            95.467539,
+            96.295985,
+            97.976027,
+            99.709673,
+            100.074713,
+            101.167653,
+            103.421946
+          ]
+        }
+      },
+      "snapshot_bytes" : 2114904,
+      "sources" : 200
+    },
+    {
+      "cards" : 10000,
+      "marks" : 20000,
+      "metrics" : {
+        "indexed_marks_for_100_sources" : {
+          "checksum" : 14000,
+          "max_ms" : 0.286277,
+          "median_ms" : 0.220709,
+          "samples_ms" : [
+            0.218015,
+            0.218566,
+            0.219568,
+            0.220709,
+            0.220829,
+            0.235562,
+            0.286277
+          ]
+        },
+        "mark_index_build" : {
+          "checksum" : 140,
+          "max_ms" : 2.987977,
+          "median_ms" : 2.858013,
+          "samples_ms" : [
+            2.555752,
+            2.577105,
+            2.590464,
+            2.858013,
+            2.885354,
+            2.938273,
+            2.987977
+          ]
+        },
+        "marks_for_100_sources" : {
+          "checksum" : 14000,
+          "max_ms" : 247.192633,
+          "median_ms" : 234.252458,
+          "samples_ms" : [
+            229.021133,
+            232.73229,
+            232.783748,
+            234.252458,
+            234.550863,
+            240.104709,
+            247.192633
+          ]
+        },
+        "no_change_transaction" : {
+          "checksum" : 140000,
+          "max_ms" : 0.016655,
+          "median_ms" : 0.010606,
+          "samples_ms" : [
+            0.010375,
+            0.010425,
+            0.010516,
+            0.010606,
+            0.010927,
+            0.011077,
+            0.016655
+          ]
+        },
+        "read" : {
+          "checksum" : 70000,
+          "max_ms" : 0.124076,
+          "median_ms" : 0.011497,
+          "samples_ms" : [
+            0.011076,
+            0.011146,
+            0.011257,
+            0.011497,
+            0.012468,
+            0.015803,
+            0.124076
+          ]
+        },
+        "reading_position_transaction" : {
+          "checksum" : 7000,
+          "max_ms" : 491.464247,
+          "median_ms" : 484.419553,
+          "samples_ms" : [
+            480.332551,
+            481.51841,
+            482.715221,
+            484.419553,
+            485.425037,
+            489.797411,
+            491.464247
+          ]
+        }
+      },
+      "snapshot_bytes" : 10593188,
+      "sources" : 1000
+    }
+  ],
+  "iterations" : 7,
+  "label" : "optimized-v3.7",
+  "os" : "Debian GNU\/Linux 13 (trixie)",
+  "scope" : "Synthetic repository operations; not iPad frame rate, touch latency, or energy measurements."
+}

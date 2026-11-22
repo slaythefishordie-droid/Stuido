@@ -2,19 +2,19 @@ import KnowledgeCore
 import SwiftUI
 
 struct StudyHomeView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     @Environment(\.studyNavigation) private var navigation
     @AppStorage("studyHomeReviewFirst") private var reviewFirst = false
     @ScaledMetric(relativeTo: .body) private var columnWidth = 305.0
     private var reading: [LibrarySource] {
-        model.state.sources.filter { $0.deletedAt == nil && $0.lastLocation != nil }
+        model.sources.filter { $0.deletedAt == nil && $0.lastLocation != nil }
             .sorted { ($0.lastReadAt ?? $0.updatedAt) > ($1.lastReadAt ?? $1.updatedAt) }
     }
     private var cards: [LibraryCard] {
-        model.state.cards.filter { $0.deletedAt == nil }.sorted { $0.updatedAt > $1.updatedAt }
+        model.cards.filter { $0.deletedAt == nil }.sorted { $0.updatedAt > $1.updatedAt }
     }
     private var projects: [LibraryProject] {
-        Array(model.state.projects.filter { $0.deletedAt == nil }.reversed())
+        Array(model.projects.filter { $0.deletedAt == nil }.reversed())
     }
 
     var body: some View {
@@ -90,7 +90,7 @@ struct StudyHomeView: View {
 
     private var reviewModule: some View {
         TimelineView(.periodic(from: .now, by: 60)) { clock in
-            let count = TodayReview.due(model.state.cards, at: clock.date).count
+            let count = TodayReview.due(model.cards, at: clock.date).count
             Button { navigation.open(.today) } label: {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {

@@ -2,7 +2,7 @@ import KnowledgeCore
 import SwiftUI
 
 struct ProjectBoardView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     let projectID: UUID
     @State private var text = ""
     @GestureState private var drag: NodeDrag?
@@ -24,7 +24,7 @@ struct ProjectBoardView: View {
     @State private var undoBoards: [ProjectBoard] = []
     @State private var expectedBoard: ProjectBoard?
     private var board: ProjectBoard {
-        model.state.projects.first { $0.id == projectID }?.board ?? ProjectBoard()
+        model.projects.first { $0.id == projectID }?.board ?? ProjectBoard()
     }
     private func change(_ action: (inout ProjectBoard) -> Void) {
         let previous = board
@@ -260,15 +260,15 @@ struct ProjectBoardView: View {
     private func contentSheet(_ node: BoardNode) -> some View {
         NavigationStack {
             nodeContent(node).toolbar { Button("完成") { opened = nil } }
-        }.environmentObject(model)
+        }.environment(model)
     }
     @ViewBuilder private func nodeContent(_ node: BoardNode) -> some View {
         if node.kind == .source,
-            let source = model.state.sources.first(where: { $0.id == node.targetID && $0.deletedAt == nil })
+            let source = model.sources.first(where: { $0.id == node.targetID && $0.deletedAt == nil })
         {
             SourceReaderView(source: source, location: source.lastLocation)
         } else if node.kind == .card, let id = node.targetID,
-            model.state.cards.contains(where: { $0.id == id && $0.deletedAt == nil })
+            model.cards.contains(where: { $0.id == id && $0.deletedAt == nil })
         {
             CardDetailView(cardID: id)
         } else {
@@ -279,7 +279,7 @@ struct ProjectBoardView: View {
 
 
 private struct BoardObjectPicker: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     let projectID: UUID
     let existingTargets: Set<UUID>
@@ -297,16 +297,16 @@ private struct BoardObjectPicker: View {
     }
 
     private var choices: [Choice] {
-        let project = model.state.projects.first { $0.id == (filterProject ?? projectID) && $0.deletedAt == nil }
+        let project = model.projects.first { $0.id == (filterProject ?? projectID) && $0.deletedAt == nil }
         let ids = Set((project?.sourceIDs ?? []) + (project?.cardIDs ?? []))
         var results: [Choice] = []
         if kind != "卡片" {
-            results += model.state.sources.lazy.filter { $0.deletedAt == nil }.map {
+            results += model.sources.lazy.filter { $0.deletedAt == nil }.map {
                 Choice(id: $0.id, title: $0.title, kind: .source, date: $0.lastReadAt ?? $0.updatedAt)
             }
         }
         if kind != "资料" {
-            results += model.state.cards.lazy.filter { $0.deletedAt == nil }.map {
+            results += model.cards.lazy.filter { $0.deletedAt == nil }.map {
                 Choice(id: $0.id, title: $0.title, kind: .card, date: $0.updatedAt)
             }
         }
@@ -326,7 +326,7 @@ private struct BoardObjectPicker: View {
                 if scope == "项目" {
                     Picker("项目", selection: $filterProject) {
                         Text("当前项目").tag(nil as UUID?)
-                        ForEach(model.state.projects.filter { $0.deletedAt == nil && $0.id != projectID }) {
+                        ForEach(model.projects.filter { $0.deletedAt == nil && $0.id != projectID }) {
                             Text($0.title).tag(Optional($0.id))
                         }
                     }

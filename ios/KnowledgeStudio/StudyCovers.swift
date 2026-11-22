@@ -43,6 +43,7 @@ struct StudySourceCover: View {
     @State private var thumbnail: UIImage?
     @State private var author: String?
     @State private var editorial: UIImage?
+    @State private var custom: UIImage?
 
     private struct RequestKey: Hashable {
         let asset: URL?
@@ -92,15 +93,23 @@ struct StudySourceCover: View {
             .task(id: w > 80 ? editorialKey : nil) {
                 editorial = nil
                 guard w > 80, let key = editorialKey else { return }
-                editorial = StudyThumbnails.editorialArt(key: key) {
+                let rendered = await StudyThumbnails.editorialArt(key: key) {
                     let size = isWide ? CGSize(width: 340, height: 218) : CGSize(width: 236, height: 342)
                     let renderer = ImageRenderer(content: editorialCover(showTitle: true)
                         .frame(width: size.width, height: size.height))
                     renderer.scale = 1
                     return renderer.uiImage
                 }
+                if !Task.isCancelled { editorial = rendered }
             }
         }.accessibilityHidden(true)
+            .task(id: source.coverImage) {
+                custom = nil
+                if let data = source.coverImage {
+                    let image = await StudyThumbnails.customArt(data)
+                    if !Task.isCancelled { custom = image }
+                }
+            }
             .task(id: RequestKey(asset: asset, mode: source.resolvedCoverMode, revision: revision)) {
                 thumbnail = nil
                 author = nil
@@ -122,7 +131,7 @@ struct StudySourceCover: View {
 
     private var displayImage: UIImage? {
         switch source.resolvedCoverMode {
-        case .custom: source.coverImage.flatMap { UIImage(data: $0) }
+        case .custom: custom
         case .original: thumbnail
         case .generated: nil
         }
@@ -216,91 +225,141 @@ enum StudyThumbnails {
         }
     }
 
-    private static let memory = NSCache<NSURL, Artwork>()
-    private static let editorialMemory = NSCache<NSString, UIImage>()
-    private static var requests: [URL: (UUID, Task<Artwork, Never>)] = [:]
+    private static var memory = CostBoundedCache<URL, Artwork>(limit: 24 * 1_048_576)
+    private static var editorialMemory = CostBoundedCache<String, UIImage>(limit: 12 * 1_048_576)
+    private static var customMemory = CostBoundedCache<Data, UIImage>(limit: 12 * 1_048_576)
+    @MainActor private final class Request {
+        let id = UUID()
+        let task: Task<Artwork, Never>
+        var consumers: Set<UUID> = []
+        init(task: Task<Artwork, Never>) { self.task = task }
+    }
+    private static var requests: [URL: Request] = [:]
+    private static var activeLoads = 0
+    private static var waiting: [CheckedContinuation<Void, Never>] = []
+    private static var generation = 0
 
     static var cacheDirectory: URL? {
         FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first?
             .appendingPathComponent("StudyCovers-v2", isDirectory: true)
     }
-
     private static func cacheFile(_ asset: URL) -> URL? {
         cacheDirectory?.appendingPathComponent(asset.lastPathComponent + ".jpg")
     }
-
-    static func clearCache() throws {
-        for (_, task) in requests.values { task.cancel() }
-        requests.removeAll()
-        memory.removeAllObjects()
-        editorialMemory.removeAllObjects()
-        if let cacheDirectory, FileManager.default.fileExists(atPath: cacheDirectory.path) {
-            try FileManager.default.removeItem(at: cacheDirectory)
-        }
+    static func apply(_ budget: PerformanceBudget) {
+        memory.limit = budget.artworkBytes
+        editorialMemory.limit = budget.editorialBytes
+        customMemory.limit = budget.customCoverBytes
     }
-
-    static func editorialArt(key: String, draw: () -> UIImage?) -> UIImage? {
-        if let cached = editorialMemory.object(forKey: key as NSString) { return cached }
+    static func releaseMemory() {
+        generation &+= 1
+        memory.removeAll(); editorialMemory.removeAll(); customMemory.removeAll()
+        for request in requests.values { request.task.cancel() }
+        requests.removeAll()
+    }
+    static func clearCache() async throws {
+        releaseMemory()
+        if let cacheDirectory { try await CoverDiskWorker.shared.clear(cacheDirectory) }
+    }
+    private static func cost(_ image: UIImage?) -> Int {
+        image?.cgImage.map { $0.bytesPerRow * $0.height } ?? 1
+    }
+    static func customArt(_ data: Data) async -> UIImage? {
+        _ = PerformancePolicy.shared
+        if let image = customMemory.value(for: data) { return image }
+        let epoch = generation
+        guard let bitmap = await CoverDiskWorker.shared.read(data), !Task.isCancelled else { return nil }
+        let image = UIImage(cgImage: bitmap.image)
+        if generation == epoch { customMemory.insert(image, for: data, cost: bitmap.cost + data.count) }
+        return image
+    }
+    static func editorialArt(key: String, draw: () -> UIImage?) async -> UIImage? {
+        _ = PerformancePolicy.shared
+        if let cached = editorialMemory.value(for: key) { return cached }
+        let epoch = generation
         let digest = SHA256.hash(data: Data(key.utf8)).map { String(format: "%02x", $0) }.joined()
         let file = cacheDirectory?.appendingPathComponent("editorial-" + digest + ".jpg")
-        let existing = file.flatMap { UIImage(contentsOfFile: $0.path) }
-        guard let image = existing ?? draw() else { return nil }
-        editorialMemory.countLimit = 80
-        editorialMemory.setObject(image, forKey: key as NSString)
-        if existing == nil, let cacheDirectory, let file, let bytes = image.jpegData(compressionQuality: 0.86) {
-            try? FileManager.default.createDirectory(at: cacheDirectory, withIntermediateDirectories: true)
-            try? bytes.write(to: file, options: .atomic)
+        var existing: UIImage?
+        if let file, let bitmap = await CoverDiskWorker.shared.read(file) { existing = UIImage(cgImage: bitmap.image) }
+        guard !Task.isCancelled, generation == epoch, let image = existing ?? draw() else { return nil }
+        editorialMemory.insert(image, for: key, cost: cost(image))
+        if existing == nil, let file, let bitmap = image.cgImage {
+            await CoverDiskWorker.shared.write(CoverBitmap(image: bitmap), to: file, quality: 0.86)
         }
         return image
     }
-
     static func artwork(_ asset: URL, kind: SourceKind) async -> Artwork {
-        if let cached = memory.object(forKey: asset as NSURL) { return cached }
-        if let request = requests[asset] { return await request.1.value }
-
-        let id = UUID()
-        let task = Task { await loadArtwork(asset, kind: kind) }
-        requests[asset] = (id, task)
-        let artwork = await task.value
-        if requests[asset]?.0 == id { requests.removeValue(forKey: asset) }
+        _ = PerformancePolicy.shared
+        if let cached = memory.value(for: asset) { return cached }
+        let request: Request
+        if let existing = requests[asset] { request = existing }
+        else {
+            let epoch = generation
+            request = Request(task: Task { await loadArtwork(asset, kind: kind, epoch: epoch) })
+            requests[asset] = request
+        }
+        let consumer = UUID()
+        request.consumers.insert(consumer)
+        let artwork = await withTaskCancellationHandler {
+            await request.task.value
+        } onCancel: {
+            Task { @MainActor in releaseConsumer(consumer, asset: asset, request: request) }
+        }
+        releaseConsumer(consumer, asset: asset, request: request)
         return artwork
     }
-
-    private static func loadArtwork(_ asset: URL, kind: SourceKind) async -> Artwork {
+    private static func releaseConsumer(_ consumer: UUID, asset: URL, request: Request) {
+        guard requests[asset]?.id == request.id else { return }
+        request.consumers.remove(consumer)
+        if request.consumers.isEmpty {
+            request.task.cancel()
+            requests.removeValue(forKey: asset)
+        }
+    }
+    private static func acquire() async {
+        // Transfer a permit to the next waiter on release, avoiding a polling timer.
+        if activeLoads >= PerformancePolicy.shared.budget.artworkConcurrency {
+            await withCheckedContinuation { waiting.append($0) }
+        } else { activeLoads += 1 }
+    }
+    private static func release() {
+        activeLoads -= 1
+        while activeLoads < PerformancePolicy.shared.budget.artworkConcurrency, !waiting.isEmpty {
+            activeLoads += 1
+            waiting.removeFirst().resume()
+        }
+    }
+    private static func loadArtwork(_ asset: URL, kind: SourceKind, epoch: Int) async -> Artwork {
+        await acquire()
+        let trace = PerformanceTrace.signposter.beginInterval("CoverLoad", id: PerformanceTrace.signposter.makeSignpostID())
+        defer { release(); PerformanceTrace.signposter.endInterval("CoverLoad", trace) }
+        guard !Task.isCancelled else { return Artwork() }
         let file = cacheFile(asset)
-        if let file, let image = UIImage(contentsOfFile: file.path) {
-            let author = try? String(contentsOf: file.appendingPathExtension("author"), encoding: .utf8)
-            let cached = Artwork(image: image, author: author)
-            memory.setObject(cached, forKey: asset as NSURL)
+        if let file, let bitmap = await CoverDiskWorker.shared.read(file) {
+            let author = await CoverDiskWorker.shared.author(asset, cachedFile: file)
+            let cached = Artwork(image: UIImage(cgImage: bitmap.image), author: author)
+            if generation == epoch, !Task.isCancelled { memory.insert(cached, for: asset, cost: bitmap.cost) }
             return cached
         }
-
         let original: Artwork
         switch kind {
         case .epub: original = await epubCover(asset)
-        case .pdf:
-            original = Artwork(author: PDFKit.PDFDocument(url: asset)?
-                .documentAttributes?[PDFDocumentAttribute.authorAttribute] as? String)
+        case .pdf: original = Artwork(author: await CoverDiskWorker.shared.author(asset, cachedFile: nil))
         default: original = Artwork()
         }
+        guard !Task.isCancelled else { return Artwork() }
         let resolved: Artwork
-        if original.image != nil {
-            resolved = original
-        } else {
+        if original.image != nil { resolved = original }
+        else {
             let request = QLThumbnailGenerator.Request(
                 fileAt: asset, size: CGSize(width: 320, height: 420), scale: 1, representationTypes: .thumbnail)
             let image = (try? await QLThumbnailGenerator.shared.generateBestRepresentation(for: request))?.uiImage
             resolved = Artwork(image: image, author: original.author)
         }
-        guard !Task.isCancelled else { return resolved }
-        memory.countLimit = 96
-        memory.setObject(resolved, forKey: asset as NSURL)
-        if let file, let data = resolved.image?.jpegData(compressionQuality: 0.76) {
-            try? FileManager.default.createDirectory(at: file.deletingLastPathComponent(), withIntermediateDirectories: true)
-            if let author = resolved.author {
-                try? author.write(to: file.appendingPathExtension("author"), atomically: true, encoding: .utf8)
-            }
-            try? data.write(to: file, options: .atomic)
+        guard !Task.isCancelled, generation == epoch else { return resolved }
+        memory.insert(resolved, for: asset, cost: cost(resolved.image))
+        if let file, let image = resolved.image?.cgImage {
+            await CoverDiskWorker.shared.write(CoverBitmap(image: image), to: file, quality: 0.76, author: resolved.author)
         }
         return resolved
     }
@@ -319,11 +378,12 @@ enum StudyThumbnails {
 
 struct StudyBoardCover: View {
     let project: LibraryProject
+    @State private var custom: UIImage?
 
     var body: some View {
         ZStack {
             StudyTheme.plum
-            if let data = project.boardCoverImage, let image = UIImage(data: data) {
+            if let image = custom {
                 Image(uiImage: image).resizable().scaledToFit()
             } else if let board = project.board, !board.nodes.isEmpty {
                 Canvas { context, size in
@@ -357,6 +417,13 @@ struct StudyBoardCover: View {
                     .foregroundStyle(StudyTheme.copper)
             }
         }.frame(height: 116).clipped().accessibilityHidden(true)
+            .task(id: project.boardCoverImage) {
+                custom = nil
+                if let data = project.boardCoverImage {
+                    let image = await StudyThumbnails.customArt(data)
+                    if !Task.isCancelled { custom = image }
+                }
+            }
     }
 }
 

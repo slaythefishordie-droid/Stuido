@@ -5,10 +5,32 @@ import GRDB
 /// Entity IDs and references are validated before every commit; no implicit cascade.
 public final class LibraryRepository: Sendable {
     private let database: DatabaseQueue
+    // Access is confined to DatabaseQueue's serialized connection, including publication
+    // after COMMIT. No mutable state escapes the queue; LibraryState has value semantics.
+    private final class SnapshotCache: @unchecked Sendable {
+        var version: Int64?
+        var state: LibraryState?
+    }
+    private let cache = SnapshotCache()
+
+    private func load(_ db: Database, version: Int64) throws -> LibraryState {
+        if cache.version == version, let state = cache.state { return state }
+        guard let data = try Data.fetchOne(db, sql: "SELECT payload FROM library_state WHERE id = 1")
+        else { throw LibraryError.invalid("知识库记录缺失") }
+        let state = try JSONDecoder().decode(LibraryState.self, from: data)
+        try state.validate()
+        cache.state = state
+        cache.version = version
+        return state
+    }
     public init(url: URL) throws {
         try FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
-        database = try DatabaseQueue(path: url.path)
+        var configuration = Configuration()
+        // Another window/process may briefly own SQLite's write lock. Give its
+        // transaction time to finish instead of failing a valid concurrent edit.
+        configuration.busyMode = .timeout(5)
+        database = try DatabaseQueue(path: url.path, configuration: configuration)
         var migrator = DatabaseMigrator()
         migrator.registerMigration("library-v1") { db in
             try db.execute(
@@ -24,32 +46,42 @@ public final class LibraryRepository: Sendable {
     }
     public func read() throws -> LibraryState {
         try database.read { db in
-            guard let data = try Data.fetchOne(db, sql: "SELECT payload FROM library_state WHERE id = 1")
-            else { throw LibraryError.invalid("知识库记录缺失") }
-            let state = try JSONDecoder().decode(LibraryState.self, from: data)
-            try state.validate()
-            return state
+            // SQLite changes this value when another connection commits. It is not a
+            // wall clock or file timestamp, so same-size and rapid updates are visible.
+            let version = try Int64.fetchOne(db, sql: "PRAGMA data_version")!
+            return try load(db, version: version)
         }
     }
     public func update(_ mutate: (inout LibraryState) throws -> Void) throws {
         _ = try updateAndRead(mutate)
     }
 
-    /// Returns the snapshot only after SQLite successfully commits the transaction.
+    /// Returns and caches a snapshot only after SQLite successfully commits.
     public func updateAndRead(_ mutate: (inout LibraryState) throws -> Void) throws -> LibraryState {
-        try database.write { db in
-            guard let data = try Data.fetchOne(db, sql: "SELECT payload FROM library_state WHERE id = 1")
-            else { throw LibraryError.invalid("知识库记录缺失") }
-            var state = try JSONDecoder().decode(LibraryState.self, from: data)
-            try state.validate()
-            let previous = state
-            try mutate(&state)
-            guard state != previous else { return previous }
-            try state.validate()
-            try db.execute(
-                sql: "UPDATE library_state SET payload = ? WHERE id = 1",
-                arguments: [try JSONEncoder().encode(state)])
-            return state
+        try database.writeWithoutTransaction { db in
+            var committed: LibraryState!
+            var version: Int64 = 0
+            try db.inTransaction(.immediate) {
+                // Acquire the writer lock BEFORE checking the external revision. A
+                // second repository cannot change the snapshot between load and save.
+                version = try Int64.fetchOne(db, sql: "PRAGMA data_version")!
+                let previous = try load(db, version: version)
+                var next = previous
+                try mutate(&next)
+                if next != previous {
+                    try next.validate()
+                    try db.execute(
+                        sql: "UPDATE library_state SET payload = ? WHERE id = 1",
+                        arguments: [try JSONEncoder().encode(next)])
+                }
+                committed = next
+                return .commit
+            }
+            // Use the version observed under the lock. Reading a NEW version after
+            // COMMIT could incorrectly tag this snapshot with a later external write.
+            cache.state = committed
+            cache.version = version
+            return committed
         }
     }
     public func restore(_ snapshot: LibraryState) throws {

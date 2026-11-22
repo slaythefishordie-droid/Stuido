@@ -89,7 +89,7 @@ final class LibraryAppTests: XCTestCase {
             locator.rectangles, decoded.rectangles, "Page-space geometry must not be rewritten after rotation"
         )
     }
-    func testPDFSourceAnchorCentersInTheActualPDFKitViewport() throws {
+    func testPDFSourceAnchorCentersInTheActualPDFKitViewport() async throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
         try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
@@ -108,6 +108,7 @@ final class LibraryAppTests: XCTestCase {
         locator.fileFingerprint = fingerprint
         locator.rectangles = [HighlightRect(page: 2, x: 380, y: 720, width: 60, height: 32)]
         let session = PDFSession(url: file, location: locator)
+        await session.open()
         let scene = try XCTUnwrap(UIApplication.shared.connectedScenes.compactMap { $0 as? UIWindowScene }.first)
         let active = scene.windows.first { $0.isKeyWindow }
         let window = UIWindow(windowScene: scene)

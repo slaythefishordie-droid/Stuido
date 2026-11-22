@@ -7,7 +7,7 @@ import PDFKit
 import SwiftUI
 
 struct SourceReaderView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     let source: LibrarySource
     var location: ReadingLocator?
     var closeReader: (@MainActor () -> Void)? = nil
@@ -18,7 +18,7 @@ struct SourceReaderView: View {
     private var book: Bool { [.pdf, .epub].contains(source.kind) }
     private var immersive: Bool { [.pdf, .epub, .local_video].contains(source.kind) }
     var body: some View {
-        let live = model.state.sources.first { $0.id == self.source.id }
+        let live = model.sources.first { $0.id == self.source.id }
         let source = live ?? self.source
         let localFile = model.assetURL(source).flatMap { url in
             FileManager.default.fileExists(atPath: url.path) ? url : nil
@@ -77,7 +77,7 @@ struct SourceReaderView: View {
 
     private func externalSource(_ source: LibrarySource, url: URL) -> some View {
         let excerpt = location.flatMap { locator in
-            model.state.marks.first(where: {
+            model.marks.first(where: {
                 $0.sourceID == source.id && $0.locator == locator && !$0.excerpt.isEmpty && $0.deletedAt == nil
             })?.excerpt
         }
@@ -115,6 +115,10 @@ struct SourceReaderView: View {
     }
 }
 
+// Construct on a worker, then transfer exclusive use to the main actor. The
+// worker never reads or mutates the PDFDocument after returning this container.
+private struct OpenedPDF: @unchecked Sendable { let document: PDFKit.PDFDocument? }
+
 @MainActor
 final class PDFSession: ObservableObject {
     let view = StudyPDFView()
@@ -122,11 +126,25 @@ final class PDFSession: ObservableObject {
     @Published var anchorStatus = "正在核对原始资料…"
     @Published var verifiedFingerprint: String?
     private var restored = false
+    private let url: URL
+    @Published private(set) var loading = true
     init(url: URL, location: ReadingLocator?) {
+        self.url = url
         view.autoScales = true
         view.displayMode = .singlePageContinuous
-        view.document = PDFKit.PDFDocument(url: url)
-
+    }
+    func open() async {
+        guard view.document == nil else { return }
+        loading = true
+        let trace = PerformanceTrace.signposter.beginInterval("PDFOpen", id: PerformanceTrace.signposter.makeSignpostID())
+        defer { loading = false; PerformanceTrace.signposter.endInterval("PDFOpen", trace) }
+        let url = url
+        let worker = Task.detached(priority: .userInitiated) {
+            autoreleasepool { OpenedPDF(document: PDFKit.PDFDocument(url: url)) }
+        }
+        let opened = await withTaskCancellationHandler { await worker.value } onCancel: { worker.cancel() }
+        guard !Task.isCancelled else { return }
+        view.document = opened.document
     }
     func restore(_ locator: ReadingLocator?, fingerprint: String?) {
         guard !restored, let locator, let document = view.document else { return }
@@ -233,7 +251,7 @@ final class PDFSession: ObservableObject {
     }
 }
 struct PDFStudyView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     let source: LibrarySource
     @State private var regionMode = false
     @State private var recognizing = false
@@ -294,7 +312,7 @@ struct PDFStudyView: View {
         .sheet(item: $selectedMark) { mark in
             NavigationStack {
                 MarkDetailView(markID: mark.id).toolbar { Button("完成") { selectedMark = nil } }
-            }.environmentObject(model)
+            }.environment(model)
         }.sheet(
             isPresented: Binding(get: { dictionaryWord != nil }, set: { if !$0 { dictionaryWord = nil } })
         ) {
@@ -306,8 +324,12 @@ struct PDFStudyView: View {
         }.task {
             session.view.capture = { capture(kind: $0, annotate: $1) }
             session.view.dictionary = { dictionaryWord = $0 }
+            await session.open()
+            guard !Task.isCancelled, session.view.document != nil else { return }
+            updateLayout()
             do {
                 let fingerprint = try await Task.detached { try StudioModel.hash(url) }.value
+                guard !Task.isCancelled else { return }
                 guard fingerprint == source.assetHash else {
                     session.anchorStatus = "文件与资料指纹不一致，已停止新增标记与精确回跳"
                     return
@@ -321,21 +343,22 @@ struct PDFStudyView: View {
         }.onDisappear {
             session.ink.flush()
             if let locator = session.readingPosition() {
-                model.saveLocation(sourceID: source.id, locator: locator)
+                model.queueReadingPosition(sourceID: source.id, locator: locator)
             }
         }
     }
 
     private var readerContent: some View {
         VStack(spacing: 3) {
-            if session.view.document == nil { Text("PDF 无法打开或已损坏，原文件保留。") }
+            if session.loading { ProgressView("正在打开 PDF…") }
+            else if session.view.document == nil { Text("PDF 无法打开或已损坏，原文件保留。") }
             PDFHost(
                 view: session.view,
-                marks: model.state.marks.filter { $0.sourceID == source.id && $0.deletedAt == nil },
+                marks: model.markIndex.marks(for: source.id),
                 regionMode: regionMode && session.verifiedFingerprint != nil && session.ink.tool == .select,
                 fingerprint: session.verifiedFingerprint,
                 marksInteractive: session.ink.tool == .select && !regionMode,
-                onMark: { id in selectedMark = model.state.marks.first { $0.id == id && $0.deletedAt == nil } },
+                onMark: { id in selectedMark = model.marks.first { $0.id == id && $0.deletedAt == nil } },
                 onRegion: saveRegion)
             if recognizing { ProgressView("正在识别选区…").font(.caption) }
         }
@@ -461,6 +484,10 @@ struct PDFHost: UIViewRepresentable {
             coordinator.document = document
         }
 
+        guard coordinator.lastMarks != marks || coordinator.lastFingerprint != fingerprint else { return }
+        coordinator.lastMarks = marks
+        coordinator.lastFingerprint = fingerprint
+
         var latest: [Int: [Highlight]] = [:]
         if let fingerprint {
             for mark in marks where mark.locator.fileFingerprint == nil || mark.locator.fileFingerprint == fingerprint {
@@ -522,6 +549,8 @@ struct PDFHost: UIViewRepresentable {
     func makeCoordinator() -> Coordinator { Coordinator() }
     @MainActor final class Coordinator: NSObject, UIGestureRecognizerDelegate {
         weak var document: PDFKit.PDFDocument?
+        var lastMarks: [LibraryMark]?
+        var lastFingerprint: String?
         var highlights: [Int: [Highlight]] = [:]
         var annotations: [Int: (PDFPage, [PDFAnnotation])] = [:]
 
@@ -533,6 +562,8 @@ struct PDFHost: UIViewRepresentable {
         func removeHighlights() {
             for number in Array(annotations.keys) { removeHighlights(on: number) }
             highlights.removeAll()
+            lastMarks = nil
+            lastFingerprint = nil
         }
         var gesture: UILongPressGestureRecognizer?
         var tap: UITapGestureRecognizer?
@@ -676,7 +707,7 @@ final class VideoSession: ObservableObject {
     }
 }
 struct LocalVideoStudyView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     let source: LibrarySource
     @StateObject private var session: VideoSession
     init(source: LibrarySource, url: URL, location: ReadingLocator?) {
@@ -708,7 +739,7 @@ struct LocalVideoStudyView: View {
             }.padding(.horizontal, 14).padding(.vertical, 7).background(StudyTheme.mat)
         }.sheet(isPresented: $showMarks) {
             NavigationStack {
-                List(model.state.marks.filter { $0.sourceID == source.id && $0.deletedAt == nil }) { mark in
+                List(model.markIndex.marks(for: source.id)) { mark in
                     Button {
                         guard let seconds = mark.locator.seconds else { return }
                         session.clearLoop()
@@ -736,7 +767,7 @@ struct LocalVideoStudyView: View {
             session.player.pause()
             session.clearLoop()
             if seconds.isFinite && seconds >= 0 {
-                model.saveLocation(
+                model.queueReadingPosition(
                     sourceID: source.id, locator: ReadingLocator(kind: "video", seconds: seconds))
             }
         }
@@ -941,7 +972,7 @@ final class StudyEPUBContainer: UIViewController {
     @objc func markSentence() { capture?(.key_sentence) }
 }
 struct EPUBStudyView: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     let source: LibrarySource, url: URL
     let location: ReadingLocator?
     @StateObject private var session = EPUBSession()
@@ -975,8 +1006,8 @@ struct EPUBStudyView: View {
                 applyPreferences()
             }
         }.task {
-            session.selectMark = { id in selectedMark = model.state.marks.first { $0.id == id } }
-            session.savePosition = { model.saveLocation(sourceID: source.id, locator: $0) }
+            session.selectMark = { id in selectedMark = model.marks.first { $0.id == id } }
+            session.savePosition = { model.queueReadingPosition(sourceID: source.id, locator: $0) }
             session.saveSelection = { locator, text, kind in
                 model.saveMark(source: source, locator: locator, excerpt: text, kind: kind)
                 return model.message == nil
@@ -988,7 +1019,7 @@ struct EPUBStudyView: View {
         .sheet(item: $selectedMark) { mark in
             NavigationStack {
                 MarkDetailView(markID: mark.id).toolbar { Button("完成") { selectedMark = nil } }
-            }.environmentObject(model)
+            }.environment(model)
         }
         .onChange(of: fontSize) { _, _ in applyPreferences() }
         .onChange(of: lineHeight) { _, _ in applyPreferences() }
@@ -1030,7 +1061,7 @@ struct EPUBStudyView: View {
         }
         .onDisappear {
             if let value = try? session.location(selection: false) {
-                model.saveLocation(sourceID: source.id, locator: value.0)
+                model.queueReadingPosition(sourceID: source.id, locator: value.0)
             }
         }
     }
@@ -1051,7 +1082,7 @@ struct EPUBStudyView: View {
             } else if let navigator = session.navigator {
                 EPUBHost(
                     navigator: navigator,
-                    marks: model.state.marks.filter { $0.sourceID == source.id && $0.deletedAt == nil },
+                    marks: model.markIndex.marks(for: source.id),
                     capture: { session.captureSelection?($0) })
             } else { ProgressView("正在打开 EPUB…") }
         }

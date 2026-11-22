@@ -4,7 +4,7 @@ import SwiftUI
 
 /// The note has its own fixed coordinate space. The Mark retains the existing EPUB Locator.
 struct EPUBInkNote: View {
-    @EnvironmentObject private var model: StudioModel
+    @Environment(StudioModel.self) private var model
     @Environment(\.dismiss) private var dismiss
     @State private var drawing = PKDrawing()
     @State private var erasing = false
