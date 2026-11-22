@@ -159,3 +159,22 @@ V2-01 网络证据补充：2026-11-20 通过网页检索核对公开录音与许
 
 
 BUILD-10 接续：运行 44691897830 的核心 30 项通过，白板拆分后不再报该位置错误；编译继续定位到 StudioView 的 InboxView.body 类型推断超时。按相同职责拆分分组/标记行/操作栏，并一次构建来源索引和分组，避免原嵌套表达式重复过滤。没有反复修改同一个未进展的表达式；本次为收集箱首次修复。仍待最终原生测试，不将编译进展标为测试通过。
+
+
+## PERF-03 · v3.7 整库热路径与主线程工作（2026-11-22）
+
+- 证据：固定 fixture v2 的一万卡片库热读约 502 ms、阅读位置写入约 1004 ms（Linux Release，非 iPad）。同一聚合 JSON 重复解码/校验、ObservableObject 全局广播、主线程封面 I/O 和笔迹/标记整库写入叠加。
+- 处理：GRDB 队列内有版本失效的缓存、提交后发布、按集合 Observation、有序后台阅读写入和批量等待、ImageIO actor 与有界预算。完整根因、测量和残余风险在 PERFORMANCE_AUDIT.md / PERFORMANCE_RESULTS.md，避免在这里重复全部表格。
+- 回归发现：默认 SQLite busy 策略让两个连接的并发测试报 `database is locked`，改为 5 秒有限等待；测试覆盖 80 个并发更新、回滚、损坏、外部恢复与重开。生产同步入口等待风险仍需真机分析。
+- 解除条件：原生完整回归通过后，继续完成低电量、大库、实际触控/能耗/长时内存验收；不能凭 Linux 热读数字宣布整 App 达标。
+
+## BUILD-11 · 原生测试直接调用传递依赖的链接符号（2026-11-22）
+
+- `44969553523` 的 App/扩展编译成功，但 RepositoryCacheTests 直接 import GRDB 后，原生测试链接出现 GRDB.Configuration / DatabaseQueue 等 undefined symbol。SwiftPM 核心测试通过并不代表宿主测试具备相同链接可见性。
+- 保留故障覆盖，改用系统 SQLite C API 创建外部连接、注入拒绝 UPDATE 的 trigger 和损坏 payload；未删测试、未向产品引入第二份 GRDB，也未更换原生工作流。原生复验结果见进度。
+
+## DEV-02 · 性能夹具和 Cloud 本地工具（2026-11-22）
+
+- 基准比较发现 snapshot_bytes 有少量差异：Card 的默认时间仍为 Date()。固定 Card 时间和 CardReference UUID，增加 fixture_version 与严格规模/字节数/checksum 比较，基线与候选成对重跑。首次原始数据保留，但不与最终夹具混比。
+- 本环境没有 Swift/SQLite 开发头；使用签名校验的 Swift 6.2.4 工具链与本地解包的 Debian SQLite 头文件完成核心测试，没有改系统目录或项目依赖。
+- npm 默认缓存目录不可写，改用 `/tmp/ks-performance-tools/npm-cache`，保留 lockfile，执行 `npm ci --ignore-scripts`。不要为沙箱缓存错误升级依赖。

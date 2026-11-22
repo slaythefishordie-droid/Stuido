@@ -20,6 +20,7 @@ public struct PerformanceBudget: Equatable, Sendable {
     /// Foreground bookkeeping sleeps until useful work is due. A failed save gets
     /// a bounded retry instead of spinning. Deadlines remain wall-clock based.
     public static func nextWakeDelay(now: Date, checkpointIn: TimeInterval, deadlines: [Date]) -> TimeInterval {
-        max(0.25, min(max(0, checkpointIn), deadlines.map { $0.timeIntervalSince(now) }.min() ?? 30))
+        let delay = min(max(0, checkpointIn), deadlines.map { $0.timeIntervalSince(now) }.min() ?? 30)
+        return delay <= 0 ? 1 : delay
     }
 }

@@ -405,11 +405,14 @@ struct PDFStudyView: View {
         regionMode = false
         let page = session.view.document?.page(at: rect.page - 1)
         if page?.string?.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false {
-            model.saveMark(source: source, locator: locator, kind: color)
+            model.scheduleReaderSave {
+                do { try await model.saveMarkAsync(source: source, locator: locator, kind: color) }
+                catch { model.message = error.localizedDescription }
+            }
             return
         }
         recognizing = true
-        Task {
+        model.scheduleReaderSave {
             defer { recognizing = false }
             let target = CGRect(x: rect.x, y: rect.y, width: rect.width, height: rect.height)
             let results = (try? await PDFRecognition.recognize(url: url, pageNumber: rect.page)) ?? []
@@ -418,7 +421,8 @@ struct PDFStudyView: View {
                 return target.contains(CGPoint(x: line.midX, y: line.midY))
             }.sorted { $0.rect.y > $1.rect.y }.map(\.text).joined(separator: "\n")
             locator.anchorText = excerpt.isEmpty ? nil : excerpt
-            model.saveMark(source: source, locator: locator, excerpt: excerpt, kind: color)
+            do { try await model.saveMarkAsync(source: source, locator: locator, excerpt: excerpt, kind: color) }
+            catch { model.message = error.localizedDescription }
         }
     }
 
@@ -435,10 +439,12 @@ struct PDFStudyView: View {
         var mark = LibraryMark(
             sourceID: source.id, locator: locator, excerpt: selection?.string ?? "")
         mark.cardKind = kind
-        model.change { $0.marks.append(mark) }
-        if model.message == nil {
-            session.view.clearSelection()
-            if annotate { selectedMark = mark }
+        model.scheduleReaderSave {
+            do {
+                try await model.saveReaderMark(mark, updatePosition: false)
+                if session.view.currentSelection === selection { session.view.clearSelection() }
+                if annotate { selectedMark = mark }
+            } catch { model.message = error.localizedDescription }
         }
     }
 
@@ -718,6 +724,7 @@ struct LocalVideoStudyView: View {
     @State private var showMarks = false
     @State private var showListening = false
     @State private var lastMark: Double?
+    @State private var markSequence = 0
     @AppStorage("quickMarkLead") private var lead = 2
     var body: some View {
         VStack(spacing: 0) {
@@ -779,8 +786,14 @@ struct LocalVideoStudyView: View {
             return
         }
         let seconds = max(0, floor(time - Double(min(3, max(0, lead)))))
-        model.saveMark(source: source, locator: ReadingLocator(kind: "video", seconds: seconds))
-        if model.message == nil { lastMark = seconds }
+        markSequence += 1
+        let sequence = markSequence
+        model.scheduleReaderSave {
+            do {
+                try await model.saveMarkAsync(source: source, locator: ReadingLocator(kind: "video", seconds: seconds))
+                if sequence == markSequence { lastMark = seconds }
+            } catch { model.message = error.localizedDescription }
+        }
     }
 
     private var listeningTools: some View {
@@ -825,7 +838,7 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
         locationWarning = "部分书页资源无法读取，请检查原始书籍文件。原有标记仍保留。"
     }
     var savePosition: ((ReadingLocator) -> Void)?
-    var saveSelection: ((ReadingLocator, String, CardKind) -> Bool)?
+    var saveSelection: ((ReadingLocator, String, CardKind) async -> Bool)?
     var captureSelection: ((CardKind) -> Void)?
     @Published var selectionActive = false
     func navigator(_ navigator: SelectableNavigator, shouldShowMenuForSelection selection: ReadiumNavigator.Selection) -> Bool {
@@ -908,12 +921,18 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
                 guard let locator = reader?.currentSelection?.locator, let text = locator.text.highlight,
                     !text.isEmpty
                 else { return }
-                do {
-                    if self?.saveSelection?(try Self.readingLocator(locator), text, kind) == true {
-                        reader?.clearSelection()
-                        self?.selectionActive = false
-                    }
-                } catch { self?.locationWarning = "选文定位未保存：\(error.localizedDescription)" }
+                Task { [weak self, weak reader] in
+                    do {
+                        let captured = try Self.readingLocator(locator)
+                        let saved = await self?.saveSelection?(captured, text, kind)
+                        // Do not clear a NEW selection made while the durable write ran.
+                        if saved == true, let current = reader?.currentSelection?.locator,
+                            (try? Self.readingLocator(current)) == captured {
+                            reader?.clearSelection()
+                            self?.selectionActive = false
+                        }
+                    } catch { self?.locationWarning = "选文定位未保存：\(error.localizedDescription)" }
+                }
             }
             reader.observeDecorationInteractions(inGroup: "knowledge-marks") { [weak self] event in
                 if let id = UUID(uuidString: event.decoration.id) { self?.selectMark?(id) }
@@ -1009,8 +1028,10 @@ struct EPUBStudyView: View {
             session.selectMark = { id in selectedMark = model.marks.first { $0.id == id } }
             session.savePosition = { model.queueReadingPosition(sourceID: source.id, locator: $0) }
             session.saveSelection = { locator, text, kind in
-                model.saveMark(source: source, locator: locator, excerpt: text, kind: kind)
-                return model.message == nil
+                do {
+                    try await model.saveMarkAsync(source: source, locator: locator, excerpt: text, kind: kind)
+                    return true
+                } catch { model.message = error.localizedDescription; return false }
             }
             await session.open(url: url, location: location, preferences: readerPreferences)
             applyPreferences()
@@ -1091,9 +1112,15 @@ struct EPUBStudyView: View {
     private func saveReadingMark() {
         do {
             if let (locator, excerpt) = try session.location(selection: true), !excerpt.isEmpty {
-                model.saveMark(source: source, locator: locator, excerpt: excerpt, kind: kind)
+                model.scheduleReaderSave {
+                    do { try await model.saveMarkAsync(source: source, locator: locator, excerpt: excerpt, kind: kind) }
+                    catch { model.message = error.localizedDescription }
+                }
             } else if let (locator, _) = try session.location(selection: false) {
-                model.saveMark(source: source, locator: locator)
+                model.scheduleReaderSave {
+                    do { try await model.saveMarkAsync(source: source, locator: locator) }
+                    catch { model.message = error.localizedDescription }
+                }
             } else { throw LibraryError.invalid("尚未取得阅读位置") }
         } catch { model.message = error.localizedDescription }
     }

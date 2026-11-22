@@ -169,7 +169,11 @@ final class LoungeHub: ObservableObject {
         ticker = nil
         guard !scenes.isEmpty else { return }
         var deadlines = [disk.timer.deadline].compactMap { $0 }
-        if drawInterval > 0 { deadlines.append(contentsOf: disk.nextDraw.values) }
+        if drawInterval > 0 {
+            for kind in LoungePromptKind.allCases where disk.prompts.contains(where: { $0.kind == kind }) {
+                if let deadline = disk.nextDraw[kind.rawValue] { deadlines.append(deadline) }
+            }
+        }
         let delay = PerformanceBudget.nextWakeDelay(now: .now,
             checkpointIn: 30 - (ProcessInfo.processInfo.systemUptime - audioCheckpoint), deadlines: deadlines)
         ticker = Task { [weak self] in

@@ -82,6 +82,7 @@ final class PDFStudyInk: NSObject, ObservableObject, @preconcurrency PDFPageOver
     private weak var view: PDFView?
     private var pages: [ObjectIdentifier: StudyInkPage] = [:]
     private var pending: [ObjectIdentifier: Task<Void, Never>] = [:]
+    private var saving: Set<ObjectIdentifier> = []
 
     func prepare(view: PDFView, model: StudioModel, sourceID: UUID, fingerprint: String) {
         guard self.view == nil else { return }
@@ -240,6 +241,8 @@ final class PDFStudyInk: NSObject, ObservableObject, @preconcurrency PDFPageOver
     }
 
     private func persist(_ overlay: StudyInkPage) {
+        let key = ObjectIdentifier(overlay.page)
+        guard !saving.contains(key) else { return }
         guard overlay.dirty, !overlay.active, overlay.isValid, let transform = overlay.transformToOverlay,
             let model, let sourceID, let identity = identity(of: overlay.page)
         else { return }
@@ -247,25 +250,24 @@ final class PDFStudyInk: NSObject, ObservableObject, @preconcurrency PDFPageOver
         let data = drawing.strokes.isEmpty ? nil : drawing.transformed(using: transform.inverted()).dataRepresentation()
         let expected = overlay.saved
         guard data != expected else { overlay.dirty = false; return }
-        do {
-            try model.commit { state in
-                guard let index = state.sources.firstIndex(where: {
-                    $0.id == sourceID && $0.deletedAt == nil && $0.assetHash == identity.fingerprint
-                }) else { throw LibraryError.invalid("原始 PDF 已变更，笔迹未写入") }
-                var entries = state.sources[index].pdfPageInk ?? []
-                let entry = entries.firstIndex { $0.page == identity.page && $0.fingerprint == identity.fingerprint }
-                guard entry.map({ entries[$0].drawing }) == expected else {
-                    throw LibraryError.invalid("此页笔迹已在另一窗口更新，未覆盖已保存笔迹")
-                }
-                if let entry { entries.remove(at: entry) }
-                if let data {
-                    entries.append(PDFPageInk(fingerprint: identity.fingerprint, page: identity.page, drawing: data))
-                }
-                state.sources[index].pdfPageInk = entries.isEmpty ? nil : entries
+        saving.insert(key)
+        model.scheduleReaderSave { [self] in
+            do {
+                try await model.savePDFInk(sourceID: sourceID, fingerprint: identity.fingerprint,
+                    page: identity.page, drawing: data, expected: expected)
+                overlay.saved = data
+                // New strokes/erasures may arrive during the write. Never mark
+                // that newer drawing clean or overwrite it with the saved one.
+                overlay.dirty = overlay.canvas.drawing != drawing
+                saving.remove(key)
+                if overlay.dirty { persist(overlay) }
+                else if view == nil || !overlay.isDescendant(of: view!) { pages.removeValue(forKey: key) }
+            } catch {
+                saving.remove(key)
+                overlay.dirty = true
+                model.message = error.localizedDescription
             }
-            overlay.saved = data
-            overlay.dirty = false
-        } catch { model.message = error.localizedDescription }
+        }
     }
 
     func flush() {

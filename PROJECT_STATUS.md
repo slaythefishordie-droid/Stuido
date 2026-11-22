@@ -7,3 +7,5 @@
 - [开发工作流与复盘](docs/workflow.md)
 
 需求按 [产品计划](docs/product-spec.md) 和 [Safari 路线图](docs/web-capture-roadmap.md) 的相关章节读取。
+
+性能重构接续还须阅读 [性能审计](PERFORMANCE_AUDIT.md)、[性能结果](PERFORMANCE_RESULTS.md) 和 [iPad 验收指南](docs/performance/IPAD_TEST_GUIDE.md)。

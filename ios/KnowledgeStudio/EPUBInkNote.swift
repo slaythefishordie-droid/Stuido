@@ -10,6 +10,7 @@ struct EPUBInkNote: View {
     @State private var erasing = false
     @State private var finger = false
     @State private var invalid = false
+    @State private var saving = false
     let mark: LibraryMark
 
     var body: some View {
@@ -33,10 +34,10 @@ struct EPUBInkNote: View {
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) { Button("取消") { dismiss() } }
                     ToolbarItem(placement: .confirmationAction) {
-                        Button("保存") { save() }.disabled(invalid)
+                        Button("保存") { save() }.disabled(invalid || saving)
                     }
                 }
-        }.onAppear {
+        }.allowsHitTesting(!saving).onAppear {
             guard let data = mark.epubNoteInk else { return }
             do { drawing = try PKDrawing(data: data) }
             catch { invalid = true }
@@ -45,15 +46,13 @@ struct EPUBInkNote: View {
 
     private func save() {
         let data = drawing.strokes.isEmpty ? nil : drawing.dataRepresentation()
-        model.change { state in
-            guard let index = state.marks.firstIndex(where: {
-                $0.id == mark.id && $0.deletedAt == nil && $0.locator == mark.locator
-            }), state.marks[index].epubNoteInk == mark.epubNoteInk else {
-                throw LibraryError.invalid("原批注已变更，未覆盖已保存内容")
-            }
-            state.marks[index].epubNoteInk = data
+        guard !saving else { return }
+        saving = true
+        Task {
+            defer { saving = false }
+            do { try await model.saveEPUBInk(mark: mark, drawing: data); dismiss() }
+            catch { model.message = error.localizedDescription }
         }
-        if model.message == nil { dismiss() }
     }
 }
 

@@ -45,3 +45,12 @@
 本轮按 docs/progress.md 完成两份计划阶段 1–4。优先端到端功能，仅阅读相关代码和运行针对性测试，不重复全量审计、无关重构或重复验证已通过部分。普通非阻塞优化写入待办。数据删除/迁移/备份恢复、对象关联与持久化、共享传输及权限安全必须保留关键验证。同一错误连续两次修复无进展则记录阻塞和尝试，继续独立功能。阶段稳定化时集中完整构建回归；未经验证不得宣称通过或发布稳定版。用户已报告里程碑 1 真机双向共享成功。
 
 v1.0.0 模块：LibraryRepository/LibraryState 负责事务与引用校验，ImportService 使用核心资源副本的 1.0 Schema；修改 schemas/import-package-1.0.schema.json 时同步 Sources/KnowledgeCore/Resources 中同名文件。StudioModel/StudioView、ManagementViews、SourceReaders、BackupService 分别承担应用协调、主界面、管理/导入、阅读和备份。新测试仅按修改风险运行，版本稳定化才做完整原生回归。
+
+## v3.7 性能重构接续
+
+本轮用户授权的独立分支为 `performance/v3.7-low-power`；发行与恢复基线见进度顶部。接续性能工作必须先阅读根目录 `PERFORMANCE_AUDIT.md`、`PERFORMANCE_RESULTS.md` 和 `docs/performance/IPAD_TEST_GUIDE.md`，区分合成基准、原生测试与真机结果。恢复标签不移动；不在 main 或发行分支直接试验。
+
+- SQLite 快照缓存只能在 GRDB 串行连接内访问，以 `data_version` 失效，写入成功提交后才发布；禁止取消引用校验来提速。必须测试外部连接、回滚、损坏及重开。
+- SwiftUI 消费 `StudioModel` 的集合属性和 `markIndex`；不要重新引入整个 ObservableObject 的广播依赖。完整 `state` 用于确实需要完整快照的操作。
+- 阅读位置可以合并；Mark、笔迹、复习、编辑不能被丢弃。后台保存成功前不宣布成功，失败保持错误和冲突保护。
+- 封面等可重建资源使用 `PerformancePolicy`、有界缓存及异步工作；主线程仍负责 UIKit/SwiftUI。不能让资源策略禁用核心功能或强制显示刷新率。

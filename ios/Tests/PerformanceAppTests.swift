@@ -67,6 +67,62 @@ final class PerformanceAppTests: XCTestCase {
         XCTAssertEqual(model.marks.count, 1)
     }
 
+    func testFailedPositionCanRetryAndMarksRemainDurable() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let model = StudioModel(root: root)
+        let source = LibrarySource(kind: .pdf, title: "Book")
+        try model.commit { $0.sources.append(source) }
+        model.queueReadingPosition(sourceID: source.id, locator: ReadingLocator(kind: "pdf", page: 0))
+        do { try await model.flushReadingPositions(); XCTFail("Invalid locator must fail") } catch {}
+        XCTAssertNil(model.sources[0].lastLocation)
+        XCTAssertNotNil(model.message)
+        model.queueReadingPosition(sourceID: source.id, locator: ReadingLocator(kind: "pdf", page: 5))
+        try await model.flushReadingPositions()
+        try await model.saveMarkAsync(source: source, locator: ReadingLocator(kind: "pdf", page: 9), excerpt: "Quote", kind: .expression)
+        let reopened = try LibraryRepository(url: root.appendingPathComponent("library.sqlite")).read()
+        XCTAssertEqual(reopened.marks[0].excerpt, "Quote")
+        XCTAssertEqual(reopened.marks[0].cardKind, .expression)
+        XCTAssertEqual(reopened.sources[0].lastLocation?.page, 9)
+    }
+
+    func testAsyncInkSavesPreserveConflictProtectionAndReopen() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let model = StudioModel(root: root)
+        let fingerprint = String(repeating: "a", count: 64)
+        let source = LibrarySource(kind: .pdf, title: "Book", assetHash: fingerprint, assetExtension: "pdf")
+        let epub = LibrarySource(kind: .epub, title: "EPUB")
+        let mark = LibraryMark(sourceID: epub.id, locator: ReadingLocator(kind: "epub", href: "chapter.xhtml", nativeJSON: "{}"))
+        try model.commit { $0.sources = [source, epub]; $0.marks = [mark] }
+        try await model.savePDFInk(sourceID: source.id, fingerprint: fingerprint, page: 1, drawing: Data([1]), expected: nil)
+        do {
+            try await model.savePDFInk(sourceID: source.id, fingerprint: fingerprint, page: 1, drawing: Data([2]), expected: nil)
+            XCTFail("Stale window must fail")
+        } catch {}
+        try await model.saveEPUBInk(mark: mark, drawing: Data([3]))
+        do { try await model.saveEPUBInk(mark: mark, drawing: Data([4])); XCTFail("Stale note must fail") } catch {}
+        let reopened = try LibraryRepository(url: root.appendingPathComponent("library.sqlite")).read()
+        XCTAssertEqual(reopened.sources[0].pdfPageInk?[0].drawing, Data([1]))
+        XCTAssertEqual(reopened.marks[0].epubNoteInk, Data([3]))
+    }
+
+    func testFlushWaitsForRegisteredReaderSaveBeforeItsTaskStarts() async throws {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let model = StudioModel(root: root)
+        let source = LibrarySource(kind: .pdf, title: "Book")
+        try model.commit { $0.sources.append(source) }
+        model.scheduleReaderSave {
+            do { try await model.saveMarkAsync(source: source, locator: ReadingLocator(kind: "pdf", page: 7)) }
+            catch { XCTFail(error.localizedDescription) }
+        }
+        // No sleep/yield: this is the same boundary used by export and restore.
+        try await model.flushReaderWrites()
+        XCTAssertEqual(try model.repository?.read().marks.count, 1)
+        XCTAssertEqual(model.marks.count, 1)
+    }
+
     func testDecodedCustomCoverIsBoundedAndCacheClearPreservesOriginal() async throws {
         let renderer = UIGraphicsImageRenderer(size: CGSize(width: 1600, height: 800))
         let data = try XCTUnwrap(renderer.image { context in

@@ -22,8 +22,9 @@ func fixture(cards: Int) -> LibraryState {
         let kind = CardKind.allCases[index % 4]
         var card = LibraryCard(type: kind, content: [LibraryCard.fields(for: kind)[0]: "Card \(index)"])
         card.id = identifier(3, index)
+        card.createdAt = date; card.updatedAt = date
         card.markIDs = [state.marks[index].id]
-        card.sourceRefs = [CardReference(sourceID: state.marks[index].sourceID, locator: state.marks[index].locator)]
+        card.sourceRefs = [CardReference(id: identifier(4, index), sourceID: state.marks[index].sourceID, locator: state.marks[index].locator)]
         return card
     }
     return state
@@ -76,7 +77,12 @@ for size in [100, 2_000, 10_000] {
     results.append(["cards": size, "sources": state.sources.count, "marks": state.marks.count,
         "snapshot_bytes": try JSONEncoder().encode(state).count, "metrics": metrics])
 }
-let report: [String: Any] = ["label": label, "os": ProcessInfo.processInfo.operatingSystemVersionString,
+let report: [String: Any] = ["label": label, "fixture_version": 2,
+    "recorded_at_utc": ISO8601DateFormatter().string(from: Date()),
+    "revision": ProcessInfo.processInfo.environment["KS_BENCHMARK_REVISION"] ?? "unknown",
+    "working_tree_dirty": ProcessInfo.processInfo.environment["KS_BENCHMARK_DIRTY"] == "true",
+    "toolchain": ProcessInfo.processInfo.environment["KS_BENCHMARK_TOOLCHAIN"] ?? "unknown",
+    "active_processors": ProcessInfo.processInfo.activeProcessorCount, "os": ProcessInfo.processInfo.operatingSystemVersionString,
     "configuration": "Release", "iterations": 7, "datasets": results,
     "scope": "Synthetic repository operations; not iPad frame rate, touch latency, or energy measurements."]
 let output = try JSONSerialization.data(withJSONObject: report, options: [.prettyPrinted, .sortedKeys])

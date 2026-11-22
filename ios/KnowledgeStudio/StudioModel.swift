@@ -24,6 +24,9 @@ final class StudioModel {
     @ObservationIgnored private var importTask: Task<LibrarySource, Error>?
     @ObservationIgnored private var changingManagedData = false
     @ObservationIgnored private var revision = 0
+    @ObservationIgnored private var activeWrites = 0
+    @ObservationIgnored private var writeWaiters: [CheckedContinuation<Void, Never>] = []
+    @ObservationIgnored private var readerSaves: [UUID: Task<Void, Never>] = [:]
     let root: URL
     private(set) var repository: LibraryRepository?
 
@@ -106,8 +109,19 @@ final class StudioModel {
     }
     private func commitAsync(_ action: @escaping @Sendable (inout LibraryState) throws -> Void) async throws {
         guard let repository else { throw LibraryError.invalid("知识库不可用") }
+        activeWrites += 1
+        defer {
+            activeWrites -= 1
+            if activeWrites == 0 {
+                let waiters = writeWaiters
+                writeWaiters.removeAll()
+                for waiter in waiters { waiter.resume() }
+            }
+        }
         let trace = PerformanceTrace.signposter.beginInterval("LibraryCommit", id: PerformanceTrace.signposter.makeSignpostID())
         defer { PerformanceTrace.signposter.endInterval("LibraryCommit", trace) }
+        let background = LibrarySaveAssertion()
+        defer { background.end() }
         let before = revision
         let committed = try await Task.detached(priority: .userInitiated) {
             try repository.updateAndRead(action)
@@ -213,6 +227,74 @@ final class StudioModel {
             }
         }
     }
+    /// Register autosaves before returning from the reader callback. Export and
+    /// restore can then wait for them even before their async bodies have started.
+    func scheduleReaderSave(_ operation: @escaping @MainActor () async -> Void) {
+        let id = UUID()
+        let background = LibrarySaveAssertion()
+        readerSaves[id] = Task {
+            await operation()
+            background.end()
+            readerSaves.removeValue(forKey: id)
+        }
+    }
+
+    func flushReaderWrites() async throws {
+        while true {
+            while let task = readerSaves.values.first { await task.value }
+            try await flushReadingPositions()
+            while activeWrites > 0 { await withCheckedContinuation { writeWaiters.append($0) } }
+            if readerSaves.isEmpty && pendingPositions.isEmpty { return }
+        }
+    }
+
+    func saveMarkAsync(source: LibrarySource, locator: ReadingLocator, excerpt: String = "", kind: CardKind? = nil) async throws {
+        var mark = LibraryMark(sourceID: source.id, locator: locator, excerpt: excerpt)
+        mark.cardKind = kind
+        try await saveReaderMark(mark, updatePosition: true)
+    }
+
+    func saveReaderMark(_ mark: LibraryMark, updatePosition: Bool) async throws {
+        message = nil
+        try await commitAsync { state in
+            guard let index = state.sources.firstIndex(where: { $0.id == mark.sourceID && $0.deletedAt == nil })
+            else { throw LibraryError.invalid("原资料已不可用，标记未写入") }
+            state.marks.append(mark)
+            if updatePosition, (state.sources[index].lastReadAt ?? .distantPast) <= mark.createdAt {
+                state.sources[index].lastLocation = mark.locator
+                state.sources[index].lastReadAt = mark.createdAt
+            }
+        }
+    }
+
+    func savePDFInk(sourceID: UUID, fingerprint: String, page: Int, drawing: Data?, expected: Data?) async throws {
+        try await commitAsync { state in
+            guard let index = state.sources.firstIndex(where: {
+                $0.id == sourceID && $0.deletedAt == nil && $0.assetHash == fingerprint
+            }) else { throw LibraryError.invalid("原始 PDF 已变更，笔迹未写入") }
+            var entries = state.sources[index].pdfPageInk ?? []
+            let entry = entries.firstIndex { $0.page == page && $0.fingerprint == fingerprint }
+            guard entry.map({ entries[$0].drawing }) == expected else {
+                throw LibraryError.invalid("此页笔迹已在另一窗口更新，未覆盖已保存笔迹")
+            }
+            if let entry { entries.remove(at: entry) }
+            if let drawing { entries.append(PDFPageInk(fingerprint: fingerprint, page: page, drawing: drawing)) }
+            state.sources[index].pdfPageInk = entries.isEmpty ? nil : entries
+        }
+    }
+
+    func saveEPUBInk(mark: LibraryMark, drawing: Data?) async throws {
+        message = nil
+        try await commitAsync { state in
+            guard let index = state.marks.firstIndex(where: {
+                $0.id == mark.id && $0.deletedAt == nil && $0.locator == mark.locator
+            }), state.marks[index].epubNoteInk == mark.epubNoteInk else {
+                throw LibraryError.invalid("原批注已变更，未覆盖已保存内容")
+            }
+            state.marks[index].epubNoteInk = drawing
+        }
+    }
+
     func saveLocation(sourceID: UUID, locator: ReadingLocator) {
         if let source = state.sources.first(where: { $0.id == sourceID }), source.lastLocation == locator,
             let read = source.lastReadAt, Date().timeIntervalSince(read) < 60
@@ -253,7 +335,7 @@ final class StudioModel {
     private func drainReadingPositions() async {
         // Keep an in-flight save alive when the reader closes or the App resigns
         // active. Expiration ends the OS assertion, never cancels a transaction.
-        let background = ReadingSaveAssertion()
+        let background = LibrarySaveAssertion()
         defer {
             readingWriteTask = nil
             background.end()
@@ -738,10 +820,10 @@ final class StudioModel {
 }
 
 @MainActor
-private final class ReadingSaveAssertion {
+private final class LibrarySaveAssertion {
     private var identifier = UIBackgroundTaskIdentifier.invalid
     init() {
-        identifier = UIApplication.shared.beginBackgroundTask(withName: "Reading position") { [weak self] in
+        identifier = UIApplication.shared.beginBackgroundTask(withName: "Library save") { [weak self] in
             Task { @MainActor in self?.end() }
         }
     }

@@ -38,7 +38,7 @@ final class PerformancePolicyTests: XCTestCase {
         XCTAssertEqual(PerformanceBudget.nextWakeDelay(now: now, checkpointIn: 30, deadlines: []), 30)
         XCTAssertEqual(PerformanceBudget.nextWakeDelay(now: now, checkpointIn: 25,
             deadlines: [now.addingTimeInterval(3), now.addingTimeInterval(90)]), 3)
-        XCTAssertEqual(PerformanceBudget.nextWakeDelay(now: now, checkpointIn: 0, deadlines: []), 0.25)
+        XCTAssertEqual(PerformanceBudget.nextWakeDelay(now: now, checkpointIn: 0, deadlines: []), 1)
     }
     func testMarkIndexPreservesOrderDeletionAndSnapshotIsolation() {
         let source = LibrarySource(kind: .pdf, title: "Book")

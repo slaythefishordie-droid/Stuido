@@ -1,6 +1,10 @@
 import Foundation
 import XCTest
-import GRDB
+#if canImport(SQLite3)
+import SQLite3
+#else
+import GRDBSQLite
+#endif
 @testable import KnowledgeCore
 
 final class RepositoryCacheTests: XCTestCase {
@@ -53,16 +57,22 @@ final class RepositoryCacheTests: XCTestCase {
         try withRepositories { first, _, url in
             let source = LibrarySource(kind: .pdf, title: "Original")
             try first.update { $0.sources.append(source) }
-            let connection = try DatabaseQueue(path: url.path)
-            try connection.write { db in
-                try db.execute(sql: "CREATE TRIGGER reject_edit BEFORE UPDATE ON library_state BEGIN SELECT RAISE(ABORT, 'injected'); END")
+            // Use the system SQLite API to simulate an independent writer. The
+            // native test host must not link a second copy of GRDB's Swift types.
+            var connection: OpaquePointer?
+            XCTAssertEqual(sqlite3_open(url.path, &connection), SQLITE_OK)
+            guard let connection else { throw LibraryError.invalid("Test connection failed") }
+            defer { sqlite3_close(connection) }
+            func execute(_ sql: String) throws {
+                guard sqlite3_exec(connection, sql, nil, nil, nil) == SQLITE_OK else {
+                    throw LibraryError.invalid(String(cString: sqlite3_errmsg(connection)))
+                }
             }
+            try execute("CREATE TRIGGER reject_edit BEFORE UPDATE ON library_state BEGIN SELECT RAISE(ABORT, 'injected'); END")
             XCTAssertThrowsError(try first.update { $0.sources[0].title = "Must roll back" })
             XCTAssertEqual(try first.read().sources, [source])
-            try connection.write { db in
-                try db.execute(sql: "DROP TRIGGER reject_edit")
-                try db.execute(sql: "UPDATE library_state SET payload = ? WHERE id = 1", arguments: [Data("invalid".utf8)])
-            }
+            try execute("DROP TRIGGER reject_edit")
+            try execute("UPDATE library_state SET payload = X'696e76616c6964' WHERE id = 1")
             XCTAssertThrowsError(try first.read())
             XCTAssertThrowsError(try first.update { $0.sources.removeAll() })
         }

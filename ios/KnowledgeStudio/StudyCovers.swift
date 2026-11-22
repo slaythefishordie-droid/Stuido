@@ -103,9 +103,9 @@ struct StudySourceCover: View {
                 if !Task.isCancelled { editorial = rendered }
             }
         }.accessibilityHidden(true)
-            .task(id: source.coverImage) {
+            .task(id: source.resolvedCoverMode == .custom ? source.coverImage : nil) {
                 custom = nil
-                if let data = source.coverImage {
+                if source.resolvedCoverMode == .custom, let data = source.coverImage {
                     let image = await StudyThumbnails.customArt(data)
                     if !Task.isCancelled { custom = image }
                 }

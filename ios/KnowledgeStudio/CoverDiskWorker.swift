@@ -44,7 +44,7 @@ actor CoverDiskWorker {
     }
     func write(_ bitmap: CoverBitmap, to file: URL, quality: Double, author: String? = nil) {
         let data = NSMutableData()
-        guard let destination = CGImageDestinationCreateWithData(data, UTType.jpeg.identifier as CFString, 1, nil) else { return }
+        guard let destination = CGImageDestinationCreateWithData(data as CFMutableData, UTType.jpeg.identifier as CFString, 1, nil) else { return }
         CGImageDestinationAddImage(destination, bitmap.image,
             [kCGImageDestinationLossyCompressionQuality: quality] as CFDictionary)
         guard CGImageDestinationFinalize(destination) else { return }
