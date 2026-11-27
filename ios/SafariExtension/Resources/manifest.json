@@ -36,6 +36,7 @@
         "capture.js",
         "legacy.js",
         "content.js",
+        "history-index.js",
         "quickmark-tools.js"
       ],
       "run_at": "document_idle"

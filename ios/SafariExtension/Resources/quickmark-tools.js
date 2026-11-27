@@ -43,6 +43,7 @@
   const listeningButton = panelButton('listening', '精听');
   panelButton('history', '历史', () => refresh());
   let a = null, b = null, boundVideo = null, marks = [], limit = 50, selectedVideo = null;
+  let historyIndex = KnowledgeHistoryIndex.build([]);
   let watched = {};
   const recordWatch = () => {
     let id; try { id = KnowledgeCapture.videoID(location.href); } catch { return; }
@@ -96,34 +97,27 @@
     } finally { clearTimeout(timer); }
   }
   async function refresh() {
-    try { marks = (await request({ action: 'listMarks' })).marks.filter(mark => mark.deletedAt == null); render(); feedback.textContent = '历史已刷新'; }
+    try {
+      const nextMarks = (await request({ action: 'listMarks' })).marks.filter(mark => mark.deletedAt == null);
+      const nextIndex = KnowledgeHistoryIndex.build(nextMarks);
+      marks = nextMarks; historyIndex = nextIndex;
+      render(); feedback.textContent = '历史已刷新';
+    }
     catch (error) { feedback.textContent = error.message; }
   }
   function render() {
     const query = find('search').value.toLowerCase();
     let id; try { id = KnowledgeCapture.videoID(location.href); } catch { id = null; }
     const current = find('current').checked;
-    const groups = new Map();
-    for (const mark of marks) {
-      if (current && mark.videoID !== id) continue;
-      const group = groups.get(mark.videoID);
-      if (group) {
-        group.marks.push(mark);
-        if (mark.createdAt > group.recent) { group.recent = mark.createdAt; group.title = mark.title; }
-      } else groups.set(mark.videoID, { id: mark.videoID, title: mark.title, recent: mark.createdAt, marks:[mark] });
-    }
-    if (selectedVideo && !groups.has(selectedVideo)) selectedVideo = null;
-    const selected = groups.get(selectedVideo);
+    if (selectedVideo && (!historyIndex.group(selectedVideo) || (current && selectedVideo !== id))) selectedVideo = null;
+    const selected = historyIndex.group(selectedVideo);
     find('videos').hidden = !selected;
     find('search').hidden = !!selected;
     find('history-title').textContent = selected?.title ?? '标记历史';
     const container = find('rows');
     container.replaceChildren();
     if (!selected) {
-      const videos = [...groups.values()].filter(group => group.id.includes(query) ||
-        group.marks.some(mark => mark.title.toLowerCase().includes(query)))
-        .sort((a, b) => (find('history-sort').value === 'watched'
-          ? ((watched[b.id] ?? 0) - (watched[a.id] ?? 0)) : 0) || b.recent - a.recent);
+      const videos = historyIndex.videos(query, current ? id : undefined, find('history-sort').value, watched);
       find('count').textContent = `${videos.length} 部视频`;
       find('more').hidden = videos.length <= limit;
       for (const group of videos.slice(0, limit)) {
@@ -146,7 +140,7 @@
       }
       return;
     }
-    const rows = selected.marks.sort((a, b) => a.seconds - b.seconds);
+    const rows = historyIndex.marks(selected.id);
     find('count').textContent = `${rows.length} 条标记`;
     find('more').hidden = rows.length <= limit;
     for (const mark of rows.slice(0, limit)) {
