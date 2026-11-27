@@ -105,7 +105,7 @@ final class PerformanceAppTests: XCTestCase {
         let fingerprint = String(repeating: "a", count: 64)
         let source = LibrarySource(kind: .pdf, title: "Book", assetHash: fingerprint, assetExtension: "pdf")
         let epub = LibrarySource(kind: .epub, title: "EPUB")
-        let mark = LibraryMark(sourceID: epub.id, locator: ReadingLocator(kind: "epub", href: "chapter.xhtml", nativeJSON: "{}"))
+        let mark = LibraryMark(sourceID: epub.id, locator: ReadingLocator(kind: "epub", href: "chapter.xhtml", nativeJSON: "{}"), excerpt: "Selected text")
         try model.commit { $0.sources = [source, epub]; $0.marks = [mark] }
         try await model.savePDFInk(sourceID: source.id, fingerprint: fingerprint, page: 1, drawing: Data([1]), expected: nil)
         do {

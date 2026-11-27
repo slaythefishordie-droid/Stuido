@@ -48,8 +48,8 @@ struct LoungeView: View {
                 .accessibilityAddTraits(.isHeader)
             Spacer()
             Button { schedule = true } label: {
-                TimelineView(.periodic(from: .now, by: 1)) { context in
-                    Label(hub.countdown.isStarted ? loungeClock(hub.countdown.remaining(at: context.date)) : "设定计时",
+                LoungeActivityTimeline(active: hub.countdown.deadline != nil) { context in
+                    Label(hub.countdown.isStarted ? loungeClock(hub.countdown.remaining(at: context)) : "设定计时",
                         systemImage: "timer")
                         .monospacedDigit()
                 }
@@ -185,7 +185,7 @@ struct LoungeTransport: View {
                 }
             }.buttonStyle(.borderless)
             if full, let track = hub.track {
-                TimelineView(.periodic(from: .now, by: 1)) { _ in
+                LoungeActivityTimeline(active: hub.playing) { _ in
                     Slider(value: Binding(get: { scrubbing ? seek : min(track.duration, hub.playhead) }, set: { seek = $0 }),
                         in: 0...max(1, track.duration), onEditingChanged: { editing in
                             if editing { seek = hub.playhead; scrubbing = true }
@@ -215,8 +215,8 @@ private struct LoungeTimerPanel: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 19) {
                     LoungeInlineFeedback()
-                    TimelineView(.periodic(from: .now, by: 1)) { context in
-                        Text(hub.countdown.isStarted ? loungeClock(hub.countdown.remaining(at: context.date))
+                    LoungeActivityTimeline(active: hub.countdown.deadline != nil) { context in
+                        Text(hub.countdown.isStarted ? loungeClock(hub.countdown.remaining(at: context))
                             : loungeClock(Double(minutes * 60)))
                             .font(.system(size: 52, weight: .medium, design: .serif)).monospacedDigit()
                             .frame(maxWidth: .infinity, alignment: .leading)
@@ -594,6 +594,21 @@ struct LoungePreferences: View {
                 Text("仅手动").tag(0)
                 ForEach([5, 15, 30, 60, 120], id: \.self) { Text("\($0) 分钟").tag($0) }
             }.onChange(of: drawInterval) { _, _ in hub.refreshRecommendationSchedule() }
+        }
+    }
+}
+
+/// A paused clock/audio transport has no time-driven display work. Scene changes
+/// restore the real current date immediately; reminder scheduling stays in the hub.
+private struct LoungeActivityTimeline<Content: View>: View {
+    @Environment(\.scenePhase) private var phase
+    let active: Bool
+    @ViewBuilder var content: (Date) -> Content
+    var body: some View {
+        if active && phase == .active {
+            TimelineView(.periodic(from: .now, by: 1)) { context in content(context.date) }
+        } else {
+            content(.now)
         }
     }
 }

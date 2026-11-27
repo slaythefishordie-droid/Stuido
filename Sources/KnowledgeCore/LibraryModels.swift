@@ -292,15 +292,17 @@ public struct LibraryState: Codable, Equatable, Sendable {
             try mark.locator.validate()
             try validateLocatorKind(mark.locator, source: sourceKinds[mark.sourceID]!)
         }
+        let fieldsByKind = Dictionary(uniqueKeysWithValues: CardKind.allCases.map { ($0, LibraryCard.fields(for: $0)) })
         for card in cards {
             try card.schedule?.validate()
-            let allowed = LibraryCard.fields(for: card.type)
+            let allowed = fieldsByKind[card.type]!
             guard let primary = card.content[allowed[0]],
                 !primary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
-                Set(card.content.keys).isSubset(of: Set(allowed))
+                card.content.keys.allSatisfy({ allowed.contains($0) })
             else { throw LibraryError.invalid("卡片必填内容或类型无效") }
-            guard Set(card.markIDs).isSubset(of: markIDs) else { throw LibraryError.invalid("卡片 Mark 引用缺失") }
-            try unique(card.sourceRefs.map(\.id))
+            guard card.markIDs.allSatisfy({ markIDs.contains($0) }) else { throw LibraryError.invalid("卡片 Mark 引用缺失") }
+            let referenceIDs = Set(card.sourceRefs.lazy.map(\.id))
+            guard referenceIDs.count == card.sourceRefs.count else { throw LibraryError.invalid("重复对象编号") }
             for ref in card.sourceRefs {
                 guard sourceIDs.contains(ref.sourceID) else { throw LibraryError.invalid("卡片资料引用缺失") }
                 try ref.locator?.validate()
@@ -310,7 +312,7 @@ public struct LibraryState: Codable, Equatable, Sendable {
             }
             for origin in card.provenance.values {
                 guard ["original", "ai_explanation", "ai_generated", "user_input"].contains(origin.kind),
-                    Set(origin.sourceRefIDs).isSubset(of: Set(card.sourceRefs.map(\.id))),
+                    origin.sourceRefIDs.allSatisfy({ referenceIDs.contains($0) }),
                     origin.kind != "original" || !origin.sourceRefIDs.isEmpty
                 else { throw LibraryError.invalid("字段出处无效") }
             }

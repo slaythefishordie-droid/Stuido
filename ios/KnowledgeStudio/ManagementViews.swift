@@ -765,6 +765,7 @@ struct DataManagerView: View {
     @State private var objectBytes: [String: Int64] = [:]
     @State private var sort = "类型"
     @State private var refreshStorage = UUID()
+    @State private var sizeWorker = StorageSizeWorker()
 
     @State private var validated: BackupService.Validated?
     struct Row: Identifiable {
@@ -855,6 +856,7 @@ struct DataManagerView: View {
             }
         }.sheet(isPresented: $showCleanup) { cleanupSheet }
         .task(id: refreshStorage) { await readStorage() }
+        .onDisappear { Task { await sizeWorker.clear() } }
         .onChange(of: model.state) { _, _ in refreshStorage = UUID() }
         .fileImporter(isPresented: $restoring, allowedContentTypes: [.zip]) { result in
             busy = true
@@ -1141,8 +1143,9 @@ struct DataManagerView: View {
         let snapshot = model.state
         let cache = StudyThumbnails.cacheDirectory
         let root = model.root
+        let sizeWorker = self.sizeWorker
         do { try await Task.sleep(for: .milliseconds(180)) } catch { return }
-        let result = await Task.detached(priority: .utility) {
+        let worker = Task.detached(priority: .utility) {
             func size(_ url: URL) -> Int64? {
                 let metadata = try? url.resourceValues(forKeys: [.fileSizeKey, .isRegularFileKey, .isSymbolicLinkKey])
                 guard metadata?.isRegularFile == true, metadata?.isSymbolicLink != true else { return nil }
@@ -1163,21 +1166,14 @@ struct DataManagerView: View {
             let db = rootFiles.filter { $0.lastPathComponent.hasPrefix("library.sqlite") }.compactMap(size).reduce(0, +)
             let recovery = rootFiles.filter { $0.lastPathComponent.hasPrefix("before-restore-") }
                 .compactMap(size).reduce(0, +)
-            let encoder = JSONEncoder()
-            func contentSize<T: Encodable>(_ items: [T]) -> Int64 {
-                guard let data = try? encoder.encode(items) else { return 0 }
-                return Int64(max(0, data.count - 2))
-            }
-            let records = [
-                "资料": contentSize(snapshot.sources.filter { $0.deletedAt == nil }),
-                "标记": contentSize(snapshot.marks.filter { $0.deletedAt == nil }),
-                "卡片": contentSize(snapshot.cards.filter { $0.deletedAt == nil }),
-                "项目": contentSize(snapshot.projects.filter { $0.deletedAt == nil }),
-                "关系": contentSize(snapshot.relations.filter { $0.deletedAt == nil }),
-                "复习记录": contentSize(snapshot.reviewRecords.filter { $0.deletedAt == nil }),
-            ]
+            let records = await sizeWorker.measure(snapshot)
             return (known, untracked, cached, db, recovery, records)
-        }.value
+        }
+        let result = await withTaskCancellationHandler {
+            await worker.value
+        } onCancel: {
+            worker.cancel()
+        }
         guard !Task.isCancelled else { return }
         (fileSizes, orphanBytes, cacheBytes, databaseBytes, recoveryBytes, objectBytes) = result
     }
@@ -1206,4 +1202,12 @@ struct DataManagerView: View {
         }
     }
 
+}
+
+private actor StorageSizeWorker {
+    private var cache = LibraryContentSizeCache()
+    func clear() { cache = LibraryContentSizeCache() }
+    func measure(_ snapshot: LibraryState) -> [String: Int64] {
+        (try? cache.measure(snapshot)) ?? [:]
+    }
 }

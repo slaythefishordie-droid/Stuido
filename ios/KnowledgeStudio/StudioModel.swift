@@ -38,7 +38,8 @@ final class StudioModel {
         do {
             repository = try LibraryRepository(url: self.root.appendingPathComponent("library.sqlite"))
             try repository?.migratePrototype(at: self.root.appendingPathComponent("prototype-v1.json"))
-            refresh()
+            // Foreground activation receives shared queues asynchronously once.
+            publish(try repository!.read())
             try finishAssetPurge()
         } catch { message = "知识库未打开，原文件已保留：\(error.localizedDescription)" }
     }

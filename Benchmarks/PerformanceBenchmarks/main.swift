@@ -55,7 +55,16 @@ for size in [100, 2_000, 10_000] {
     var markEdit = 0
     var cardEdit = 0
     let index = LibraryMarkIndex(state.marks)
+    var sizeCache = LibraryContentSizeCache()
+    _ = try sizeCache.measure(state)
     let metrics: [String: Any] = [
+        "content_sizes_full": try measure {
+            var cache = LibraryContentSizeCache()
+            return Int(try cache.measure(state).values.reduce(0, +))
+        },
+        "content_sizes_unchanged": try measure {
+            Int(try sizeCache.measure(state).values.reduce(0, +))
+        },
         "validation": try measure { try state.validate(); return state.cards.count },
         "full_json_encode": try measure { try JSONEncoder().encode(state).count },
         "read": try measure { try repository.read().cards.count },
