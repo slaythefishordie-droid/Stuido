@@ -52,8 +52,12 @@ for size in [100, 2_000, 10_000] {
     let state = fixture(cards: size)
     try repository.restore(state)
     var edit = 0
+    var markEdit = 0
+    var cardEdit = 0
     let index = LibraryMarkIndex(state.marks)
     let metrics: [String: Any] = [
+        "validation": try measure { try state.validate(); return state.cards.count },
+        "full_json_encode": try measure { try JSONEncoder().encode(state).count },
         "read": try measure { try repository.read().cards.count },
         "no_change_transaction": try measure { try repository.updateAndRead { _ in }.marks.count },
         "reading_position_transaction": try measure {
@@ -61,6 +65,14 @@ for size in [100, 2_000, 10_000] {
             return try repository.updateAndRead {
                 $0.sources[0].lastLocation = ReadingLocator(kind: "pdf", page: edit)
             }.sources.count
+        },
+        "mark_edit_transaction": try measure {
+            markEdit += 1
+            return try repository.updateAndRead { $0.marks[0].note = "Note \(markEdit)" }.marks.count
+        },
+        "card_edit_transaction": try measure {
+            cardEdit += 1
+            return try repository.updateAndRead { $0.cards[0].note = "Note \(cardEdit)" }.cards.count
         },
         "mark_index_build": measure { LibraryMarkIndex(state.marks).marks(for: state.sources[0].id).count },
         "indexed_marks_for_100_sources": measure {
@@ -73,7 +85,11 @@ for size in [100, 2_000, 10_000] {
         },
     ]
     let reopened = try LibraryRepository(url: directory.appendingPathComponent("library.sqlite")).read()
-    precondition(reopened.sources[0].lastLocation?.page == 7 && reopened.cards == state.cards)
+    var expected = state
+    expected.sources[0].lastLocation = ReadingLocator(kind: "pdf", page: 7)
+    expected.marks[0].note = "Note 7"
+    expected.cards[0].note = "Note 7"
+    precondition(reopened == expected)
     results.append(["cards": size, "sources": state.sources.count, "marks": state.marks.count,
         "snapshot_bytes": try JSONEncoder().encode(state).count, "metrics": metrics])
 }

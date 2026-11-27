@@ -70,9 +70,16 @@ public final class LibraryRepository: Sendable {
                 try mutate(&next)
                 if next != previous {
                     try next.validate()
+                    let changes = try next.encodedChanges(from: previous)
+                    // Keep the v1 JSON BLOB and one atomic UPDATE. SQLite parses the
+                    // old JSON in native code; Swift only encodes changed records/collections.
+                    // Explicit TEXT input avoids SQLite's JSON-BLOB ambiguity across
+                    // versions. The result remains a BLOB readable by older builds.
+                    let replacements = Array(repeating: "?, json(?)", count: changes.count / 2)
+                        .joined(separator: ", ")
                     try db.execute(
-                        sql: "UPDATE library_state SET payload = ? WHERE id = 1",
-                        arguments: [try JSONEncoder().encode(next)])
+                        sql: "UPDATE library_state SET payload = CAST(json_set(CAST(payload AS TEXT), \(replacements)) AS BLOB) WHERE id = 1",
+                        arguments: StatementArguments(changes))
                 }
                 committed = next
                 return .commit

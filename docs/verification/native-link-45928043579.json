@@ -1,0 +1,30 @@
+{
+  "run_id": 45928043579,
+  "job_id": 140273939903,
+  "url": "https://github.com/slaythefishordie-droid/Stuido/actions/runs/45928043579",
+  "retrieved_at": "2026-11-27",
+  "source": "GitHub workflow job logs",
+  "target": "KnowledgeStudio (App)",
+  "configuration": "Release",
+  "undefined_symbol_blocks": [
+    [
+      "Undefined symbols for architecture x86_64:",
+      "  \"type metadata for FSRS.FSRSParameters\", referenced from:",
+      "      closure #2 () -> () in KnowledgeStudio.CardReviewHistory.body.getter : some in TodayView.o",
+      "      lazy protocol witness table accessor for type FSRS.FSRSParameters and conformance FSRS.FSRSParameters : Swift.Decodable in FSRS in TodayView.o",
+      "  \"protocol conformance descriptor for FSRS.FSRSParameters : Swift.Decodable in FSRS\", referenced from:",
+      "      lazy protocol witness table accessor for type FSRS.FSRSParameters and conformance FSRS.FSRSParameters : Swift.Decodable in FSRS in TodayView.o",
+      "ld: symbol(s) not found for architecture x86_64"
+    ],
+    [
+      "Undefined symbols for architecture arm64:",
+      "  \"type metadata for FSRS.FSRSParameters\", referenced from:",
+      "      closure #2 () -> () in KnowledgeStudio.CardReviewHistory.body.getter : some in TodayView.o",
+      "      lazy protocol witness table accessor for type FSRS.FSRSParameters and conformance FSRS.FSRSParameters : Swift.Decodable in FSRS in TodayView.o",
+      "  \"protocol conformance descriptor for FSRS.FSRSParameters : Swift.Decodable in FSRS\", referenced from:",
+      "      lazy protocol witness table accessor for type FSRS.FSRSParameters and conformance FSRS.FSRSParameters : Swift.Decodable in FSRS in TodayView.o",
+      "ld: symbol(s) not found for architecture arm64"
+    ]
+  ],
+  "status": "Historical failure identified; current candidate verification recorded separately."
+}

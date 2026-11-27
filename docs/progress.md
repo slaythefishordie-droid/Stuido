@@ -2,7 +2,14 @@
 
 本文件是交付状态、版本变更和真机结果的唯一入口。操作规则见[工作流](workflow.md)，错误与待办见[工程问题](engineering-issues.md)。日期使用北京时间；实现、自动验证、真机验收分别记录。
 
-## 当前交接 · 性能代码收尾，验证暂停 · 2026-11-27
+## 第二轮性能优化 · 2026-11-27（验证进行中）
+
+- 按本轮用户指示恢复可用测试，以 `performance/v3.7-low-power / 2fbb260` 为基线，继续同一分支；不新建工作分支、不归档或编译 IPA。最初误取 main 原型的未完成修改已移出仓库，未带入本分支。
+- 整库写入继续完整引用校验、IMMEDIATE 事务和提交后缓存发布；仅将 JSON 编码改为有界记录/集合差量，用 SQLite `json_set` 更新原 v1 JSON BLOB。批量变化回退集合编码，无迁移、无额外常驻序列化缓存。旧读写器交替、重排/缩短/清空、编码失败及 COMMIT 失败均覆盖。
+- Linux Swift 6.2.1 Release 核心 **46/46 通过**。相同 fixture v2 的最终成对基准与原生结果待本轮结束追加；不使用上轮机器数字作为本轮前测。
+- 已取到历史 `45928043579` 完整日志：App 的 x86_64/arm64 均因 TodayView 引用 FSRSParameters 元数据/Decodable 符号而链接失败。限制 retention getter 跨模块内联，保持薄适配边界；独立 Release 调用方对象只引用 KnowledgeCore getter。原生结果仍待复验，证据见 `verification/native-link-45928043579.json`。
+
+## 上一轮交接 · 性能代码收尾，验证暂停 · 2026-11-27
 
 按用户最新指示“先跳过测试和编译，完成代码优化，编写日志供其他模型接手”，本轮停止新的测试/编译，取消了正在运行的 [45929590952](https://github.com/slaythefishordie-droid/Stuido/actions/runs/45929590952)（`b6d4861`）。此取消不代表测试结果。当前是未完成原生验收的候选分支，不发布 Release/IPA，不合并发行分支。
 

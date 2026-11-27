@@ -17,7 +17,11 @@ public struct ReviewSchedule: Codable, Equatable, Sendable {
             FSRSParameters(requestRetention: retention, w: FSRSDefaults.defaultWv6, enableFuzz: false))
     }
     public var retention: Double {
-        (try? JSONDecoder().decode(FSRSParameters.self, from: parameters).requestRetention) ?? 0.9
+        // Keep third-party Codable metadata inside KnowledgeCore. Release cross-
+        // module inlining otherwise makes the App link FSRS implementation symbols.
+        @inline(never) get {
+            (try? JSONDecoder().decode(FSRSParameters.self, from: parameters).requestRetention) ?? 0.9
+        }
     }
     public func validate() throws {
         guard version == "swift-fsrs/6.0.0:FSRS-6", revision >= 0 else {
