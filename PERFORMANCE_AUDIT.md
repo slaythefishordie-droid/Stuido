@@ -2,6 +2,8 @@
 
 基线：`1888dcb570093aba680f70baa403dcbc5fcd7f99`（`release/v3.7.0`，相对 `v3.7.0` 标签只有文档整理）。恢复标签：`baseline/v3.7-before-performance-20261121`。独立分支：`performance/v3.7-low-power`。初始工作区干净，原 `work` 分支保留。
 
+最新交接决定见 [PERFORMANCE_HANDOFF.md](PERFORMANCE_HANDOFF.md)：2026-11-27 用户暂停测试/编译，原生链接仍未通过。
+
 ## 验证边界
 
 Linux 可运行 Swift 6.2.4 Release 核心基准和功能测试；SwiftUI、PDFKit、Readium 集成由 macOS Actions 检查。当前没有连接 iPad、Instruments、Energy Log。下表静态发现不等于已经测得卡顿或耗电。时间数据与最终处理见 PERFORMANCE_RESULTS.md。

@@ -2,7 +2,19 @@
 
 本文件是交付状态、版本变更和真机结果的唯一入口。操作规则见[工作流](workflow.md)，错误与待办见[工程问题](engineering-issues.md)。日期使用北京时间；实现、自动验证、真机验收分别记录。
 
-## 性能重构进行中 · 2026-11-22
+## 当前交接 · 性能代码收尾，验证暂停 · 2026-11-27
+
+按用户最新指示“先跳过测试和编译，完成代码优化，编写日志供其他模型接手”，本轮停止新的测试/编译，取消了正在运行的 [45929590952](https://github.com/slaythefishordie-droid/Stuido/actions/runs/45929590952)（`b6d4861`）。此取消不代表测试结果。当前是未完成原生验收的候选分支，不发布 Release/IPA，不合并发行分支。
+
+工作分支 `performance/v3.7-low-power`，最后业务代码 `87fb4194e9ac2b8768a724a85ffcfaa9d01c001a`。后续提交仅整理交接文档。新模型必须先读 [PERFORMANCE_HANDOFF.md](../PERFORMANCE_HANDOFF.md)，再按新对话的用户指示开展工作，不能擅自把“暂缓验证”写成“已通过”。
+
+代码收尾包括：阅读器呈现回调断开、接受的 EPUB 保存意图保留、同选区在途防重复、可取消的封面等待队列、预算改变时唤醒等待者、Home 单次投影、复习计数去掉排序。最后三项所在提交只做人工静态审查和 diff 检查，遵从用户要求未执行测试或编译。
+
+已知证据：Linux 核心 Debug/Release 各 42 项通过（Release 于 2026-11-27 补验），协议/Safari 43 项通过。Release 原生 [45928043579](https://github.com/slaythefishordie-droid/Stuido/actions/runs/45928043579) 在链接阶段失败，摘要记录 0 tests，精确缺失符号仍待定位；之前 Debug [44970616821](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44970616821) 的完整错误也未取到。当前网络对两次日志所在 Blob 主机拒绝访问，41 条规则仅确认存在于草稿，未确认应用。新的 CI 诊断已可通过 GitHub annotations 输出计数/错误，后续候选补充链接符号块。
+
+稳定恢复基线、合成基准和原 v3.7 正式发行信息仍保留下方。代码实现完成与真机/原生验收完成必须分开；剩余热点和完整接续步骤见交接与结果文档。
+
+## 性能重构阶段记录 · 2026-11-22
 
 用户授权以 v3.7 为基础进行独立性能重构，当前工作分支为 `performance/v3.7-low-power`。基线是 `1888dcb570093aba680f70baa403dcbc5fcd7f99`（相对发行标签只有文档整理），已推送恢复标签 `baseline/v3.7-before-performance-20261121`。原本干净的 `work` 分支及 main、release/v3.7.0、v3.7.0 均保留；没有重置、强推或发布新版本。
 
@@ -10,7 +22,7 @@
 
 Linux Swift 6.2.4 核心 42/42；固定夹具 Release 基准在同一当前环境重跑：一万卡片热读约 502.077→0.012 ms，阅读位置事务约 1003.617→519.062 ms，Source 的 Marks 查询索引约 238.909→0.244 ms。这是合成核心结果，非 iPad 响应/能耗实测。首次基准日期未固定的问题及比较脚本见结果文档。
 
-[首次原生检查](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44969553523) 核心通过、App 与扩展编译通过，测试直接依赖 GRDB 导致链接失败；已用系统 SQLite 做故障注入，等待修正候选的完整原生回归。未启用 IPA 打包。本轮尚未完成真机低电量、长时内存、触控和阅读压力验收，不标记稳定版。
+[首次原生检查](https://github.com/slaythefishordie-droid/Stuido/actions/runs/44969553523) 核心通过、App 与扩展编译通过，测试直接依赖 GRDB 导致链接失败；已用系统 SQLite 做故障注入；后续运行与当前暂停决定见顶部，不再沿用当时的等待状态。未启用 IPA 打包。本轮尚未完成真机低电量、长时内存、触控和阅读压力验收，不标记稳定版。
 
 ## 当前交付 · v3.7.0 · 2026-11-21
 

@@ -1,5 +1,7 @@
 # 项目接续入口
 
+性能重构的新模型首先阅读 [PERFORMANCE_HANDOFF.md](PERFORMANCE_HANDOFF.md)，然后按下列入口接续。
+
 仅维护三份日志，不在此复制状态：
 
 - [开发进度与验收](docs/progress.md)

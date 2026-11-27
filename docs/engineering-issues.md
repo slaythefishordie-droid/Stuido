@@ -192,3 +192,8 @@ BUILD-10 接续：运行 44691897830 的核心 30 项通过，白板拆分后不
 Release 运行 `45928043579` 通过核心阶段，但链接失败，xcresult 明确为 0 个测试；不应把它解释为 UI 流程失败。摘要脚本已证明能从 GitHub annotations 读取结果，但初版仍漏掉多行 Undefined symbols 块，已补充并用保留的首轮失败日志回放验证。新运行日志主机为 `productionresultssa6.blob.core.windows.net`，仍受当前运行配置限制。
 
 另查出原验收夹具只有 DEBUG 编译条件，Release UI 测试需要单独的 `STUDIO_TEST_SUPPORT`；仅测试命令启用，正式归档不启用。Release 模拟器默认同时编译 arm64/x86_64，测试命令现明确 ONLY_ACTIVE_ARCH=YES，按选中 runner 的目标模拟器架构验证；设备归档参数保持原样。
+
+
+### PERF-03 / BUILD-12 · 本轮交接界限（2026-11-27）
+
+用户选择跳过剩余测试与编译，`45929590952` 已取消。最后代码 `87fb419` 完成封面排队取消、首页投影共用和复习计数，未经运行验证；此前 `b6d4861` 的呈现回调释放、选区防重复与 Release 夹具也未完成原生验证。当前原生链接失败没有被宣称修复。交接中列出下一模型需确认的 continuation/permit、选区意图、数据保存和 UI 行为边界，见根目录 PERFORMANCE_HANDOFF.md。

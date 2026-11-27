@@ -1,5 +1,7 @@
 # Knowledge Studio 开发约定
 
+当前性能分支交接必须先读 [PERFORMANCE_HANDOFF.md](PERFORMANCE_HANDOFF.md)，尤其是用户暂停验证的最新决定；依据新对话指示接续，不将未验证候选标为稳定版。
+
 开始任务先核对分支、未提交改动及用户目标，读本文件和 [开发进度](docs/progress.md) 的当前基线。按任务定位 [产品计划](docs/product-spec.md)、[Safari 路线图](docs/web-capture-roadmap.md) 的相关章节，以及涉及模块和问题 ID；不每轮通读全部历史。详细执行规则见 [工作流](docs/workflow.md)，排障查 [工程问题](docs/engineering-issues.md)。
 
 ## 分支与交付
