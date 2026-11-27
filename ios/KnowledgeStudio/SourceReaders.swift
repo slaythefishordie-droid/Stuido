@@ -146,6 +146,12 @@ final class PDFSession: ObservableObject {
         guard !Task.isCancelled else { return }
         view.document = opened.document
     }
+    func disconnectPresentation() {
+        // These closures capture SwiftUI presentation state, which can retain
+        // this StateObject. Break that ownership path when its reader leaves.
+        view.capture = nil
+        view.dictionary = nil
+    }
     func restore(_ locator: ReadingLocator?, fingerprint: String?) {
         guard !restored, let locator, let document = view.document else { return }
         restored = true
@@ -255,6 +261,7 @@ struct PDFStudyView: View {
     let source: LibrarySource
     @State private var regionMode = false
     @State private var recognizing = false
+    @State private var selectionSaves = PendingSelectionSaves()
     @State private var selectionActive = false
     @State private var selectedMark: LibraryMark?
     @State private var dictionaryWord: String?
@@ -341,6 +348,7 @@ struct PDFStudyView: View {
                 session.restore(initialLocation, fingerprint: fingerprint)
             } catch { session.anchorStatus = "无法核对文件指纹，未执行精确回跳" }
         }.onDisappear {
+            session.disconnectPresentation()
             session.ink.flush()
             if let locator = session.readingPosition() {
                 model.queueReadingPosition(sourceID: source.id, locator: locator)
@@ -439,7 +447,9 @@ struct PDFStudyView: View {
         var mark = LibraryMark(
             sourceID: source.id, locator: locator, excerpt: selection?.string ?? "")
         mark.cardKind = kind
+        if selection != nil, !selectionSaves.begin(locator) { return }
         model.scheduleReaderSave {
+            defer { if selection != nil { selectionSaves.finish(locator) } }
             do {
                 try await model.saveReaderMark(mark, updatePosition: false)
                 if session.view.currentSelection === selection { session.view.clearSelection() }
@@ -839,6 +849,7 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
     }
     var savePosition: ((ReadingLocator) -> Void)?
     var saveSelection: ((ReadingLocator, String, CardKind) async -> Bool)?
+    private var selectionSaves = PendingSelectionSaves()
     var captureSelection: ((CardKind) -> Void)?
     @Published var selectionActive = false
     func navigator(_ navigator: SelectableNavigator, shouldShowMenuForSelection selection: ReadiumNavigator.Selection) -> Bool {
@@ -848,6 +859,11 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
         return true
     }
     var selectMark: ((UUID) -> Void)?
+    func disconnectPresentation() {
+        selectMark = nil
+        savePosition = nil
+        saveSelection = nil
+    }
     func navigator(_ navigator: Navigator, locationDidChange locator: Locator) {
         if let value = try? Self.readingLocator(locator) { savePosition?(value) }
     }
@@ -921,18 +937,23 @@ final class EPUBSession: NSObject, ObservableObject, EPUBNavigatorDelegate {
                 guard let locator = reader?.currentSelection?.locator, let text = locator.text.highlight,
                     !text.isEmpty
                 else { return }
-                Task { [weak self, weak reader] in
-                    do {
-                        let captured = try Self.readingLocator(locator)
-                        let saved = await self?.saveSelection?(captured, text, kind)
+                do {
+                    let captured = try Self.readingLocator(locator)
+                    guard let self, let save = self.saveSelection,
+                        self.selectionSaves.begin(captured) else { return }
+                    // An accepted tap must still save if the presentation closes
+                    // before this task starts and disconnects its callbacks.
+                    Task { [weak self, weak reader] in
+                        defer { self?.selectionSaves.finish(captured) }
+                        let saved = await save(captured, text, kind)
                         // Do not clear a NEW selection made while the durable write ran.
                         if saved == true, let current = reader?.currentSelection?.locator,
                             (try? Self.readingLocator(current)) == captured {
                             reader?.clearSelection()
                             self?.selectionActive = false
                         }
-                    } catch { self?.locationWarning = "选文定位未保存：\(error.localizedDescription)" }
-                }
+                    }
+                } catch { self?.locationWarning = "选文定位未保存：\(error.localizedDescription)" }
             }
             reader.observeDecorationInteractions(inGroup: "knowledge-marks") { [weak self] event in
                 if let id = UUID(uuidString: event.decoration.id) { self?.selectMark?(id) }
@@ -1081,6 +1102,7 @@ struct EPUBStudyView: View {
             }.frame(idealWidth: 375, idealHeight: 440).presentationCompactAdaptation(.popover)
         }
         .onDisappear {
+            session.disconnectPresentation()
             if let value = try? session.location(selection: false) {
                 model.queueReadingPosition(sourceID: source.id, locator: value.0)
             }

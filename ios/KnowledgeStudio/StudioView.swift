@@ -17,7 +17,7 @@ struct StudioView: View {
     private var model: StudioModel { session.model }
 
     init() {
-        #if DEBUG
+        #if DEBUG || STUDIO_TEST_SUPPORT
         if let id = ProcessInfo.processInfo.environment["STUDIO_ACCEPTANCE_FIXTURE"], UUID(uuidString: id) != nil {
             _session = StateObject(wrappedValue: StudioSession(model: Self.acceptanceModel(id)))
             return
@@ -26,7 +26,7 @@ struct StudioView: View {
         _session = StateObject(wrappedValue: StudioSession(model: StudioModel()))
     }
 
-    #if DEBUG
+    #if DEBUG || STUDIO_TEST_SUPPORT
     private static func acceptanceModel(_ id: String) -> StudioModel {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent("studio-acceptance-" + id)
         let model = StudioModel(root: root)

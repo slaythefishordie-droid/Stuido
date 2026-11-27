@@ -9,6 +9,7 @@ from pathlib import Path
 before = json.loads(Path(sys.argv[1]).read_text())
 after = json.loads(Path(sys.argv[2]).read_text())
 assert before['configuration'] == after['configuration'] == 'Release'
+assert before.get('fixture_version') == after.get('fixture_version') == 2, 'Incompatible fixture version'
 assert len(before['datasets']) == len(after['datasets'])
 print('| Cards | Operation | Baseline median ms | Optimized median ms |')
 print('|---:|---|---:|---:|')

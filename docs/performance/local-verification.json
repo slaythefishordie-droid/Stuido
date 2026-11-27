@@ -19,5 +19,12 @@
     "stage": "native test linking; app compiled",
     "reason": "Test directly referenced GRDB symbols; use system SQLite for external mutation test"
   },
-  "scope": "Core and protocol regression only. Native and device results recorded separately."
+  "scope": "Core and protocol regression only. Native and device results recorded separately.",
+  "core_release": {
+    "date": "2026-11-27",
+    "toolchain": "Swift 6.2.4 Linux",
+    "tests": 42,
+    "failures": 0,
+    "revision": "d6605725978b26e2b4e83afd4e95b37d01aa9b44"
+  }
 }

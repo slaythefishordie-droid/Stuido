@@ -93,7 +93,7 @@ PROJECT_STATUS.md 仅导航，不再复制状态；需求、模型、依赖、�
 
 先保存干净基线与恢复标签，再在独立分支记录 Release 夹具基准。夹具使用固定日期/ID，比较前必须检查规模、快照字节数和结果 checksum；机器差异和未优化控制路径一同记录。Linux 只证明核心层，真机数据另表。诊断读取 PERFORMANCE_AUDIT.md / PERFORMANCE_RESULTS.md，不重复建第三份性能流水账。
 
-原生工作流保留默认 Debug 与原 IPA 门控，新增可选 `configuration=Release`，使用优化构建运行同一套测试（保留测试可见性）。普通推送/PR 仍走默认，性能验证手动执行：
+原生工作流保留默认 Debug 与原 IPA 门控，新增可选 `configuration=Release`，使用优化构建运行同一套测试（保留测试可见性）。仅测试命令启用 `STUDIO_TEST_SUPPORT`，让 Release UI 测试仍能使用随机临时目录中的隔离夹具；正式 Release archive 不带此编译条件。普通推送/PR 仍走默认，性能验证手动执行：
 
 ```sh
 gh workflow run ipados.yml --ref performance/v3.7-low-power \

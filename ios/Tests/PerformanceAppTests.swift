@@ -14,6 +14,18 @@ private final class ObservationCount: @unchecked Sendable {
 
 @MainActor
 final class PerformanceAppTests: XCTestCase {
+    func testSelectionSaveGateAllowsNewSelectionAndRetry() {
+        var gate = PendingSelectionSaves()
+        let first = ReadingLocator(kind: "pdf", page: 1)
+        let second = ReadingLocator(kind: "pdf", page: 2)
+        XCTAssertTrue(gate.begin(first))
+        XCTAssertFalse(gate.begin(first), "Repeated taps before commit must not duplicate a highlight")
+        XCTAssertTrue(gate.begin(second), "A new selection remains interactive")
+        gate.finish(first)
+        XCTAssertTrue(gate.begin(first), "A failed or completed save must release its selection")
+        XCTAssertFalse(gate.begin(second))
+    }
+
     func testCollectionObservationDoesNotInvalidateCardsForReadingOrMessages() throws {
         let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: root) }
@@ -121,6 +133,26 @@ final class PerformanceAppTests: XCTestCase {
         try await model.flushReaderWrites()
         XCTAssertEqual(try model.repository?.read().marks.count, 1)
         XCTAssertEqual(model.marks.count, 1)
+    }
+
+    func testReaderPresentationCallbacksReleaseSessions() {
+        weak var pdf: PDFSession?
+        weak var epub: EPUBSession?
+        autoreleasepool {
+            let session = PDFSession(url: URL(fileURLWithPath: "/unused.pdf"), location: nil)
+            pdf = session
+            session.view.capture = { [session] _, _ in _ = session.view }
+            session.view.dictionary = { [session] _ in _ = session.view }
+            session.disconnectPresentation()
+            let book = EPUBSession()
+            epub = book
+            book.selectMark = { [book] _ in _ = book.navigator }
+            book.savePosition = { [book] _ in _ = book.navigator }
+            book.saveSelection = { [book] _, _, _ in _ = book.navigator; return true }
+            book.disconnectPresentation()
+        }
+        XCTAssertNil(pdf, "Closed PDF presentation must release its callback ownership cycle")
+        XCTAssertNil(epub, "Closed EPUB presentation must release its callback ownership cycle")
     }
 
     func testDecodedCustomCoverIsBoundedAndCacheClearPreservesOriginal() async throws {

@@ -14,6 +14,20 @@ def annotate(level, text):
     print(f'::{level}::{text[:6000]}')
 
 
+def linker_context(lines):
+    blocks = []
+    for index, line in enumerate(lines):
+        if 'undefined symbols for architecture' not in line.lower():
+            continue
+        block = []
+        for item in lines[index:index + 100]:
+            block.append(item)
+            if 'symbol(s) not found' in item.lower():
+                break
+        blocks.extend('\n'.join(block[start:start + 12]) for start in range(0, len(block), 12))
+    return blocks[:12]
+
+
 def main():
     root = Path('artifacts')
     bundle = root / 'SimulatorTests.xcresult'
@@ -26,7 +40,7 @@ def main():
             counts = {key: summary.get(key) for key in
                       ['title', 'result', 'totalTestCount', 'passedTests', 'failedTests', 'skippedTests']}
             annotate('notice', 'Native test summary: ' + json.dumps(counts, ensure_ascii=False))
-            for failure in summary.get('testFailures', [])[:20]:
+            for failure in (summary.get('testFailures') or [])[:20]:
                 annotate('error', json.dumps(failure, ensure_ascii=False))
         else:
             annotate('warning', 'xcresult summary unavailable: ' + result.stderr[-3000:])
@@ -34,6 +48,8 @@ def main():
     if not log.exists():
         return
     lines = log.read_text(errors='replace').splitlines()
+    for block in linker_context(lines):
+        annotate('error', 'Linker symbols:\n' + block)
     failures = [line for line in lines if any(term in line.lower() for term in
                 ['error:', ' failed', 'testing failed', 'timed out', 'crashed', 'unable to', '** test'])]
     for line in failures[-15:]:

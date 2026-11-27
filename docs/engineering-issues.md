@@ -186,3 +186,9 @@ BUILD-10 接续：运行 44691897830 的核心 30 项通过，白板拆分后不
 - 旧日志和 artifact 实际重定向到 `productionresultssa13.blob.core.windows.net`，请求被拒绝。当前配置报告自定义 8 域名，草稿仍有 41 条且含 `*.blob.core.windows.net`，运行实例与草稿基版本不同。仅看到草稿不能宣称已应用；本轮不绕过代理或 TLS，也不改已正确的草稿。
 - 新增 always 执行的原生诊断脚本，保留完整 artifact，并将测试计数、失败条目或启动失败尾部写入 GitHub check annotations。这样可以通过正常 GitHub API 阅读关键诊断。配置新增 Release 测试选择，当前 Debug 默认和 IPA 门控保留。
 - 旧附件恢复访问仍需在当前聊天的环境设置应用已有域名配置（至少允许实际主机），设置生效后才能重试。网络阻塞不作为测试通过证据。
+
+### BUILD-12 · 追加定位（2026-11-27）
+
+Release 运行 `45928043579` 通过核心阶段，但链接失败，xcresult 明确为 0 个测试；不应把它解释为 UI 流程失败。摘要脚本已证明能从 GitHub annotations 读取结果，但初版仍漏掉多行 Undefined symbols 块，已补充并用保留的首轮失败日志回放验证。新运行日志主机为 `productionresultssa6.blob.core.windows.net`，仍受当前运行配置限制。
+
+另查出原验收夹具只有 DEBUG 编译条件，Release UI 测试需要单独的 `STUDIO_TEST_SUPPORT`；仅测试命令启用，正式归档不启用。Release 模拟器默认同时编译 arm64/x86_64，测试命令现明确 ONLY_ACTIVE_ARCH=YES，按选中 runner 的目标模拟器架构验证；设备归档参数保持原样。

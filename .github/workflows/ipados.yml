@@ -105,7 +105,8 @@ jobs:
           set -euo pipefail
           ks_simulator=$(python3 scripts/select-simulator.py)
           xcodebuild test -project ios/KnowledgeStudio.xcodeproj -scheme KnowledgeStudio \
-            -configuration "$KS_BUILD_CONFIGURATION" ENABLE_TESTABILITY=YES \
+            -configuration "$KS_BUILD_CONFIGURATION" ENABLE_TESTABILITY=YES ONLY_ACTIVE_ARCH=YES \
+            SWIFT_ACTIVE_COMPILATION_CONDITIONS='$(inherited) STUDIO_TEST_SUPPORT' \
             -destination "platform=iOS Simulator,id=$ks_simulator" -parallel-testing-enabled NO \
             -derivedDataPath .build/DerivedData -clonedSourcePackagesDirPath .build/SourcePackages \
             -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile \
@@ -151,7 +152,7 @@ jobs:
           python3 - <<'PY'
           import json, os, pathlib
           results = {name.lower(): os.environ[name] for name in ['PACKAGES', 'CORE', 'SIMULATOR', 'ARCHIVE', 'IPA']}
-          results.update(commit=os.environ['GITHUB_SHA'], altstore_installation='not_tested', physical_ipad_validation='not_tested')
+          results.update(configuration=os.environ['KS_BUILD_CONFIGURATION'], commit=os.environ['GITHUB_SHA'], altstore_installation='not_tested', physical_ipad_validation='not_tested')
           pathlib.Path('artifacts/build-status.json').write_text(json.dumps(results, indent=2) + '\n')
           with open(os.environ['GITHUB_STEP_SUMMARY'], 'a') as summary:
               summary.write('| Check | Result |\n|---|---|\n')
