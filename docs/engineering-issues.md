@@ -178,3 +178,11 @@ BUILD-10 接续：运行 44691897830 的核心 30 项通过，白板拆分后不
 - 基准比较发现 snapshot_bytes 有少量差异：Card 的默认时间仍为 Date()。固定 Card 时间和 CardReference UUID，增加 fixture_version 与严格规模/字节数/checksum 比较，基线与候选成对重跑。首次原始数据保留，但不与最终夹具混比。
 - 本环境没有 Swift/SQLite 开发头；使用签名校验的 Swift 6.2.4 工具链与本地解包的 Debian SQLite 头文件完成核心测试，没有改系统目录或项目依赖。
 - npm 默认缓存目录不可写，改用 `/tmp/ks-performance-tools/npm-cache`，保留 lockfile，执行 `npm ci --ignore-scripts`。不要为沙箱缓存错误升级依赖。
+
+
+## BUILD-12 / NET-03 · 失败测试摘要与运行策略（2026-11-27）
+
+- `44970616821` 的核心阶段通过，模拟器阶段 exit 65。原流程在 xcodebuild 失败后提前退出，未提取 xcresult 摘要；原错误扫描又输出无关 plist 构建命令，现有 annotations 不足以定位根因，不推断这是业务错误或测试超时。
+- 旧日志和 artifact 实际重定向到 `productionresultssa13.blob.core.windows.net`，请求被拒绝。当前配置报告自定义 8 域名，草稿仍有 41 条且含 `*.blob.core.windows.net`，运行实例与草稿基版本不同。仅看到草稿不能宣称已应用；本轮不绕过代理或 TLS，也不改已正确的草稿。
+- 新增 always 执行的原生诊断脚本，保留完整 artifact，并将测试计数、失败条目或启动失败尾部写入 GitHub check annotations。这样可以通过正常 GitHub API 阅读关键诊断。配置新增 Release 测试选择，当前 Debug 默认和 IPA 门控保留。
+- 旧附件恢复访问仍需在当前聊天的环境设置应用已有域名配置（至少允许实际主机），设置生效后才能重试。网络阻塞不作为测试通过证据。

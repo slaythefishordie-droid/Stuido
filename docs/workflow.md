@@ -88,3 +88,16 @@ PROJECT_STATUS.md 仅导航，不再复制状态；需求、模型、依赖、�
 当期只做静态、单元和原生验证，冻结要求记在历史进度。先用核心测试验证数据安全，再集中运行原生检查。无法继承的第三方控制器用组合接入。持久化新增字段采用可选增量，并验证事务、重开和备份。
 
 阶段汇报后继续完成已授权的工作。设计判断、实际验证、提交和待验边界集中写进当次记录，阶段名称沿用原计划。
+
+## 性能工作验证 · 2026-11-22
+
+先保存干净基线与恢复标签，再在独立分支记录 Release 夹具基准。夹具使用固定日期/ID，比较前必须检查规模、快照字节数和结果 checksum；机器差异和未优化控制路径一同记录。Linux 只证明核心层，真机数据另表。诊断读取 PERFORMANCE_AUDIT.md / PERFORMANCE_RESULTS.md，不重复建第三份性能流水账。
+
+原生工作流保留默认 Debug 与原 IPA 门控，新增可选 `configuration=Release`，使用优化构建运行同一套测试（保留测试可见性）。普通推送/PR 仍走默认，性能验证手动执行：
+
+```sh
+gh workflow run ipados.yml --ref performance/v3.7-low-power \
+  -f configuration=Release -f package_ipa=false -f runner=macos-15-intel
+```
+
+先等同分支已有运行完成再发起不同配置，避免并发组互相取消。Release 模拟器通过也不等于真机帧率、能耗或 AltStore 安装通过。

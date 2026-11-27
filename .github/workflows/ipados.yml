@@ -29,6 +29,13 @@ on:
         description: 'Explicit delivery stage: archive and package IPA'
         type: boolean
         default: false
+      configuration:
+        description: 'Native validation configuration (Release for performance work)'
+        type: choice
+        default: Debug
+        options:
+          - Debug
+          - Release
       runner:
         description: 'Standard macOS runner (Intel preferred while ARM64 capacity is constrained)'
         type: choice
@@ -48,9 +55,10 @@ jobs:
   build:
     name: Xcode 26.2 · iPadOS
     runs-on: ${{ inputs.runner || 'macos-15-intel' }}
-    timeout-minutes: ${{ inputs.package_ipa && 45 || 25 }}
+    timeout-minutes: ${{ inputs.package_ipa && 45 || inputs.configuration == 'Release' && 35 || 25 }}
     env:
       DEVELOPER_DIR: /Applications/Xcode_26.2.app/Contents/Developer
+      KS_BUILD_CONFIGURATION: ${{ inputs.configuration || 'Debug' }}
     defaults:
       run:
         shell: bash
@@ -86,13 +94,18 @@ jobs:
         id: core
         run: |
           set -euo pipefail
-          bash scripts/test-core.sh 2>&1 | tee artifacts/logs/core-tests.log
+          if [[ "$KS_BUILD_CONFIGURATION" == Release ]]; then
+            bash scripts/test-core.sh -c release
+          else
+            bash scripts/test-core.sh
+          fi 2>&1 | tee artifacts/logs/core-tests.log
       - name: Test the native App on an iPad simulator
         id: simulator
         run: |
           set -euo pipefail
           ks_simulator=$(python3 scripts/select-simulator.py)
           xcodebuild test -project ios/KnowledgeStudio.xcodeproj -scheme KnowledgeStudio \
+            -configuration "$KS_BUILD_CONFIGURATION" ENABLE_TESTABILITY=YES \
             -destination "platform=iOS Simulator,id=$ks_simulator" -parallel-testing-enabled NO \
             -derivedDataPath .build/DerivedData -clonedSourcePackagesDirPath .build/SourcePackages \
             -disableAutomaticPackageResolution -onlyUsePackageVersionsFromResolvedFile \
@@ -105,21 +118,9 @@ jobs:
           assert result['totalTestCount'] >= 32, 'Expected core and App tests to actually run'
           assert result['failedTests'] == 0, 'Simulator tests failed'
           PY
-      - name: Surface simulator build errors
-        if: failure()
-        run: |
-          python3 - <<'PYERROR'
-          from pathlib import Path
-          log = Path('artifacts/logs/simulator-tests.log')
-          if log.exists():
-              for line in log.read_text(errors='replace').splitlines():
-                  if any(word in line for word in ['error:', 'failed', 'Testing failed', 'ProcessInfoPlistFile', 'SafariExtension.appex', 'ValidateEmbeddedBinary']):
-                      escaped = line.replace('%', '%25').replace('\r', '%0D')
-                      print('::error::' + escaped[:2000])
-          import plistlib
-          for path in Path('.build/DerivedData/Build/Products').glob('**/SafariExtension.appex/Info.plist'):
-              print('::error::Extension Info ' + str(path) + ' ' + str(plistlib.loads(path.read_bytes())))
-          PYERROR
+      - name: Record native test diagnostics
+        if: always()
+        run: python3 scripts/report-native-tests.py
       - name: Archive the actual iPadOS device App without signing
         id: archive
         if: github.event_name == 'workflow_dispatch' && inputs.package_ipa

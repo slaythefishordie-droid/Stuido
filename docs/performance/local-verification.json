@@ -1,0 +1,23 @@
+{
+  "date": "2026-11-22",
+  "timezone": "Asia/Shanghai",
+  "revision": "67dc222154cb3810a61c8c6b63d0c8f65dc7b2f6",
+  "core": {
+    "configuration": "Debug",
+    "toolchain": "Swift 6.2.4 Linux",
+    "tests": 42,
+    "failures": 0
+  },
+  "node": {
+    "version": "24.22.1",
+    "tests": 43,
+    "failures": 0
+  },
+  "native_initial": {
+    "run": 44969553523,
+    "result": "failure",
+    "stage": "native test linking; app compiled",
+    "reason": "Test directly referenced GRDB symbols; use system SQLite for external mutation test"
+  },
+  "scope": "Core and protocol regression only. Native and device results recorded separately."
+}
