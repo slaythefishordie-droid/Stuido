@@ -2,7 +2,7 @@
 
 基线：`1888dcb570093aba680f70baa403dcbc5fcd7f99`（`release/v3.7.0`，相对 `v3.7.0` 标签只有文档整理）。恢复标签：`baseline/v3.7-before-performance-20261121`。独立分支：`performance/v3.7-low-power`。初始工作区干净，原 `work` 分支保留。
 
-最新交接决定见 [PERFORMANCE_HANDOFF.md](PERFORMANCE_HANDOFF.md)：2026-11-27 用户暂停测试/编译，原生链接仍未通过。
+首轮暂停决定见 [PERFORMANCE_HANDOFF.md](PERFORMANCE_HANDOFF.md)；第二轮已恢复验证，最新状态见 docs/progress.md。
 
 ## 验证边界
 

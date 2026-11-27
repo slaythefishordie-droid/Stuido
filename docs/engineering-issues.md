@@ -197,3 +197,7 @@ Release 运行 `45928043579` 通过核心阶段，但链接失败，xcresult 明
 ### PERF-03 / BUILD-12 · 本轮交接界限（2026-11-27）
 
 用户选择跳过剩余测试与编译，`45929590952` 已取消。最后代码 `87fb419` 完成封面排队取消、首页投影共用和复习计数，未经运行验证；此前 `b6d4861` 的呈现回调释放、选区防重复与 Release 夹具也未完成原生验证。当前原生链接失败没有被宣称修复。交接中列出下一模型需确认的 continuation/permit、选区意图、数据保存和 UI 行为边界，见根目录 PERFORMANCE_HANDOFF.md。
+
+### 第二轮复验 · 2026-11-27
+
+`7ae4501` 的原生运行 45968880076 已通过 App/扩展编译及链接，执行 85 项测试、83 通过、2 失败、0 跳过；未归档或打包 IPA。BUILD-12 原缺失符号已定位并消除（证据 `verification/native-link-45928043579.json`），但完整验收仍阻塞于 PerformanceAppTests/testAsyncInkSavesPreserveConflictProtectionAndReopen 的 unavailableGroup，以及回收站 UI 查询超时。前者夹具另有 EPUB 空摘录，后续应独立修正夹具与共享容器隔离并保留冲突断言；后者须取 xcresult/界面快照复现，不直接认定为业务回归或放宽超时掩盖。
