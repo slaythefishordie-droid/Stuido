@@ -18,19 +18,27 @@ struct StudyHomeView: View {
     }
 
     var body: some View {
-        NavigationStack {
+        // Reuse one projection across ViewThatFits candidates and the recent
+        // shelf instead of filtering/sorting the library in every helper.
+        let cards = self.cards
+        let reading = self.reading
+        let projects = self.projects
+        return NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 22) {
                     Text("书桌").font(.system(.largeTitle, design: .serif, weight: .semibold))
                         .accessibilityAddTraits(.isHeader)
                     ViewThatFits(in: .horizontal) {
                         HStack(alignment: .top, spacing: 24) {
-                            thoughts.frame(minWidth: columnWidth + 90)
-                            activity.frame(idealWidth: columnWidth, maxWidth: columnWidth)
+                            thoughts(cards: cards).frame(minWidth: columnWidth + 90)
+                            activity(reading: reading, projects: projects).frame(idealWidth: columnWidth, maxWidth: columnWidth)
                         }
-                        VStack(alignment: .leading, spacing: 24) { thoughts; activity }
+                        VStack(alignment: .leading, spacing: 24) {
+                            thoughts(cards: cards)
+                            activity(reading: reading, projects: projects)
+                        }
                     }
-                    recent
+                    recent(reading: reading)
                 }.padding(24).frame(maxWidth: 1180)
                     .frame(maxWidth: .infinity)
             }.studySurface()
@@ -38,13 +46,13 @@ struct StudyHomeView: View {
         }
     }
 
-    private var thoughts: some View {
+    private func thoughts(cards: [LibraryCard]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             StudyHeading(title: "思想卡片")
             if let featured = cards.first(where: { $0.type == .key_sentence }) ?? cards.first {
                 cardLink(featured, featured: true)
                 LazyVGrid(columns: [GridItem(.adaptive(minimum: 150), spacing: 10)], spacing: 10) {
-                    ForEach(relatedCards(to: featured)) { cardLink($0) }
+                    ForEach(relatedCards(to: featured, cards: cards)) { cardLink($0) }
                 }
             } else {
                 ContentUnavailableView("还没有知识卡片", systemImage: "rectangle.stack",
@@ -54,14 +62,14 @@ struct StudyHomeView: View {
         }
     }
 
-    private func relatedCards(to featured: LibraryCard) -> [LibraryCard] {
+    private func relatedCards(to featured: LibraryCard, cards: [LibraryCard]) -> [LibraryCard] {
         let remaining = cards.filter { $0.id != featured.id }
         let distinct = CardKind.allCases.compactMap { kind in remaining.first { $0.type == kind } }
         let distinctIDs = Set(distinct.map(\.id))
         return Array((distinct + remaining.filter { !distinctIDs.contains($0.id) }).prefix(3))
     }
 
-    private var activity: some View {
+    private func activity(reading: [LibrarySource], projects: [LibraryProject]) -> some View {
         VStack(alignment: .leading, spacing: 13) {
             if reviewFirst { reviewModule }
             StudyHeading(title: "继续阅读／观看")
@@ -90,7 +98,7 @@ struct StudyHomeView: View {
 
     private var reviewModule: some View {
         TimelineView(.periodic(from: .now, by: 60)) { clock in
-            let count = TodayReview.due(model.cards, at: clock.date).count
+            let count = TodayReview.countDue(model.cards, at: clock.date)
             Button { navigation.open(.today) } label: {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack {
@@ -111,7 +119,7 @@ struct StudyHomeView: View {
         }
     }
 
-    private var recent: some View {
+    private func recent(reading: [LibrarySource]) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             StudyHeading(title: "最近打开")
             LazyVGrid(columns: [GridItem(.adaptive(minimum: 138), spacing: 12)], spacing: 14) {

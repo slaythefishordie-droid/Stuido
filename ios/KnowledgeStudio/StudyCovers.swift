@@ -235,8 +235,13 @@ enum StudyThumbnails {
         init(task: Task<Artwork, Never>) { self.task = task }
     }
     private static var requests: [URL: Request] = [:]
+    private struct WaitingLoad {
+        let id: UUID
+        let continuation: CheckedContinuation<Bool, Never>
+    }
     private static var activeLoads = 0
-    private static var waiting: [CheckedContinuation<Void, Never>] = []
+    private static var loadLimit = 2
+    private static var waiting: [WaitingLoad] = []
     private static var generation = 0
 
     static var cacheDirectory: URL? {
@@ -250,6 +255,8 @@ enum StudyThumbnails {
         memory.limit = budget.artworkBytes
         editorialMemory.limit = budget.editorialBytes
         customMemory.limit = budget.customCoverBytes
+        loadLimit = max(1, budget.artworkConcurrency)
+        resumeWaitingLoads()
     }
     static func releaseMemory() {
         generation &+= 1
@@ -289,6 +296,7 @@ enum StudyThumbnails {
         return image
     }
     static func artwork(_ asset: URL, kind: SourceKind) async -> Artwork {
+        guard !Task.isCancelled else { return Artwork() }
         _ = PerformancePolicy.shared
         if let cached = memory.value(for: asset) { return cached }
         let request: Request
@@ -316,21 +324,39 @@ enum StudyThumbnails {
             requests.removeValue(forKey: asset)
         }
     }
-    private static func acquire() async {
-        // Transfer a permit to the next waiter on release, avoiding a polling timer.
-        if activeLoads >= PerformancePolicy.shared.budget.artworkConcurrency {
-            await withCheckedContinuation { waiting.append($0) }
-        } else { activeLoads += 1 }
-    }
-    private static func release() {
-        activeLoads -= 1
-        while activeLoads < PerformancePolicy.shared.budget.artworkConcurrency, !waiting.isEmpty {
+    private static func acquire() async -> Bool {
+        guard !Task.isCancelled else { return false }
+        if activeLoads < loadLimit, waiting.isEmpty {
             activeLoads += 1
-            waiting.removeFirst().resume()
+            return true
+        }
+        let id = UUID()
+        return await withTaskCancellationHandler {
+            await withCheckedContinuation { continuation in
+                if Task.isCancelled { continuation.resume(returning: false) }
+                else { waiting.append(WaitingLoad(id: id, continuation: continuation)) }
+            }
+        } onCancel: {
+            Task { @MainActor in cancelWaitingLoad(id) }
         }
     }
+    private static func cancelWaitingLoad(_ id: UUID) {
+        guard let index = waiting.firstIndex(where: { $0.id == id }) else { return }
+        waiting.remove(at: index).continuation.resume(returning: false)
+    }
+    private static func resumeWaitingLoads() {
+        while activeLoads < loadLimit, !waiting.isEmpty {
+            activeLoads += 1
+            waiting.removeFirst().continuation.resume(returning: true)
+        }
+    }
+    private static func release() {
+        precondition(activeLoads > 0)
+        activeLoads -= 1
+        resumeWaitingLoads()
+    }
     private static func loadArtwork(_ asset: URL, kind: SourceKind, epoch: Int) async -> Artwork {
-        await acquire()
+        guard await acquire() else { return Artwork() }
         let trace = PerformanceTrace.signposter.beginInterval("CoverLoad", id: PerformanceTrace.signposter.makeSignpostID())
         defer { release(); PerformanceTrace.signposter.endInterval("CoverLoad", trace) }
         guard !Task.isCancelled else { return Artwork() }

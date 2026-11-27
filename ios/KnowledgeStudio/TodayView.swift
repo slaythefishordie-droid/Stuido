@@ -2,10 +2,15 @@ import KnowledgeCore
 import SwiftUI
 
 enum TodayReview {
+    private static func isDue(_ card: LibraryCard, at date: Date) -> Bool {
+        card.deletedAt == nil && card.review == .active && (card.schedule?.due ?? .distantPast) <= date
+    }
     static func due(_ cards: [LibraryCard], at date: Date) -> [LibraryCard] {
-        cards.filter {
-            $0.deletedAt == nil && $0.review == .active && ($0.schedule?.due ?? .distantPast) <= date
-        }.sorted { ($0.schedule?.due ?? .distantPast) < ($1.schedule?.due ?? .distantPast) }
+        cards.filter { isDue($0, at: date) }
+            .sorted { ($0.schedule?.due ?? .distantPast) < ($1.schedule?.due ?? .distantPast) }
+    }
+    static func countDue(_ cards: [LibraryCard], at date: Date) -> Int {
+        cards.reduce(0) { $0 + (isDue($1, at: date) ? 1 : 0) }
     }
 }
 
