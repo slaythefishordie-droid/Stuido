@@ -83,7 +83,16 @@ final class StudyAcceptanceTests: XCTestCase {
 
     private func tap(_ app: XCUIApplication, _ label: String) {
         let button = app.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch
-        XCTAssertTrue(button.waitForExistence(timeout: 5), "找不到按钮 \(label)")
+        let found = button.waitForExistence(timeout: 5)
+        if !found {
+            // Synthetic acceptance fixture only; expose the actual menu/dialog
+            // hierarchy even when the xcresult download host is unavailable.
+            print("STORAGE_UI_HIERARCHY_BEGIN\n" + app.debugDescription + "\nSTORAGE_UI_HIERARCHY_END")
+            let screenshot = XCTAttachment(screenshot: app.screenshot())
+            screenshot.lifetime = .keepAlways
+            add(screenshot)
+        }
+        XCTAssertTrue(found, "找不到按钮 \(label)")
         button.tap()
     }
 }

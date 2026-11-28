@@ -768,44 +768,10 @@ struct DataManagerView: View {
     @State private var sizeWorker = StorageSizeWorker()
 
     @State private var validated: BackupService.Validated?
-    struct Row: Identifiable {
-        let id: UUID
-        let title: String
-        let kind: String
-        let deleted: Bool
-    }
+    typealias Row = LibraryObjectRow
     var rows: [Row] {
-        var all: [Row] = model.sources.map {
-            Row(id: $0.id, title: $0.title, kind: "资料", deleted: $0.deletedAt != nil)
-        }
-        all += model.marks.map {
-            Row(
-                id: $0.id, title: $0.excerpt.isEmpty ? locationLabel($0.locator) : $0.excerpt, kind: "标记",
-                deleted: $0.deletedAt != nil)
-        }
-        all += model.cards.map {
-            Row(id: $0.id, title: $0.title, kind: "卡片", deleted: $0.deletedAt != nil)
-        }
-        all += model.projects.map {
-            Row(id: $0.id, title: $0.title, kind: "项目", deleted: $0.deletedAt != nil)
-        }
-        all += model.projects.filter { $0.hasBoard && ($0.deletedAt == nil || $0.boardTrashedAt != nil) }
-            .map { Row(id: $0.boardManagementID, title: $0.title + " · 白板", kind: "白板",
-                deleted: $0.boardTrashedAt != nil) }
-        all += model.relations.map {
-            Row(id: $0.id, title: $0.kind, kind: "关系", deleted: $0.deletedAt != nil)
-        }
-        all += model.reviewRecords.map {
-            Row(
-                id: $0.id, title: "\($0.rating) · \($0.reviewedAt.formatted())", kind: "复习记录",
-                deleted: $0.deletedAt != nil)
-        }
-        let filtered = all.filter {
-            $0.deleted == trash && (kind == "全部" || $0.kind == kind)
-                && (search.isEmpty || $0.title.localizedCaseInsensitiveContains(search))
-        }
-        if sort == "名称" { return filtered.sorted { $0.title.localizedStandardCompare($1.title) == .orderedAscending } }
-        return filtered
+        LibraryObjectRow.project(model.state, kind: kind, trash: trash, search: search,
+            sortByName: sort == "名称", markTitle: { $0.excerpt.isEmpty ? locationLabel($0.locator) : $0.excerpt })
     }
 
     var body: some View {

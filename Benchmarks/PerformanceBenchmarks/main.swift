@@ -43,6 +43,11 @@ func measure(_ operation: () throws -> Int) rethrows -> [String: Any] {
         "checksum": checksum]
 }
 
+if CommandLine.arguments.contains("--object-rows") {
+    try objectRowsBenchmark()
+    exit(0)
+}
+
 let label = CommandLine.arguments.dropFirst().first ?? "unlabeled"
 var results: [[String: Any]] = []
 for size in [100, 2_000, 10_000] {
