@@ -201,3 +201,10 @@ Release 运行 `45928043579` 通过核心阶段，但链接失败，xcresult 明
 ### 第二轮复验 · 2026-11-27
 
 `7ae4501` 的原生运行 45968880076 已通过 App/扩展编译及链接，执行 85 项测试、83 通过、2 失败、0 跳过；未归档或打包 IPA。BUILD-12 原缺失符号已定位并消除（证据 `verification/native-link-45928043579.json`），但完整验收仍阻塞于 PerformanceAppTests/testAsyncInkSavesPreserveConflictProtectionAndReopen 的 unavailableGroup，以及回收站 UI 查询超时。前者夹具另有 EPUB 空摘录，后续应独立修正夹具与共享容器隔离并保留冲突断言；后者须取 xcresult/界面快照复现，不直接认定为业务回归或放宽超时掩盖。
+
+
+### 跨模块复验 · 2026-11-28
+
+`84b6ed8` 的 Release 运行 `46080900306`：编译/链接通过，87 项中 86 通过、1 失败、0 跳过；84 项核心/App 全通过，笔迹冲突/重开测试已通过，归档和 IPA 跳过。回收站 UI 本次在首次点击 `storage.actions.可移除资料` 后找不到“移入回收站”（StudyAcceptanceTests.swift:86，约 31 秒结束），不同于上次永久删除阶段超时。日志不足以区分菜单呈现、可访问性查询或刷新竞争；不据此认定为数据删除错误，也不调整超时掩盖。
+
+摘要和 failureText 已保存在 `verification/native-full-pass-46080900306.json`。完整 xcresult artifact `15237244814` 已由 CI 上传，但当前下载至 `productionresultssa7.blob.core.windows.net` 被 Forbidden 阻塞；未取得界面附件。后续需在可访问附件且具备 xcresulttool 的 macOS 环境检查失败快照，复现首次菜单和永久删除两处，再做针对性修复。保留 UI 断言，不把本轮标为完整验收通过。

@@ -1,0 +1,18 @@
+{
+  "run_id": 46080900306,
+  "job_id": 140779386491,
+  "commit": "84b6ed8c880e744dfdeef109b805e2368b885537",
+  "configuration": "Release",
+  "total": 87,
+  "passed": 86,
+  "failed": 1,
+  "skipped": 0,
+  "archive": "skipped",
+  "ipa": "skipped",
+  "artifact_id": 15237244814,
+  "annotations": [
+    "{\"failureText\": \"XCTAssertTrue failed - 找不到按钮 移入回收站\", \"targetName\": \"KnowledgeStudioUITests\", \"testIdentifier\": 87, \"testIdentifierString\": \"StudyAcceptanceTests/testStorageMovesRestoresAndPermanentlyDeletesOnlySelectedObject()\", \"testIdentifierURL\": \"test://com.apple.xcode/KnowledgeStudio/KnowledgeStudioUITests/StudyAcceptanceTests/testStorageMovesRestoresAndPermanentlyDeletesOnlySelectedObject\", \"testName\": \"testStorageMovesRestoresAndPermanentlyDeletesOnlySelectedObject()\"}",
+    "Native test summary: {\"title\": \"Test - KnowledgeStudio\", \"result\": \"Failed\", \"totalTestCount\": 87, \"passedTests\": 86, \"failedTests\": 1, \"skippedTests\": 0}"
+  ],
+  "artifact_download": "Forbidden; xcresult attachments not inspected"
+}
