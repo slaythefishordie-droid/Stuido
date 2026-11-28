@@ -114,6 +114,7 @@ report = {
     'build_type': 'Release iphoneos arm64',
     'device_compilation': 'passed',
     'package_structure': 'verified',
+    'ipa_sha256': pathlib.Path('artifacts/KnowledgeStudio-resignable.ipa.sha256').read_text().split()[0],
     'signed': True,
     'signing': 'ad-hoc; user provisioning required',
     'safari_extension_embedded': True,
@@ -136,4 +137,5 @@ report = {
     'note': 'Ad-hoc IPA for AltStore Classic re-signing; device extension and App Groups permissions require verification.'
 }
 pathlib.Path('artifacts/package-report.json').write_text(json.dumps(report, indent=2) + '\n')
+print('::notice title=IPA package summary::' + json.dumps(report, ensure_ascii=False))
 PY

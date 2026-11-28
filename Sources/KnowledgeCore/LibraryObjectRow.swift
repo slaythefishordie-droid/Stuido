@@ -21,7 +21,6 @@ public struct LibraryObjectRow: Identifiable, Equatable, Sendable {
             guard kind == "全部" || kind == category else { return }
             for item in items where deleted(item) == trash && eligible(item) {
                 let value = title(item)
-                guard search.isEmpty || value.localizedCaseInsensitiveContains(search) else { continue }
                 rows.append(Self(id: id(item), title: value, kind: category, deleted: trash))
             }
         }
@@ -35,6 +34,9 @@ public struct LibraryObjectRow: Identifiable, Equatable, Sendable {
         append(state.relations, kind: "关系", deleted: { $0.deletedAt != nil }, id: { $0.id }, title: { $0.kind })
         append(state.reviewRecords, kind: "复习记录", deleted: { $0.deletedAt != nil }, id: { $0.id },
             title: { "\($0.rating) · \($0.reviewedAt.formatted())" })
+        // Keep date formatting and localized matching in separate passes. Interleaving
+        // these Foundation operations regressed the full-library search benchmark.
+        if !search.isEmpty { rows = rows.filter { $0.title.localizedCaseInsensitiveContains(search) } }
         if sortByName { rows.sort { $0.title.localizedStandardCompare($1.title) == .orderedAscending } }
         return rows
     }
